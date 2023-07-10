@@ -1,0 +1,8 @@
+{
+  "nsaas_config": {
+    "00:0d:3a:d6:9b:6e": {
+      "ip": "10.0.255.254",
+      "engine_threads": 1
+    }
+  }
+}

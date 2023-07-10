@@ -1,33 +1,71 @@
-# Project
+# NSaaS (Network Stack as a Service)
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+# Getting started
 
-As the maintainer of this project, please make a few updates:
+NSaaS provides an easy way for applications to access low-latency userspace
+networking. NSaaS runs as a separate process on all machines where the
+application is deployed. Applications interact with NSaaS over shared memory
+with a familiar socket-like API, and NSaaS processes in the cluster communicate
+with each other using userspace networking (DPDK).
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+NSaaS provides the following benefits, in addition to the low-latency:
 
-## Contributing
+- First-class support for running on Azure VMs and other cloud environments.
+- Multiple applications can simultaneously use the same network interface.
+- No need for DPDK expertise, or compiling the application with DPDK.
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+## Get the NSaaS binary
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+The NSaaS binary is provided in the form of a Docker image. To get this, you
+will need (1) access to the MSR-NSaaS repo, (2) a Github personal access
+token (https://github.com/settings/tokens) with the read:packages scope, and (3)
+ask an admin to give you access at
+[link](https://github.com/orgs/MSR-NSaaS/packages/container/nsaas/settings)
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+Start NSaaS on two servers, A & B. Below, we assume that the accelerated DPDK-capable NIC is named `eth1`:
 
-## Trademarks
+```bash
+# Reboot like below to allow non-root users to run Docker
+sudo groupadd docker && sudo usermod -aG docker $USER && sudo reboot
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+# We assume that the Github token is stored as GITHUB_PAT
+echo ${GITHUB_PAT} | docker login ghcr.io -u <github_username> --password-stdin
+docker pull ghcr.io/msr-nsaas/nsaas:latest
+
+# Start NSaaS on the accelerated NIC (e.g., eth1 on Azure)
+git clone git@github.com:MSR-NSaaS/nsaas.git
+cd nsaas
+./nsaas.sh --mac <MAC address of eth1> --ip <IP address of eth1>
+```
+
+## Run the hello_world JavaScript or C# example:
+
+```bash
+# Build the NSaaS helper library
+cd nsaas; ./build_shim.sh; cp libnsaas_shim.so js/; cp libnsaas_shim.so csharp/HelloWorld
+
+# On server A, run JS hello server (requires node)
+cd js;
+node hello_world.js --local <eth1 IP address of server A>
+
+# On server B, run C# hello client (requires dotnet-sdk)
+cd csharp/HelloWorld
+dotnet run --local <eth1 IP address of server B> --remote <eth1 IP address of server A>
+```
+
+If everything goes well, server A should print "Hello World!"
+
+## Application Programming Interface
+Applications use the following steps to interact with the NSaaS service:
+
+- Initialize the NSaaS library using `nsaas_init()`.
+- In every thread, create a new channel to NSaaS using `nsaas_attach()`.
+- Listen on a port using `nsaas_listen()`.
+- Connect to remote processes using `nsaas_connect()`.
+- Send and receive messages using `nsaas_send()` and `nsaas_recv()`.
+
+See `src/ext/nsaas.h` for the full API documentation.
+
+## Developing NSaaS
+
+See `INTERNAL.md` for instructions on how to build and test NSaaS.
