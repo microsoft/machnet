@@ -28,7 +28,7 @@ add_subdirectory(third_party/googlebench)
 set(HDR_HISTOGRAM_BUILD_PROGRAMS OFF CACHE BOOL "Minimize HDR histogram build")
 set(HDR_LOG_REQUIRED OFF CACHE BOOL "Disable HDR histogram's log to avoid zlib dependency")
 add_subdirectory(third_party/HdrHistogram_c)
-include_directories(SYSTEM third_party/HdrHistogram_c/src)
+include_directories(SYSTEM third_party/HdrHistogram_c/include/)
 
 set(BUILD_TESTING ON)
 add_subdirectory(src)

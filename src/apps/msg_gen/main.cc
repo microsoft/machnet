@@ -13,9 +13,8 @@
 #include <numeric>
 #include <sstream>
 #include <thread>
-
-#include "hdr_histogram.h"
-#include "nsaas.h"
+#include <hdr/hdr_histogram.h>
+#include <nsaas.h>
 
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
