@@ -6,15 +6,15 @@ This is a simple message generator application that uses the Machnet stack.
 
 Successful build of the `Machnet` project (see main [README](../../../README.md)).
 
-
-## Running the application
-
-**Attention**: A `Machnet` stack instance must be running on the machine that needs to use this
+A `Machnet` stack instance must already be running on the machine that needs to use this
 message generator application. You can find information on how to run the
 `Machnet` stack in the [README](../machnet/README.md).
 
 
-The `msg_gen` application is run by the `msg_gen` binary. You could see the available options by running `msg_gen --help`.
+## Running the application
+
+The `msg_gen` application is run by the `msg_gen` binary. You could see the
+available options by running `msg_gen --help`.
 
 ### Sending messages between two machines
 
@@ -32,6 +32,3 @@ cd ${REPOROOT}/build/
 sudo GLOG_logtostderr=1 ./src/apps/msg_gen/msg_gen --local_ip 10.0.0.2 --remote_ip 10.0.0.1
 
 ```
-
-Add `--help` to see the available extra options.
-
