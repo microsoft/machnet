@@ -2,8 +2,8 @@ CC = gcc
 CFLAGS = -Wall -fPIC
 LDFLAGS = -shared
 LIBS = -luuid
-TARGET = libnsaas_shim.so
-SRCS = nsaas.c
+TARGET = libmachnet_shim.so
+SRCS = machnet.c
 OBJS = $(SRCS:.c=.o)
 
 all: $(TARGET)

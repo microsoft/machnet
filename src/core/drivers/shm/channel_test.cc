@@ -8,7 +8,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <nsaas.h>
+#include <machnet.h>
 #include <unistd.h>
 #include <utils.h>
 
@@ -28,21 +28,21 @@ constexpr const char *file_name(const char *path) {
 
 const char *fname = file_name(__FILE__);
 
-// Enqueue one message from the application to NSaaS.
-bool app_msg_enqueue(NSaaSChannelCtx_t *ctx, const std::vector<char> &msg) {
-  NSaaSIovec_t iovec;
+// Enqueue one message from the application to Machnet.
+bool app_msg_enqueue(MachnetChannelCtx_t *ctx, const std::vector<char> &msg) {
+  MachnetIovec_t iovec;
   iovec.base = const_cast<char *>(msg.data());
   iovec.len = msg.size();
-  NSaaSMsgHdr_t msghdr;
+  MachnetMsgHdr_t msghdr;
   msghdr.msg_size = msg.size();
   msghdr.flags = 0;
   msghdr.msg_iov = &iovec;
   msghdr.msg_iovlen = 1;
 
-  return nsaas_sendmsg(ctx, &msghdr) == 0;
+  return machnet_sendmsg(ctx, &msghdr) == 0;
 }
 
-// Check if the message we received in NSaaS matches the original one sent from
+// Check if the message we received in Machnet matches the original one sent from
 // the application.
 bool check_msg(juggler::shm::ShmChannel *channel, juggler::shm::MsgBuf *msg,
                const std::vector<char> &expected) {
@@ -70,7 +70,7 @@ bool check_msg(juggler::shm::ShmChannel *channel, juggler::shm::MsgBuf *msg,
  * @param  msg        The message to be copied.
  * @return bool       True if the message was copied successfully.
  */
-bool nsaas_msg_prepare(juggler::shm::MsgBufBatch *batch, const uint8_t *msg,
+bool machnet_msg_prepare(juggler::shm::MsgBufBatch *batch, const uint8_t *msg,
                        const uint32_t msg_size) {
   uint32_t msg_ofs = 0;
   uint32_t msg_buf_index = 0;
@@ -161,10 +161,10 @@ TEST(BasicChannelTest, ChannelDequeue) {
   // Step 1: Enqueue some messages to the channel (from the application).
   const std::vector<char> msg1(kMessageSize, 'a');
   EXPECT_TRUE(
-      app_msg_enqueue(const_cast<NSaaSChannelCtx_t *>(channel->ctx()), msg1));
+      app_msg_enqueue(const_cast<MachnetChannelCtx_t *>(channel->ctx()), msg1));
   const std::vector<char> msg2(kMessageSize, 'b');
   EXPECT_TRUE(
-      app_msg_enqueue(const_cast<NSaaSChannelCtx_t *>(channel->ctx()), msg2));
+      app_msg_enqueue(const_cast<MachnetChannelCtx_t *>(channel->ctx()), msg2));
 
   // Step 2: Dequeue the messages from the application, and check validity.
   juggler::shm::MsgBufBatch batch;
@@ -197,22 +197,22 @@ TEST(BasicChannelTest, ChannelEnqueue) {
   juggler::shm::MsgBufBatch batch;
   EXPECT_TRUE(channel->MsgBufBulkAlloc(&batch, nbuffers));
   EXPECT_EQ(batch.GetSize(), nbuffers);
-  EXPECT_TRUE(nsaas_msg_prepare(&batch, tx_msg.data(), tx_msg.size()));
+  EXPECT_TRUE(machnet_msg_prepare(&batch, tx_msg.data(), tx_msg.size()));
   EXPECT_EQ(channel->EnqueueMessages(&batch.bufs()[0], 1), 1);
 
   // Step 2: Dequeue the message from the application side, and check validity.
   std::vector<uint8_t> rx_msg(kMessageSize);
-  NSaaSIovec_t rx_iov;
+  MachnetIovec_t rx_iov;
   rx_iov.base = rx_msg.data();
   rx_iov.len = rx_msg.size();
-  NSaaSMsgHdr_t rx_msghdr;
+  MachnetMsgHdr_t rx_msghdr;
   rx_msghdr.msg_size = 0;
   rx_msghdr.flow_info = {
       .src_ip = 0, .dst_ip = 0, .src_port = 0, .dst_port = 0};
   rx_msghdr.msg_iov = &rx_iov;
   rx_msghdr.msg_iovlen = 1;
 
-  EXPECT_EQ(nsaas_recvmsg(channel->ctx(), &rx_msghdr), 1);
+  EXPECT_EQ(machnet_recvmsg(channel->ctx(), &rx_msghdr), 1);
   EXPECT_EQ(rx_msghdr.msg_size, kMessageSize);
   EXPECT_EQ(rx_msg, tx_msg);
 }
@@ -222,7 +222,7 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
       std::chrono::milliseconds(60 * 1000);   // 60 seconds.
   const uint32_t kChannelRingSize = 1 << 10;  // 1024 slots for all rings.
   const uint32_t kBufferSize =
-      (1 << 12) + NSAAS_MSGBUF_SPACE_RESERVED;  // 4096 bytes for payload.
+      (1 << 12) + MACHNET_MSGBUF_SPACE_RESERVED;  // 4096 bytes for payload.
   const std::size_t kMsgSizeMin = 4;
   const std::size_t kMsgSizeMax = 1 << 17;  // 128K bytes.
   const size_t kMsgNr = 1 << 20;
@@ -256,7 +256,7 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
   if (pid != 0) {
     // Parent process.
     // Busy-wait until the child process is ready.
-    while (__nsaas_channel_app_ring_pending(channel->ctx()) == 0) {
+    while (__machnet_channel_app_ring_pending(channel->ctx()) == 0) {
       __asm__("pause");
     }
 
@@ -308,7 +308,7 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
       auto ret = channel->MsgBufBulkAlloc(&tx_batch, nbuffers);
       if (!ret) continue;  // No buffers available.
 
-      EXPECT_TRUE(nsaas_msg_prepare(&tx_batch, tx_msg.data(), tx_msg_size));
+      EXPECT_TRUE(machnet_msg_prepare(&tx_batch, tx_msg.data(), tx_msg_size));
       ret = channel->EnqueueMessages(&tx_batch.bufs()[0], 1);
       if (ret == 1)
         msg_tx++;
@@ -329,12 +329,12 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
     // Check the buffer pool status.
     EXPECT_EQ(channel->GetFreeBufCount(), channel->GetTotalBufCount());
 
-    std::vector<NSaaSRingSlot_t> expected_buffers(channel->GetTotalBufCount());
+    std::vector<MachnetRingSlot_t> expected_buffers(channel->GetTotalBufCount());
     std::iota(expected_buffers.begin(), expected_buffers.end(), 0);
-    std::vector<NSaaSRingSlot_t> buffers(channel->GetTotalBufCount());
+    std::vector<MachnetRingSlot_t> buffers(channel->GetTotalBufCount());
 
     // Allocate all the buffers in the channel.
-    EXPECT_EQ(__nsaas_channel_buf_alloc_bulk(channel->ctx(), buffers.size(),
+    EXPECT_EQ(__machnet_channel_buf_alloc_bulk(channel->ctx(), buffers.size(),
                                              buffers.data(), nullptr),
               buffers.size());
     EXPECT_EQ(channel->GetFreeBufCount(), 0);
@@ -345,7 +345,7 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
     // Child process.
     const int kNumRetries = 5;
     size_t channel_size;
-    NSaaSChannelCtx_t *ctx = nullptr;
+    MachnetChannelCtx_t *ctx = nullptr;
 
     // Attempt to bind to the channel. Channel might not be ready yet, so we
     // retry.
@@ -355,7 +355,7 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
       if (num_retries++ > kNumRetries) {
         exit(kBindFailed);
       }
-      ctx = nsaas_bind(shm_fd, &channel_size);
+      ctx = machnet_bind(shm_fd, &channel_size);
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
@@ -374,15 +374,15 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
       }
 
       // Receive messages.
-      NSaaSIovec_t iov;
+      MachnetIovec_t iov;
       iov.base = rx_msg.data();
       iov.len = rx_msg.size();
-      NSaaSMsgHdr_t msghdr;
+      MachnetMsgHdr_t msghdr;
       msghdr.msg_size = 0;
       msghdr.flags = 0;
       msghdr.flow_info = {
           .src_ip = 0, .dst_ip = 0, .src_port = 0, .dst_port = 0};
-      auto ret = nsaas_recvmsg(ctx, &msghdr);
+      auto ret = machnet_recvmsg(ctx, &msghdr);
       if (ret == 1) msg_rx++;
 
       // If already sent the amount of messages needed skip.
@@ -399,7 +399,7 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
                           .dst_port = UINT16_MAX};
       msghdr.msg_iov = &iov;
       msghdr.msg_iovlen = 1;
-      ret = nsaas_sendmsg(ctx, &msghdr);
+      ret = machnet_sendmsg(ctx, &msghdr);
       if (ret == 0) msg_tx++;
     }
 

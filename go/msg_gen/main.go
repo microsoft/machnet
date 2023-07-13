@@ -10,7 +10,7 @@ import (
 	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/buger/jsonparser"
 	"github.com/golang/glog"
-	nsaas "github.com/msr-nsaas/nsaas"
+	machnet "github.com/msr-machnet/machnet"
 )
 
 // TODO: Check Path here.
@@ -36,14 +36,14 @@ type stats struct {
 }
 
 type task_ctx struct {
-	ctx      *nsaas.NSaaSChannelCtx
-	flow     nsaas.NSaaSNetFlow
+	ctx      *machnet.MachnetChannelCtx
+	flow     machnet.MachnetFlow
 	msg_data []uint8
 	rx_msg   []uint8
 }
 
 // TODO: Currently, allows for exactly `msg_size` bytes of data.
-func new_task_ctx(ctx *nsaas.NSaaSChannelCtx, flow nsaas.NSaaSNetFlow) *task_ctx {
+func new_task_ctx(ctx *machnet.MachnetChannelCtx, flow machnet.MachnetFlow) *task_ctx {
 	var task *task_ctx = new(task_ctx)
 
 	task.ctx = ctx
@@ -148,7 +148,7 @@ func tx(task *task_ctx, stats *stats) {
 		return
 	}
 
-	ret := nsaas.SendMsg(channel_ctx, task.flow, &task.msg_data[0], uint(msg_size))
+	ret := machnet.SendMsg(channel_ctx, task.flow, &task.msg_data[0], uint(msg_size))
 	if ret == 0 {
 		stats.tx_success += 1
 		stats.tx_bytes += uint64(msg_size)
@@ -160,7 +160,7 @@ func tx(task *task_ctx, stats *stats) {
 func rx(task *task_ctx, stats *stats) {
 	channel_ctx := task.ctx
 
-	err, _ := nsaas.RecvMsg(channel_ctx, &task.rx_msg[0], uint(msg_size))
+	err, _ := machnet.RecvMsg(channel_ctx, &task.rx_msg[0], uint(msg_size))
 	if err != 0 {
 		return
 	}
@@ -190,7 +190,7 @@ func ping(task *task_ctx, stats *stats, histogram *hdrhistogram.Histogram) {
 	// Start timer.
 	start := time.Now()
 
-	ret := nsaas.SendMsg(channel_ctx, task.flow, &task.msg_data[0], uint(msg_size))
+	ret := machnet.SendMsg(channel_ctx, task.flow, &task.msg_data[0], uint(msg_size))
 	if ret == 0 {
 		stats.tx_success += 1
 		stats.tx_bytes += uint64(msg_size)
@@ -199,9 +199,9 @@ func ping(task *task_ctx, stats *stats, histogram *hdrhistogram.Histogram) {
 	}
 
 	// Keep reading until we get a message from the same flow.
-	err, _ := nsaas.RecvMsg(channel_ctx, &task.rx_msg[0], uint(msg_size))
+	err, _ := machnet.RecvMsg(channel_ctx, &task.rx_msg[0], uint(msg_size))
 	for err != 0 {
-		err, _ = nsaas.RecvMsg(channel_ctx, &task.rx_msg[0], uint(msg_size))
+		err, _ = machnet.RecvMsg(channel_ctx, &task.rx_msg[0], uint(msg_size))
 	}
 
 	// Stop timer.
@@ -224,7 +224,7 @@ func ping(task *task_ctx, stats *stats, histogram *hdrhistogram.Histogram) {
 func bounce(task *task_ctx, stats *stats) {
 	channel_ctx := task.ctx
 
-	err, flow_info := nsaas.RecvMsg(channel_ctx, &task.rx_msg[0], uint(msg_size))
+	err, flow_info := machnet.RecvMsg(channel_ctx, &task.rx_msg[0], uint(msg_size))
 	if err != 0 {
 		return
 	}
@@ -239,7 +239,7 @@ func bounce(task *task_ctx, stats *stats) {
 	flow_info.DstPort = tmp_flow.SrcPort
 
 	// Prepare to send back the message.
-	ret := nsaas.SendMsg(channel_ctx, flow_info, &task.rx_msg[0], uint(msg_size))
+	ret := machnet.SendMsg(channel_ctx, flow_info, &task.rx_msg[0], uint(msg_size))
 	if ret == 0 {
 		stats.tx_success += 1
 		stats.tx_bytes += uint64(msg_size)
@@ -296,14 +296,14 @@ func main() {
 		glog.Info("Starting in passive message bouncing mode.")
 	}
 
-	// Initialize the nsaas library.
-	ret := nsaas.Init()
+	// Initialize the machnet library.
+	ret := machnet.Init()
 	if ret != 0 {
-		glog.Fatal("Failed to initialize the nsaas library.")
+		glog.Fatal("Failed to initialize the machnet library.")
 	}
 
-	// Define a pointer variable channel_ctx to store the output of C.nsaas_attach()
-	var channel_ctx *nsaas.NSaaSChannelCtx = nsaas.Attach() // TODO: Defer nsaas.Detach()?
+	// Define a pointer variable channel_ctx to store the output of C.machnet_attach()
+	var channel_ctx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 
 	if channel_ctx == nil {
 		glog.Fatal("Failed to attach to the channel.")
@@ -318,20 +318,20 @@ func main() {
 	// Parse the json file to get the local_ip.
 	local_ip, _ := jsonparser.GetString(json_bytes, "hosts_config", local_hostname, "ipv4_addr")
 
-	var flow nsaas.NSaaSNetFlow
+	var flow machnet.MachnetFlow
 	if active_generator {
 		// Parse the json file to get the remote_ip.
 		remote_ip, _ := jsonparser.GetString(json_bytes, "hosts_config", remote_hostname, "ipv4_addr")
 
 		// Initiate connection to the remote host.
-		ret, flow = nsaas.Connect(channel_ctx, local_ip, remote_ip, remote_port)
+		ret, flow = machnet.Connect(channel_ctx, local_ip, remote_ip, remote_port)
 		if ret != 0 {
 			glog.Fatal("Failed to connect to remote host.")
 		}
 		glog.Info("[CONNECTED] [", local_ip, " <-> ", remote_ip, ":", remote_port, "]")
 	} else {
 		// Listen for incoming connections.
-		ret = nsaas.Listen(channel_ctx, local_ip, remote_port)
+		ret = machnet.Listen(channel_ctx, local_ip, remote_port)
 		if ret != 0 {
 			glog.Fatal("Failed to listen for incoming connections.")
 		}

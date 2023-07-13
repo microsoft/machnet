@@ -10,7 +10,7 @@
 #include <icmp.h>
 #include <ipv4.h>
 #include <math.h>
-#include <nsaas_config.h>
+#include <machnet_config.h>
 #include <packet.h>
 #include <pmd.h>
 #include <ttime.h>
@@ -409,7 +409,7 @@ int main(int argc, char *argv[]) {
   gflags::SetUsageMessage("Simple packet generator.");
 
   signal(SIGINT, int_handler);
-  juggler::NSaaSConfigProcessor config_processor(FLAGS_config_json);
+  juggler::MachnetConfigProcessor config_processor(FLAGS_config_json);
 
   LOG_IF(FATAL, config_processor.interfaces_config().size() != 1)
       << "Exactly one interface must be configured. ";

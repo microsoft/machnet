@@ -1,5 +1,5 @@
-PROJECT_NAME = NSaaS
-INPUT = src/ext/nsaas.h
+PROJECT_NAME = Machnet
+INPUT = src/ext/machnet.h
 DISTRIBUTE_GROUP_DOC = YES
 OUTPUT_DIRECTORY = ./doxygen_generated
 

@@ -16,8 +16,8 @@
 #include <flow_key.h>
 #include <glog/logging.h>
 #include <ipv4.h>
-#include <nsaas_common.h>
-#include <nsaas_pkthdr.h>
+#include <machnet_common.h>
+#include <machnet_pkthdr.h>
 #include <packet.h>
 #include <packet_pool.h>
 #include <pmd.h>
@@ -153,7 +153,7 @@ class TXQueue {
  */
 class RXQueue {
  public:
-  using NSaaSPktHdr = net::NSaaSPktHdr;
+  using MachnetPktHdr = net::MachnetPktHdr;
 
   static constexpr std::size_t kReassemblyQueueDefaultSize = 64;
   static constexpr std::size_t kReassemblyQueueDefaultSizeMask =
@@ -195,10 +195,10 @@ class RXQueue {
 
   void Push(swift::Pcb* pcb, const dpdk::Packet* packet) {
     const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
-    const auto* nsaash = packet->head_data<NSaaSPktHdr*>(net_hdr_len);
+    const auto* machneth = packet->head_data<MachnetPktHdr*>(net_hdr_len);
     const auto* payload =
-        packet->head_data<uint8_t*>(net_hdr_len + sizeof(NSaaSPktHdr));
-    const auto seqno = nsaash->seqno.value();
+        packet->head_data<uint8_t*>(net_hdr_len + sizeof(MachnetPktHdr));
+    const auto seqno = machneth->seqno.value();
     const auto expected_seqno = pcb->rcv_nxt;
 
     if (swift::seqno_lt(seqno, expected_seqno)) [[unlikely]] {  // NOLINT
@@ -240,10 +240,10 @@ class RXQueue {
     auto* msgbuf = channel_->MsgBufAlloc();
     CHECK_NOTNULL(msgbuf);
     const size_t payload_len =
-        packet->length() - net_hdr_len - sizeof(NSaaSPktHdr);
+        packet->length() - net_hdr_len - sizeof(MachnetPktHdr);
     auto* msg_data = msgbuf->append<uint8_t*>(payload_len);
     utils::Copy(CHECK_NOTNULL(msg_data), payload, msgbuf->length());
-    msgbuf->set_flags(nsaash->msg_flags);
+    msgbuf->set_flags(machneth->msg_flags);
     msgbuf->set_src_ip(remote_ip_);
     msgbuf->set_src_port(remote_port_);
     msgbuf->set_dst_ip(local_ip_);
@@ -339,7 +339,7 @@ class Flow {
   using Ethernet = net::Ethernet;
   using Ipv4 = net::Ipv4;
   using Udp = net::Udp;
-  using NSaaSPktHdr = net::NSaaSPktHdr;
+  using MachnetPktHdr = net::MachnetPktHdr;
   using ApplicationCallback =
       std::function<void(shm::Channel*, bool, const Key&)>;
 
@@ -485,18 +485,18 @@ class Flow {
    * @param packet Pointer to the allocated packet on the rx ring of the driver
    */
   void InputPacket(const dpdk::Packet* packet) {
-    // Parse the NSaaS header of the packet.
+    // Parse the Machnet header of the packet.
     const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
-    auto* nsaash = packet->head_data<NSaaSPktHdr*>(net_hdr_len);
+    auto* machneth = packet->head_data<MachnetPktHdr*>(net_hdr_len);
 
-    // Sanity check on the NSaaS header.
-    if (nsaash->magic.value() != NSaaSPktHdr::kMagic) [[unlikely]] {  // NOLINT
-        LOG(ERROR) << "Invalid NSaaS header magic: " << nsaash->magic;
+    // Sanity check on the Machnet header.
+    if (machneth->magic.value() != MachnetPktHdr::kMagic) [[unlikely]] {  // NOLINT
+        LOG(ERROR) << "Invalid Machnet header magic: " << machneth->magic;
         return;
       }  // NOLINT
 
-    switch (nsaash->net_flags) {
-      case NSaaSPktHdr::NSaaSNetFlags::kSyn:
+    switch (machneth->net_flags) {
+      case MachnetPktHdr::MachnetFlags::kSyn:
         // SYN packet received. For this to be valid it has to be an already
         // established flow with this SYN being a retransmission.
         if (state_ != State::kSynReceived && state_ != State::kClosed) {
@@ -508,7 +508,7 @@ class Flow {
         if (state_ == State::kClosed) {
           // If the flow is in closed state, we need to send a SYN-ACK packetj
           // and mark the flow as established.
-          pcb_.rcv_nxt = nsaash->seqno.value();
+          pcb_.rcv_nxt = machneth->seqno.value();
           pcb_.advance_rcv_nxt();
           SendSynAck(pcb_.get_snd_nxt());
           state_ = State::kSynReceived;
@@ -518,7 +518,7 @@ class Flow {
           SendSynAck(pcb_.snd_una);
         }
         break;
-      case NSaaSPktHdr::NSaaSNetFlags::kSynAck:
+      case MachnetPktHdr::MachnetFlags::kSynAck:
         // SYN-ACK packet received. For this to be valid it has to be an already
         // established flow with this SYN-ACK being a retransmission.
         if (state_ != State::kSynSent && state_ != State::kEstablished) {
@@ -527,16 +527,16 @@ class Flow {
           return;
         }
 
-        if (nsaash->ackno.value() != pcb_.snd_nxt) [[unlikely]] {  // NOLINT
+        if (machneth->ackno.value() != pcb_.snd_nxt) [[unlikely]] {  // NOLINT
             LOG(ERROR) << "SYN-ACK packet received with invalid ackno: "
-                       << nsaash->ackno << " snd_una: " << pcb_.snd_una
+                       << machneth->ackno << " snd_una: " << pcb_.snd_una
                        << " snd_nxt: " << pcb_.snd_nxt;
             return;
           }
 
         if (state_ == State::kSynSent) {
           pcb_.snd_una++;
-          pcb_.rcv_nxt = nsaash->seqno.value();
+          pcb_.rcv_nxt = machneth->seqno.value();
           pcb_.advance_rcv_nxt();
           pcb_.rto_maybe_reset();
           // Mark the flow as established.
@@ -547,20 +547,20 @@ class Flow {
         // Send an ACK packet.
         SendAck();
         break;
-      case NSaaSPktHdr::NSaaSNetFlags::kRst: {
-        const auto seqno = nsaash->seqno.value();
+      case MachnetPktHdr::MachnetFlags::kRst: {
+        const auto seqno = machneth->seqno.value();
         const auto expected_seqno = pcb_.rcv_nxt;
         if (swift::seqno_eq(seqno, expected_seqno)) {
           // If the RST packet is in sequence, we can reset the flow.
           state_ = State::kClosed;
         }
       } break;
-      case NSaaSPktHdr::NSaaSNetFlags::kAck:
+      case MachnetPktHdr::MachnetFlags::kAck:
         // ACK packet, update the flow.
-        // update_flow(nsaash);
-        process_ack(nsaash);
+        // update_flow(machneth);
+        process_ack(machneth);
         break;
-      case NSaaSPktHdr::NSaaSNetFlags::kData:
+      case MachnetPktHdr::MachnetFlags::kData:
         // clang-format off
         if (state_ != State::kEstablished) [[unlikely]] { // NOLINT
             // clang-format on
@@ -668,58 +668,58 @@ class Flow {
     packet->offload_udpv4_csum();
   }
 
-  void PrepareNSaaSHdr(dpdk::Packet* packet, uint32_t seqno,
-                       const NSaaSPktHdr::NSaaSNetFlags& net_flags,
+  void PrepareMachnetHdr(dpdk::Packet* packet, uint32_t seqno,
+                       const MachnetPktHdr::MachnetFlags& net_flags,
                        uint8_t msg_flags = 0) {
-    auto* nsaash = packet->head_data<NSaaSPktHdr*>(sizeof(Ethernet) +
+    auto* machneth = packet->head_data<MachnetPktHdr*>(sizeof(Ethernet) +
                                                    sizeof(Ipv4) + sizeof(Udp));
-    nsaash->magic = be16_t(NSaaSPktHdr::kMagic);
-    nsaash->net_flags = net_flags;
-    nsaash->msg_flags = msg_flags;
-    nsaash->seqno = be32_t(seqno);
-    nsaash->ackno = be32_t(pcb_.ackno());
-    nsaash->sack_bitmap = be64_t(pcb_.sack_bitmap);
-    nsaash->sack_bitmap_count = be16_t(pcb_.sack_bitmap_count);
-    nsaash->timestamp1 = be64_t(0);
+    machneth->magic = be16_t(MachnetPktHdr::kMagic);
+    machneth->net_flags = net_flags;
+    machneth->msg_flags = msg_flags;
+    machneth->seqno = be32_t(seqno);
+    machneth->ackno = be32_t(pcb_.ackno());
+    machneth->sack_bitmap = be64_t(pcb_.sack_bitmap);
+    machneth->sack_bitmap_count = be16_t(pcb_.sack_bitmap_count);
+    machneth->timestamp1 = be64_t(0);
   }
 
   void SendControlPacket(uint32_t seqno,
-                         const NSaaSPktHdr::NSaaSNetFlags& flags) {
+                         const MachnetPktHdr::MachnetFlags& flags) {
     auto* packet = CHECK_NOTNULL(txring_->GetPacketPool()->PacketAlloc());
     dpdk::Packet::Reset(packet);
 
     const size_t kControlPacketSize =
-        sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) + sizeof(NSaaSPktHdr);
+        sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) + sizeof(MachnetPktHdr);
     CHECK_NOTNULL(packet->append(kControlPacketSize));
     PrepareL2Header(packet);
     PrepareL3Header(packet);
     PrepareL4Header(packet);
-    PrepareNSaaSHdr(packet, seqno, flags);
+    PrepareMachnetHdr(packet, seqno, flags);
 
     // Send the packet.
     txring_->SendPackets(&packet, 1);
   }
 
   void SendSyn(uint32_t seqno) {
-    SendControlPacket(seqno, NSaaSPktHdr::NSaaSNetFlags::kSyn);
+    SendControlPacket(seqno, MachnetPktHdr::MachnetFlags::kSyn);
   }
 
   void SendSynAck(uint32_t seqno) {
-    SendControlPacket(seqno, NSaaSPktHdr::NSaaSNetFlags::kSyn |
-                                 NSaaSPktHdr::NSaaSNetFlags::kAck);
+    SendControlPacket(seqno, MachnetPktHdr::MachnetFlags::kSyn |
+                                 MachnetPktHdr::MachnetFlags::kAck);
   }
 
   void SendAck() {
-    SendControlPacket(pcb_.seqno(), NSaaSPktHdr::NSaaSNetFlags::kAck);
+    SendControlPacket(pcb_.seqno(), MachnetPktHdr::MachnetFlags::kAck);
   }
 
   void SendRst() {
-    SendControlPacket(pcb_.seqno(), NSaaSPktHdr::NSaaSNetFlags::kRst);
+    SendControlPacket(pcb_.seqno(), MachnetPktHdr::MachnetFlags::kRst);
   }
 
   /**
    * @brief This helper method prepares a network packet that carries the data
-   * of a particular `NSaaSMsgBuf_t'.
+   * of a particular `MachnetMsgBuf_t'.
    *
    * @tparam copy_mode Copy mode of the packet. Either kMemCopy or kZeroCopy.
    * @param buf Pointer to the message buffer to be sent.
@@ -732,7 +732,7 @@ class Flow {
     DCHECK(!(msg_buf->is_last() && msg_buf->is_sg()));
     // Header length after before the payload.
     const size_t hdr_length =
-        (sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) + sizeof(NSaaSPktHdr));
+        (sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) + sizeof(MachnetPktHdr));
     const uint32_t pkt_len = hdr_length + msg_buf->length();
     CHECK_LE(pkt_len - sizeof(Ethernet), dpdk::PmdRing::kDefaultFrameSize);
 
@@ -769,22 +769,22 @@ class Flow {
     PrepareL3Header(packet);
     PrepareL4Header(packet);
 
-    // Prepare the NSaaS-specific header.
-    auto* nsaash = packet->head_data<NSaaSPktHdr*>(sizeof(Ethernet) +
+    // Prepare the Machnet-specific header.
+    auto* machneth = packet->head_data<MachnetPktHdr*>(sizeof(Ethernet) +
                                                    sizeof(Ipv4) + sizeof(Udp));
-    nsaash->magic = be16_t(NSaaSPktHdr::kMagic);
-    nsaash->net_flags = NSaaSPktHdr::NSaaSNetFlags::kData;
-    nsaash->ackno = be32_t(UINT32_MAX);
-    nsaash->msg_flags = msg_buf->flags();
+    machneth->magic = be16_t(MachnetPktHdr::kMagic);
+    machneth->net_flags = MachnetPktHdr::MachnetFlags::kData;
+    machneth->ackno = be32_t(UINT32_MAX);
+    machneth->msg_flags = msg_buf->flags();
     DCHECK(!(msg_buf->is_last() && msg_buf->is_sg()));
 
-    // nsaash->msg_id = be32_t(msg_id_);
-    nsaash->seqno = be32_t(seqno);
-    nsaash->timestamp1 = be64_t(0);
+    // machneth->msg_id = be32_t(msg_id_);
+    machneth->seqno = be32_t(seqno);
+    machneth->timestamp1 = be64_t(0);
 
     if constexpr (copy_mode == CopyMode::kMemCopy) {
       // Copy the payload.
-      auto* payload = reinterpret_cast<uint8_t*>(nsaash + 1);
+      auto* payload = reinterpret_cast<uint8_t*>(machneth + 1);
       utils::Copy(payload, msg_buf->head_data(), msg_buf->length());
     }
   }
@@ -855,15 +855,15 @@ class Flow {
     if (pcb_.rto_disabled()) pcb_.rto_enable();
   }
 
-  void process_ack(const NSaaSPktHdr* nsaash) {
-    auto ackno = nsaash->ackno.value();
+  void process_ack(const MachnetPktHdr* machneth) {
+    auto ackno = machneth->ackno.value();
     if (swift::seqno_lt(ackno, pcb_.snd_una)) {
       return;
     } else if (swift::seqno_eq(ackno, pcb_.snd_una)) {
       // Duplicate ACK.
       pcb_.duplicate_acks++;
       // Update the number of out-of-order acknowledgements.
-      pcb_.snd_ooo_acks = nsaash->sack_bitmap_count.value();
+      pcb_.snd_ooo_acks = machneth->sack_bitmap_count.value();
 
       if (pcb_.duplicate_acks < swift::Pcb::kRexmitThreshold) {
         // We have not reached the threshold yet, so we do not do anything.
@@ -874,8 +874,8 @@ class Flow {
         // We have already done the fast retransmit, so we are now in the
         // fast recovery phase. We need to send a new packet for every ACK we
         // get.
-        auto sack_bitmap = nsaash->sack_bitmap.value();
-        auto sack_bitmap_count = nsaash->sack_bitmap_count.value();
+        auto sack_bitmap = machneth->sack_bitmap.value();
+        auto sack_bitmap_count = machneth->sack_bitmap_count.value();
 
         // First we check the SACK bitmap to see if there are more undelivered
         // packets. In fast recovery mode we get after a fast retransmit, and

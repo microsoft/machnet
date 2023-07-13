@@ -1,6 +1,6 @@
 #!/bin/bash
-# Start the NSaaS service on this machineA
-# Usage: nsaas.sh --mac <local MAC> --ip <local IP>
+# Start the Machnet service on this machineA
+# Usage: machnet.sh --mac <local MAC> --ip <local IP>
 #  - mac: MAC address of the local DPDK interface
 #  - ip: IP address of the local DPDK interface
 #  - bare_metal: if set, will use local binary instead of Docker image
@@ -85,41 +85,41 @@ if ! groups | grep -q docker; then
     exit
 fi
 
-echo "Checking if the NSaaS Docker image is available"
-if ! docker pull ghcr.io/msr-nsaas/nsaas:latest
+echo "Checking if the Machnet Docker image is available"
+if ! docker pull ghcr.io/msr-machnet/machnet:latest
 then
-    echo "Please make sure you have access to the NSaaS Docker image at ghcr.io/msr-nsaas/nsaas"
-    echo "See NSaaS README for instructions on how to get access"
+    echo "Please make sure you have access to the Machnet Docker image at ghcr.io/msr-machnet/machnet"
+    echo "See Machnet README for instructions on how to get access"
 fi
 
-echo "Starting NSaaS with local MAC $LOCAL_MAC and IP $LOCAL_IP"
+echo "Starting Machnet with local MAC $LOCAL_MAC and IP $LOCAL_IP"
 
-if [ ! -d "/var/run/nsaas" ]; then
-    echo "Creating /var/run/nsaas"
-    sudo mkdir -p /var/run/nsaas
+if [ ! -d "/var/run/machnet" ]; then
+    echo "Creating /var/run/machnet"
+    sudo mkdir -p /var/run/machnet
 fi
 
-sudo bash -c "echo '{\"nsaas_config\": {\"$LOCAL_MAC\": {\"ip\": \"$LOCAL_IP\"}}}' > /var/run/nsaas/local_config.json"
-echo "Created config for local NSaaS, in /var/run/nsaas/local_config.json. Contents:"
-sudo cat /var/run/nsaas/local_config.json
+sudo bash -c "echo '{\"machnet_config\": {\"$LOCAL_MAC\": {\"ip\": \"$LOCAL_IP\"}}}' > /var/run/machnet/local_config.json"
+echo "Created config for local Machnet, in /var/run/machnet/local_config.json. Contents:"
+sudo cat /var/run/machnet/local_config.json
 
 if [ $BARE_METAL -eq 1 ]; then
-    echo "Starting NSaaS in bare metal mode"
+    echo "Starting Machnet in bare metal mode"
     THIS_SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-    nsaas_bin="$THIS_SCRIPT_DIR/build/src/apps/nsaas/nsaas"
+    machnet_bin="$THIS_SCRIPT_DIR/build/src/apps/machnet/machnet"
 
-    if [ ! -f ${nsaas_bin} ]; then
-        echo "${nsaas_bin} not found, please build NSaaS first"
+    if [ ! -f ${machnet_bin} ]; then
+        echo "${machnet_bin} not found, please build Machnet first"
         exit 1
     fi
 
-    sudo ${nsaas_bin} --config_json /var/run/nsaas/local_config.json --logtostderr=1
+    sudo ${machnet_bin} --config_json /var/run/machnet/local_config.json --logtostderr=1
 else
     sudo docker run --privileged --net=host \
         -v /dev/hugepages:/dev/hugepages \
-        -v /var/run/nsaas:/var/run/nsaas \
-        ghcr.io/msr-nsaas/nsaas:latest \
-        /root/nsaas/build/src/apps/nsaas/nsaas \
-        --config_json /var/run/nsaas/local_config.json \
+        -v /var/run/machnet:/var/run/machnet \
+        ghcr.io/msr-machnet/machnet:latest \
+        /root/machnet/build/src/apps/machnet/machnet \
+        --config_json /var/run/machnet/local_config.json \
         --logtostderr=1
 fi

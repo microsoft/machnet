@@ -6,17 +6,17 @@ time (RTT) between two machines.
 
 ## Prerequisites
 
-Successful build of the `NSaaS` project (see main [README](../../../README.md)).
+Successful build of the `Machnet` project (see main [README](../../../README.md)).
 
 ## Running the application
 
 ### Configuration
 
-The configuration is done by editing the [config.json](../nsaas/config.json) file similar to the [nsaas](../nsaas) application. The configuration file should contain exactly one interface configuration.
+The configuration is done by editing the [config.json](../machnet/config.json) file similar to the [machnet](../machnet) application. The configuration file should contain exactly one interface configuration.
 
 ```json
 {
-  "nsaas_config": {
+  "machnet_config": {
     "00:0d:3a:d6:9b:6e": {
       "ip": "10.0.255.254",
       "cpu_mask": "0xffff"

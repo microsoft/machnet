@@ -1,13 +1,13 @@
 /**
- * @file nsaas_engine_test.cc
+ * @file machnet_engine_test.cc
  *
- * Unit tests for the NSaaSEngine class.
+ * Unit tests for the MachnetEngine class.
  */
 
 #include <channel.h>
 #include <dpdk.h>
 #include <gtest/gtest.h>
-#include <nsaas_engine.h>
+#include <machnet_engine.h>
 #include <packet.h>
 #include <pmd.h>
 
@@ -26,16 +26,16 @@ constexpr const char *file_name(const char *path) {
 
 const char *fname = file_name(__FILE__);
 
-TEST(BasicNSaaSEngineSharedStateTest, SrcPortAlloc) {
+TEST(BasicMachnetEngineSharedStateTest, SrcPortAlloc) {
   using EthAddr = juggler::net::Ethernet::Address;
   using Ipv4Addr = juggler::net::Ipv4::Address;
   using UdpPort = juggler::net::Udp::Port;
-  using NSaaSEngineSharedState = juggler::NSaaSEngineSharedState;
+  using MachnetEngineSharedState = juggler::MachnetEngineSharedState;
 
   EthAddr test_mac;
   Ipv4Addr test_ip;
 
-  NSaaSEngineSharedState state({}, {test_mac}, {test_ip});
+  MachnetEngineSharedState state({}, {test_mac}, {test_ip});
   std::vector<UdpPort> allocated_ports;
   do {
     auto port = state.SrcPortAlloc(test_ip, [](uint16_t port) { return true; });
@@ -44,10 +44,10 @@ TEST(BasicNSaaSEngineSharedStateTest, SrcPortAlloc) {
   } while (true);
 
   std::vector<UdpPort> expected_ports;
-  expected_ports.resize(NSaaSEngineSharedState::kSrcPortMax -
-                        NSaaSEngineSharedState::kSrcPortMin + 1);
+  expected_ports.resize(MachnetEngineSharedState::kSrcPortMax -
+                        MachnetEngineSharedState::kSrcPortMin + 1);
   std::iota(expected_ports.begin(), expected_ports.end(),
-            NSaaSEngineSharedState::kSrcPortMin);
+            MachnetEngineSharedState::kSrcPortMin);
 
   EXPECT_EQ(allocated_ports, expected_ports);
 
@@ -70,8 +70,8 @@ TEST(BasicNSaaSEngineSharedStateTest, SrcPortAlloc) {
   } while (true);
 
   expected_ports.clear();
-  for (size_t p = NSaaSEngineSharedState::kSrcPortMin;
-       p <= NSaaSEngineSharedState::kSrcPortMax; p++) {
+  for (size_t p = MachnetEngineSharedState::kSrcPortMin;
+       p <= MachnetEngineSharedState::kSrcPortMax; p++) {
     if (is_divisible_by_3(p)) {
       expected_ports.emplace_back(p);
     }
@@ -85,9 +85,9 @@ TEST(BasicNSaaSEngineSharedStateTest, SrcPortAlloc) {
   EXPECT_FALSE(port.has_value());
 }
 
-TEST(BasicNSaaSEngineTest, BasicNSaaSEngineTest) {
+TEST(BasicMachnetEngineTest, BasicMachnetEngineTest) {
   using PmdPort = juggler::dpdk::PmdPort;
-  using NSaaSEngine = juggler::NSaaSEngine;
+  using MachnetEngine = juggler::MachnetEngine;
 
   const uint32_t kChannelRingSize = 1024;
   juggler::shm::ChannelManager channel_mgr;
@@ -100,12 +100,12 @@ TEST(BasicNSaaSEngineTest, BasicNSaaSEngineTest) {
   test_ip.FromString("10.0.0.1");
   std::vector<uint8_t> rss_key = {};
   std::vector<juggler::net::Ipv4::Address> test_ips = {test_ip};
-  auto shared_state = std::make_shared<juggler::NSaaSEngineSharedState>(
+  auto shared_state = std::make_shared<juggler::MachnetEngineSharedState>(
       rss_key, test_mac, test_ips);
   const uint32_t kRingDescNr = 1024;
   auto pmd_port = std::make_shared<PmdPort>(0, 1, 1, kRingDescNr, kRingDescNr);
   pmd_port->InitDriver();
-  NSaaSEngine engine(pmd_port, 0, 0, shared_state, {channel});
+  MachnetEngine engine(pmd_port, 0, 0, shared_state, {channel});
   EXPECT_EQ(engine.GetChannelCount(), 1);
 }
 

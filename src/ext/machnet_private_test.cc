@@ -1,4 +1,4 @@
-#include "nsaas_private.h"
+#include "machnet_private.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -7,11 +7,11 @@
 #include <random>
 #include <thread>
 
-TEST(NSaaSPrivateTest, NSaasChannelCalcShMemSize) {
-  auto calc_func = [](size_t nsaas_r_slots, size_t app_r_slots,
+TEST(MachnetPrivateTest, NSaasChannelCalcShMemSize) {
+  auto calc_func = [](size_t machnet_r_slots, size_t app_r_slots,
                       size_t buf_r_slots, size_t buffer_size) {
-    return __nsaas_channel_dataplane_calculate_size(
-        nsaas_r_slots, app_r_slots, buf_r_slots, buffer_size, 0);
+    return __machnet_channel_dataplane_calculate_size(
+        machnet_r_slots, app_r_slots, buf_r_slots, buffer_size, 0);
   };
 
   const uint32_t kMaxCount = std::min(65536u, RING_SZ_MASK);
@@ -30,7 +30,7 @@ TEST(NSaaSPrivateTest, NSaasChannelCalcShMemSize) {
   } while (count <= kMaxCount);
 }
 
-TEST(NSaaSPrivateTest, NSaasChannelCreateDestroy) {
+TEST(MachnetPrivateTest, NSaasChannelCreateDestroy) {
   const std::size_t kChannelRingSize = 1 << 11;  // 2048 slots for all rings.
   const std::size_t kBufferSize = 1 << 12;       // 4096 bytes for buffer.
   const std::string channel_name = "test_channel_create_destroy";
@@ -39,18 +39,18 @@ TEST(NSaaSPrivateTest, NSaasChannelCreateDestroy) {
   size_t channel_size;
   int is_posix_shm;
   int channel_fd;
-  NSaaSChannelCtx_t *channel_ctx = __nsaas_channel_create(
+  MachnetChannelCtx_t *channel_ctx = __machnet_channel_create(
       channel_name.c_str(), kChannelRingSize, kChannelRingSize,
       kChannelRingSize, kBufferSize, &channel_size, &is_posix_shm, &channel_fd);
   EXPECT_NE(channel_ctx, nullptr);
 
   // Destroy the channel (should succeed).
-  __nsaas_channel_destroy(channel_ctx, channel_size, &channel_fd, is_posix_shm,
+  __machnet_channel_destroy(channel_ctx, channel_size, &channel_fd, is_posix_shm,
                           channel_name.c_str());
   EXPECT_EQ(channel_fd, -1);
 }
 
-TEST(NSaaSPrivateTest, NSaasChannelDataplaneInit) {
+TEST(MachnetPrivateTest, NSaasChannelDataplaneInit) {
   const uint32_t kChannelRingSize = 1 << 11;  // 2048 slots for all rings.
   const uint32_t kBufferSize = 1 << 12;       // 4096 bytes for buffer.
   const std::string channel_name = "test_channel";
@@ -59,20 +59,20 @@ TEST(NSaaSPrivateTest, NSaasChannelDataplaneInit) {
   size_t channel_size;
   int is_posix_shm;
   int channel_fd;
-  NSaaSChannelCtx_t *channel_ctx = __nsaas_channel_create(
+  MachnetChannelCtx_t *channel_ctx = __machnet_channel_create(
       channel_name.c_str(), kChannelRingSize, kChannelRingSize,
       kChannelRingSize, kBufferSize, &channel_size, &is_posix_shm, &channel_fd);
   EXPECT_NE(channel_ctx, nullptr);
-  EXPECT_EQ(channel_ctx->magic, NSAAS_CHANNEL_CTX_MAGIC);
+  EXPECT_EQ(channel_ctx->magic, MACHNET_CHANNEL_CTX_MAGIC);
   EXPECT_EQ(std::string(channel_ctx->name), channel_name);
 
   // Destroy the channel (should succeed).
-  __nsaas_channel_destroy(channel_ctx, channel_size, &channel_fd, is_posix_shm,
+  __machnet_channel_destroy(channel_ctx, channel_size, &channel_fd, is_posix_shm,
                           channel_name.c_str());
   EXPECT_EQ(channel_fd, -1);
 }
 
-TEST(NSaaSPrivateTest, NSaasChannelBufAllocFree) {
+TEST(MachnetPrivateTest, NSaasChannelBufAllocFree) {
   const uint32_t kChannelRingSize = 1 << 11;  // 2048 slots for all rings.
   const uint32_t kBufferSize = 1 << 12;       // 4096 bytes for buffer.
 
@@ -82,21 +82,21 @@ TEST(NSaaSPrivateTest, NSaasChannelBufAllocFree) {
   size_t channel_size;
   int is_posix_shm;
   int channel_fd;
-  auto *channel = __nsaas_channel_create(
+  auto *channel = __machnet_channel_create(
       channel_name.c_str(), kChannelRingSize, kChannelRingSize,
       kChannelRingSize, kBufferSize, &channel_size, &is_posix_shm, &channel_fd);
   EXPECT_NE(channel, nullptr);
-  EXPECT_EQ(channel->magic, NSAAS_CHANNEL_CTX_MAGIC);
+  EXPECT_EQ(channel->magic, MACHNET_CHANNEL_CTX_MAGIC);
   EXPECT_EQ(std::string(channel->name), channel_name);
 
-  std::vector<NSaaSRingSlot_t> buffer_indices;
+  std::vector<MachnetRingSlot_t> buffer_indices;
   // TEST 0: Allocate a single buffer and free it (should succeed).
   buffer_indices.resize(1);
-  uint32_t n = __nsaas_channel_buf_alloc_bulk(channel, buffer_indices.size(),
+  uint32_t n = __machnet_channel_buf_alloc_bulk(channel, buffer_indices.size(),
                                               buffer_indices.data(), nullptr);
   EXPECT_EQ(n, buffer_indices.size());
   EXPECT_EQ(buffer_indices[0], 0);
-  n = __nsaas_channel_buf_free_bulk(channel, buffer_indices.size(),
+  n = __machnet_channel_buf_free_bulk(channel, buffer_indices.size(),
                                     buffer_indices.data());
   EXPECT_EQ(n, buffer_indices.size());
 
@@ -104,27 +104,27 @@ TEST(NSaaSPrivateTest, NSaasChannelBufAllocFree) {
   // NOTE: The usable buffers in the channel are equal to the buffer ring size
   // - 1.
   buffer_indices.resize(kChannelRingSize - 1);
-  n = __nsaas_channel_buf_alloc_bulk(channel, buffer_indices.size(),
+  n = __machnet_channel_buf_alloc_bulk(channel, buffer_indices.size(),
                                      buffer_indices.data(), nullptr);
   EXPECT_EQ(n, buffer_indices.size());
 
   // Shuffle buffer_indices, and release them.
   std::random_shuffle(buffer_indices.begin(), buffer_indices.end());
-  n = __nsaas_channel_buf_free_bulk(channel, buffer_indices.size(),
+  n = __machnet_channel_buf_free_bulk(channel, buffer_indices.size(),
                                     buffer_indices.data());
   EXPECT_EQ(n, buffer_indices.size());
 
   // Check order at allocation.
   auto original_buffer_indices = buffer_indices;
-  std::vector<NSaaSMsgBuf_t *> buffers;
-  n = __nsaas_channel_buf_alloc_bulk(channel, buffer_indices.size(),
+  std::vector<MachnetMsgBuf_t *> buffers;
+  n = __machnet_channel_buf_alloc_bulk(channel, buffer_indices.size(),
                                      buffer_indices.data(), buffers.data());
   EXPECT_EQ(n, buffer_indices.size());
   EXPECT_EQ(original_buffer_indices, buffer_indices);
 
   // Check that all the Msg Buffers are initialized.
   for (auto &msg_buf : buffers) {
-    EXPECT_EQ(msg_buf->magic, NSAAS_MSGBUF_MAGIC);
+    EXPECT_EQ(msg_buf->magic, MACHNET_MSGBUF_MAGIC);
     EXPECT_EQ(msg_buf->size, kBufferSize);
     EXPECT_EQ(msg_buf->data_len, 0);
     EXPECT_EQ(msg_buf->flags, 0);
@@ -132,12 +132,12 @@ TEST(NSaaSPrivateTest, NSaasChannelBufAllocFree) {
   }
 
   // Destroy the channel (should succeed).
-  __nsaas_channel_destroy(channel, channel_size, &channel_fd, is_posix_shm,
+  __machnet_channel_destroy(channel, channel_size, &channel_fd, is_posix_shm,
                           channel_name.c_str());
   EXPECT_EQ(channel_fd, -1);
 }
 
-TEST(NSaaSBufferPool, Concurrency) {
+TEST(MachnetBufferPool, Concurrency) {
   const uint32_t kChannelRingSize = 1 << 8;  // 256 slots for all rings.
   const uint32_t kBufferSize = 1 << 8;       // 256 bytes for buffer.
 
@@ -147,11 +147,11 @@ TEST(NSaaSBufferPool, Concurrency) {
   size_t channel_size;
   int is_posix_shm;
   int channel_fd;
-  auto *channel = __nsaas_channel_create(
+  auto *channel = __machnet_channel_create(
       channel_name.c_str(), kChannelRingSize, kChannelRingSize,
       kChannelRingSize, kBufferSize, &channel_size, &is_posix_shm, &channel_fd);
   EXPECT_NE(channel, nullptr);
-  EXPECT_EQ(channel->magic, NSAAS_CHANNEL_CTX_MAGIC);
+  EXPECT_EQ(channel->magic, MACHNET_CHANNEL_CTX_MAGIC);
   EXPECT_EQ(std::string(channel->name), channel_name);
 
   // Set the min and maximum buffers to allocate.
@@ -173,7 +173,7 @@ TEST(NSaaSBufferPool, Concurrency) {
   // Synchronize threads to start at the same time.
   auto thread_func = [&channel, &allocs_nr, &barrier, &thread_count]() {
     LOG(INFO) << "Thread " << std::this_thread::get_id() << " started.";
-    std::vector<NSaaSRingSlot_t> buffer_indices(kMaxAllocNr, UINT32_MAX);
+    std::vector<MachnetRingSlot_t> buffer_indices(kMaxAllocNr, UINT32_MAX);
 
     // Wait for parent to notify start of work.
     while (!barrier.load()) {
@@ -188,14 +188,14 @@ TEST(NSaaSBufferPool, Concurrency) {
       int retries = 8;
       uint32_t ret;
       do {
-        ret = __nsaas_channel_buf_free_bulk(channel, n, buffer_indices.data());
+        ret = __machnet_channel_buf_free_bulk(channel, n, buffer_indices.data());
       } while (ret == 0 && retries-- > 0);
       EXPECT_EQ(ret, n);
     };
 
     for (size_t i = 0; i < allocs_nr.size(); i++) {
       uint32_t alloc_nr = allocs_nr[i];
-      uint32_t alloced_nr = __nsaas_channel_buf_alloc_bulk(
+      uint32_t alloced_nr = __machnet_channel_buf_alloc_bulk(
           channel, alloc_nr, buffer_indices.data(), nullptr);
       release_buffers(alloced_nr);
     }
@@ -222,23 +222,23 @@ TEST(NSaaSBufferPool, Concurrency) {
   }
 
   // Check the buffer pool state.
-  EXPECT_EQ(__nsaas_channel_buffers_avail(channel), kChannelRingSize - 1);
-  std::vector<NSaaSRingSlot_t> buffers(kChannelRingSize - 1);
+  EXPECT_EQ(__machnet_channel_buffers_avail(channel), kChannelRingSize - 1);
+  std::vector<MachnetRingSlot_t> buffers(kChannelRingSize - 1);
   // Dequeue all the buffers from the pool.
-  auto ret = __nsaas_channel_buf_alloc_bulk(channel, buffers.size(),
+  auto ret = __machnet_channel_buf_alloc_bulk(channel, buffers.size(),
                                             buffers.data(), nullptr);
   EXPECT_EQ(ret, buffers.size());
   sort(buffers.begin(), buffers.end());
 
   // Craft a vector of expected buffer indices.
-  std::vector<NSaaSRingSlot_t> expected_buffers(kChannelRingSize - 1);
+  std::vector<MachnetRingSlot_t> expected_buffers(kChannelRingSize - 1);
   std::iota(expected_buffers.begin(), expected_buffers.end(), 0);
 
   // Check equality.
   EXPECT_EQ(buffers, expected_buffers);
 
   // Destroy the channel (should succeed).
-  __nsaas_channel_destroy(channel, channel_size, &channel_fd, is_posix_shm,
+  __machnet_channel_destroy(channel, channel_size, &channel_fd, is_posix_shm,
                           channel_name.c_str());
   EXPECT_EQ(channel_fd, -1);
 }

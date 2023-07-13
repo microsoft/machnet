@@ -1,4 +1,4 @@
-#include "nsaas_config.h"
+#include "machnet_config.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -53,7 +53,7 @@ static std::optional<std::string> GetPCIeAddress(
   return std::nullopt;
 }
 
-NSaaSConfigProcessor::NSaaSConfigProcessor(
+MachnetConfigProcessor::MachnetConfigProcessor(
     const std::string &config_json_filename)
     : config_json_filename_(config_json_filename), interfaces_config_{} {
   std::ifstream config_json_file(config_json_filename);
@@ -61,17 +61,17 @@ NSaaSConfigProcessor::NSaaSConfigProcessor(
       << " Failed to open config JSON file " << config_json_filename << ".";
 
   config_json_file >> json_;
-  AssertJsonValidNSaaSConfig();
+  AssertJsonValidMachnetConfig();
   DiscoverInterfaceConfiguration();
 }
 
-void NSaaSConfigProcessor::AssertJsonValidNSaaSConfig() {
-  if (json_.find(kNSaaSConfigJsonKey) == json_.end()) {
-    LOG(FATAL) << "No entry for NSaaS config (key " << kNSaaSConfigJsonKey
+void MachnetConfigProcessor::AssertJsonValidMachnetConfig() {
+  if (json_.find(kMachnetConfigJsonKey) == json_.end()) {
+    LOG(FATAL) << "No entry for Machnet config (key " << kMachnetConfigJsonKey
                << ") in " << config_json_filename_;
   }
 
-  for (const auto &interface : json_.at(kNSaaSConfigJsonKey)) {
+  for (const auto &interface : json_.at(kMachnetConfigJsonKey)) {
     if (interface.find("ip") == interface.end()) {
       LOG(FATAL) << "No IP address for " << interface << " in "
                  << config_json_filename_;
@@ -85,8 +85,8 @@ void NSaaSConfigProcessor::AssertJsonValidNSaaSConfig() {
   }
 }
 
-void NSaaSConfigProcessor::DiscoverInterfaceConfiguration() {
-  for (const auto &[key, val] : json_.at(kNSaaSConfigJsonKey).items()) {
+void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
+  for (const auto &[key, val] : json_.at(kMachnetConfigJsonKey).items()) {
     const net::Ethernet::Address l2_addr(key);
     size_t engine_threads = 1;
     cpu_set_t cpu_mask = NetworkInterfaceConfig::kDefaultCpuMask;
@@ -120,7 +120,7 @@ void NSaaSConfigProcessor::DiscoverInterfaceConfiguration() {
   }
 }
 
-utils::CmdLineOpts NSaaSConfigProcessor::GetEalOpts() const {
+utils::CmdLineOpts MachnetConfigProcessor::GetEalOpts() const {
   utils::CmdLineOpts eal_opts{juggler::dpdk::kDefaultEalOpts};
   // TODO(ilias) : What cpu mask to set for EAL?
   eal_opts.Append({"-c", "0x1"});

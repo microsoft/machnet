@@ -11,7 +11,7 @@ namespace juggler {
 namespace shm {
 
 ShmChannel::ShmChannel(const std::string channel_name,
-                       const NSaaSChannelCtx_t *channel_ctx,
+                       const MachnetChannelCtx_t *channel_ctx,
                        const size_t channel_mem_size, const bool is_posix_shm,
                        int channel_fd)
     : name_(channel_name),
@@ -21,13 +21,13 @@ ShmChannel::ShmChannel(const std::string channel_name,
       channel_fd_(channel_fd) {}
 
 ShmChannel::~ShmChannel() {
-  __nsaas_channel_destroy(
+  __machnet_channel_destroy(
       const_cast<void *>(reinterpret_cast<const void *>(ctx_)), mem_size_,
       &channel_fd_, is_posix_shm_, name_.c_str());
 }
 
 Channel::Channel(const std::string &channel_name,
-                 const NSaaSChannelCtx_t *channel_ctx,
+                 const MachnetChannelCtx_t *channel_ctx,
                  const size_t channel_mem_size, const bool is_posix_shm,
                  int channel_fd)
     : ShmChannel(channel_name, channel_ctx, channel_mem_size, is_posix_shm,
@@ -56,7 +56,7 @@ bool Channel::RegisterMemForDMA(rte_device *dev) {
 
   // There is padding at the end of the memory region to make sure that the end
   // is page-aligned.
-  LOG_IF(FATAL, bufp_mem_end > __nsaas_channel_end(ctx())) << "Out of bounds!";
+  LOG_IF(FATAL, bufp_mem_end > __machnet_channel_end(ctx())) << "Out of bounds!";
 
   // Calculate the number of pages in the memory region, and the IOVA addresses
   // of each one.

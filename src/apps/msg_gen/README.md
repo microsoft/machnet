@@ -1,10 +1,10 @@
 # Mesage Generator (msg_gen)
 
-This is a simple message generator application that uses the NSaaS stack.
+This is a simple message generator application that uses the Machnet stack.
 
 ## Prerequisites
 
-Successful build of the `NSaaS` project (see main [README](../../../README.md)).
+Successful build of the `Machnet` project (see main [README](../../../README.md)).
 
 
 ## Running the application
@@ -17,7 +17,7 @@ The `msg_gen` application is run by the `msg_gen` binary. You could see the avai
 
 ### Sending messages between two machines
 
-**Attention**: An NSaaS stack instance must be running on every machine that needs to use this message generator application. You can find information on how to run the NSaaS stack in the [NSaaS README](../nsaas/README.md).
+**Attention**: An Machnet stack instance must be running on every machine that needs to use this message generator application. You can find information on how to run the Machnet stack in the [Machnet README](../machnet/README.md).
 
 In the example below, a server named `poseidon` sends messages to the `zeus` server, which bounces them back.
 

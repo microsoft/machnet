@@ -1,8 +1,8 @@
 #include <config.h>
 #include <dpdk.h>
 #include <glog/logging.h>
-#include <nsaas_controller.h>
-#include <nsaas_ctrl.h>
+#include <machnet_controller.h>
+#include <machnet_ctrl.h>
 #include <utils.h>
 #include <worker.h>
 
@@ -12,15 +12,15 @@
 
 namespace juggler {
 
-struct NSaaSClientContext {
+struct MachnetClientContext {
   bool registered;
   uuid_t uuid;
 };
 
-NSaaSController::NSaaSController(const std::string &conf_file)
+MachnetController::MachnetController(const std::string &conf_file)
     : config_processor_{conf_file}, channel_manager_{} {}
 
-void NSaaSController::Run() {
+void MachnetController::Run() {
   if (IsRunning()) {
     LOG(ERROR) << "Controller is already running.";
     return;
@@ -31,7 +31,7 @@ void NSaaSController::Run() {
     return;
   }
 
-  signal(SIGINT, NSaaSController::sig_handler);
+  signal(SIGINT, MachnetController::sig_handler);
 
   // Initialize DPDK.
   dpdk_.InitDpdk(config_processor_.GetEalOpts());
@@ -60,20 +60,20 @@ void NSaaSController::Run() {
         dpdk::PmdRing::kDefaultRingDescNr, dpdk::PmdRing::kDefaultRingDescNr));
     pmd_ports_.back()->InitDriver();
 
-    // Create the NSaaSEngineShared State.
-    auto shared_state = std::make_shared<NSaaSEngineSharedState>(
+    // Create the MachnetEngineShared State.
+    auto shared_state = std::make_shared<MachnetEngineSharedState>(
         pmd_ports_.back()->GetRSSKey(), pmd_ports_.back()->GetL2Addr(),
         std::vector<net::Ipv4::Address>(1, interface.ip_addr()));
-    // Create the NSaaS engines.
+    // Create the Machnet engines.
     for (size_t i = 0; i < interface.engine_threads(); ++i) {
-      engines_.emplace_back(std::make_shared<juggler::NSaaSEngine>(
+      engines_.emplace_back(std::make_shared<juggler::MachnetEngine>(
           pmd_ports_.back(), i, i, shared_state));
       // Create the CPU mask for the engine threads.
       cpu_masks.emplace_back(interface.cpu_mask());
     }
   }
 
-  WorkerPool<NSaaSEngine> engine_thread_pool{engines_, cpu_masks};
+  WorkerPool<MachnetEngine> engine_thread_pool{engines_, cpu_masks};
   engine_thread_pool.Init();
   engine_thread_pool.Launch();
 
@@ -89,58 +89,58 @@ void NSaaSController::Run() {
   }
 }
 
-bool NSaaSController::HandleNewConnection(UDSocket *s) {
+bool MachnetController::HandleNewConnection(UDSocket *s) {
   // Client context.
-  if (!s->AllocateUserData(sizeof(NSaaSClientContext))) return false;
+  if (!s->AllocateUserData(sizeof(MachnetClientContext))) return false;
   auto *client_context =
-      reinterpret_cast<NSaaSClientContext *>(s->GetUserData());
+      reinterpret_cast<MachnetClientContext *>(s->GetUserData());
   CHECK_NOTNULL(client_context);
   client_context->registered = false;
   return true;
 }
 
-void NSaaSController::HandleNewMessage(UDSocket *s, const char *data,
+void MachnetController::HandleNewMessage(UDSocket *s, const char *data,
                                        size_t length) {
   CHECK_NOTNULL(s);
-  if (length != sizeof(nsaas_ctrl_msg_t)) {
+  if (length != sizeof(machnet_ctrl_msg_t)) {
     LOG(ERROR) << "Invalid message length";
     return;
   }
 
-  auto *req = reinterpret_cast<const nsaas_ctrl_msg_t *>(data);
+  auto *req = reinterpret_cast<const machnet_ctrl_msg_t *>(data);
   switch (req->type) {
-    case NSAAS_CTRL_MSG_TYPE_REQ_REGISTER: {
-      nsaas_ctrl_msg_t resp;
-      resp.type = NSAAS_CTRL_MSG_TYPE_RESPONSE;
+    case MACHNET_CTRL_MSG_TYPE_REQ_REGISTER: {
+      machnet_ctrl_msg_t resp;
+      resp.type = MACHNET_CTRL_MSG_TYPE_RESPONSE;
       resp.msg_id = req->msg_id;
 
       auto ret = RegisterApplication(req->app_uuid, &req->app_info);
-      resp.status = ret ? NSAAS_CTRL_STATUS_SUCCESS : NSAAS_CTRL_STATUS_FAILURE;
+      resp.status = ret ? MACHNET_CTRL_STATUS_SUCCESS : MACHNET_CTRL_STATUS_FAILURE;
       CHECK(s->SendMsg(reinterpret_cast<char *>(&resp), sizeof(resp)));
 
       // Get client context.
       auto *client_context =
-          reinterpret_cast<NSaaSClientContext *>(s->GetUserData());
+          reinterpret_cast<MachnetClientContext *>(s->GetUserData());
       client_context->registered = true;
       juggler::utils::Copy(client_context->uuid, req->app_uuid, sizeof(uuid_t));
     } break;
-    case NSAAS_CTRL_MSG_TYPE_REQ_CHANNEL: {
+    case MACHNET_CTRL_MSG_TYPE_REQ_CHANNEL: {
       LOG(INFO) << "Request to create new channel: "
                 << juggler::utils::UUIDToString(req->channel_info.channel_uuid);
       int channel_fd;
       auto ret = CreateChannel(req->app_uuid, &req->channel_info, &channel_fd);
 
-      nsaas_ctrl_msg_t resp;
-      resp.type = NSAAS_CTRL_MSG_TYPE_RESPONSE;
+      machnet_ctrl_msg_t resp;
+      resp.type = MACHNET_CTRL_MSG_TYPE_RESPONSE;
       resp.msg_id = req->msg_id;
 
       if (ret && channel_fd >= 0) {
-        resp.status = NSAAS_CTRL_STATUS_SUCCESS;
+        resp.status = MACHNET_CTRL_STATUS_SUCCESS;
         LOG(INFO) << "Sending channel fd: " << channel_fd << " to client.";
         CHECK(s->SendMsgWithFd(reinterpret_cast<char *>(&resp), sizeof(resp),
                                channel_fd));
       } else {
-        resp.status = NSAAS_CTRL_STATUS_FAILURE;
+        resp.status = MACHNET_CTRL_STATUS_FAILURE;
         CHECK(s->SendMsg(reinterpret_cast<char *>(&resp), sizeof(resp)));
       }
     } break;
@@ -150,10 +150,10 @@ void NSaaSController::HandleNewMessage(UDSocket *s, const char *data,
   }
 }
 
-void NSaaSController::HandlePassiveClose(UDSocket *s) {
+void MachnetController::HandlePassiveClose(UDSocket *s) {
   // Get client context.
   auto *client_context =
-      reinterpret_cast<NSaaSClientContext *>(s->GetUserData());
+      reinterpret_cast<MachnetClientContext *>(s->GetUserData());
   if (client_context->registered) {
     LOG(INFO) << "Client " << juggler::utils::UUIDToString(client_context->uuid)
               << " disconnected.";
@@ -163,13 +163,13 @@ void NSaaSController::HandlePassiveClose(UDSocket *s) {
   }
 }
 
-void NSaaSController::HandleTimeout(UDSocket *s) {
+void MachnetController::HandleTimeout(UDSocket *s) {
   // TODO(ilias): Handle timeout.
   LOG(WARNING) << "Not implemented.";
 }
 
-bool NSaaSController::RegisterApplication(const uuid_t app_uuid,
-                                          const nsaas_app_info_t *app_info) {
+bool MachnetController::RegisterApplication(const uuid_t app_uuid,
+                                          const machnet_app_info_t *app_info) {
   const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
 
   // Check if the application is already registered.
@@ -186,7 +186,7 @@ bool NSaaSController::RegisterApplication(const uuid_t app_uuid,
   return true;
 }
 
-void NSaaSController::UnregisterApplication(const uuid_t app_uuid) {
+void MachnetController::UnregisterApplication(const uuid_t app_uuid) {
   const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
 
   // Check if the application is registered.
@@ -215,8 +215,8 @@ void NSaaSController::UnregisterApplication(const uuid_t app_uuid) {
   LOG(INFO) << "Application unregistered: " << app_uuid_str;
 }
 
-bool NSaaSController::CreateChannel(const uuid_t app_uuid,
-                                    const nsaas_channel_info_t *channel_info,
+bool MachnetController::CreateChannel(const uuid_t app_uuid,
+                                    const machnet_channel_info_t *channel_info,
                                     int *fd) {
   const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
 
@@ -239,7 +239,7 @@ bool NSaaSController::CreateChannel(const uuid_t app_uuid,
   // used.
   const auto channel_buffer_size =
       juggler::dpdk::PmdRing::kDefaultFrameSize - sizeof(juggler::net::Ipv4) -
-      sizeof(juggler::net::Udp) - sizeof(juggler::net::NSaaSPktHdr);
+      sizeof(juggler::net::Udp) - sizeof(juggler::net::MachnetPktHdr);
   if (!channel_manager_.AddChannel(
           channel_uuid_str.c_str(), ChannelManager::kDefaultRingSize,
           ChannelManager::kDefaultRingSize, ChannelManager::kDefaultBufferCount,
@@ -250,7 +250,7 @@ bool NSaaSController::CreateChannel(const uuid_t app_uuid,
   // Add the channel to the list of channels for this application.
   app_channels.insert(channel_uuid_str);
 
-  // Pass a promise to the NSaaS engine and wait for the channel to be
+  // Pass a promise to the Machnet engine and wait for the channel to be
   // activated.
   std::promise<bool> p;
   auto fstatus = p.get_future();
@@ -281,18 +281,18 @@ bool NSaaSController::CreateChannel(const uuid_t app_uuid,
   return status;
 }
 
-void NSaaSController::RunController() {
-  const std::string socket_path = NSAAS_CONTROLLER_DEFAULT_PATH;
+void MachnetController::RunController() {
+  const std::string socket_path = MACHNET_CONTROLLER_DEFAULT_PATH;
 
   const UDServer::on_connect_cb_t on_connect_cb = std::bind(
-      &NSaaSController::HandleNewConnection, this, std::placeholders::_1);
+      &MachnetController::HandleNewConnection, this, std::placeholders::_1);
 
   const UDServer::on_close_cb_t on_close_cb = [=, this](UDSocket *socket) {
     this->HandlePassiveClose(socket);
   };
 
   // UDServer::on_close_cb_t on_close_cb = std::bind(
-  //     &NSaaSController::HandlePassiveClose, this, std::placeholders::_1);
+  //     &MachnetController::HandlePassiveClose, this, std::placeholders::_1);
   const UDServer::on_message_cb_t on_message_cb =
       [=, this](UDSocket *socket, const char *data, size_t length, int fd) {
         this->HandleNewMessage(socket, data, length);
@@ -308,7 +308,7 @@ void NSaaSController::RunController() {
   server_->Run();
 }
 
-void NSaaSController::Stop() {
+void MachnetController::Stop() {
   CHECK_NOTNULL(server_);
   server_->Stop();
 }

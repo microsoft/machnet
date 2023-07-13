@@ -1,5 +1,5 @@
-// Example hello world program for NSaaS
-// Usage: Assuming we have two servers (A and B), where NSaaS is running on both
+// Example hello world program for Machnet
+// Usage: Assuming we have two servers (A and B), where Machnet is running on both
 // IP 10.0.255.100 at server A, and IP 10.0.255.101 at server B.
 //
 // On server A: dotnet run --local_ip 10.0.255.100
@@ -61,42 +61,42 @@ class Program
             Console.WriteLine($"Remote IP: {options.RemoteIp}");
         }
 
-        int ret = NSaaSShim.nsaas_init();
-        CustomCheck(ret == 0, "nsaas_init()");
+        int ret = MachnetShim.machnet_init();
+        CustomCheck(ret == 0, "machnet_init()");
 
-        IntPtr channel_ctx = NSaaSShim.nsaas_attach();
-        CustomCheck(channel_ctx != IntPtr.Zero, "nsaas_attach()");
+        IntPtr channel_ctx = MachnetShim.machnet_attach();
+        CustomCheck(channel_ctx != IntPtr.Zero, "machnet_attach()");
 
         if (!string.IsNullOrEmpty(options.RemoteIp))
         {
             // Client
-            NSaaSNetFlow_t flow = new NSaaSNetFlow_t();
-            ret = NSaaSShim.nsaas_connect(channel_ctx, options.LocalIp, options.RemoteIp, kHelloWorldPort, ref flow);
-            CustomCheck(ret == 0, "nsaas_connect()");
+            MachnetFlow_t flow = new MachnetFlow_t();
+            ret = MachnetShim.machnet_connect(channel_ctx, options.LocalIp, options.RemoteIp, kHelloWorldPort, ref flow);
+            CustomCheck(ret == 0, "machnet_connect()");
 
             string msg = "Hello World!";
             byte[] msgBuffer = Encoding.UTF8.GetBytes(msg);
-            ret = NSaaSShim.nsaas_send(channel_ctx, flow, msgBuffer, new IntPtr(msgBuffer.Length));
-            CustomCheck(ret != -1, "nsaas_send()");
+            ret = MachnetShim.machnet_send(channel_ctx, flow, msgBuffer, new IntPtr(msgBuffer.Length));
+            CustomCheck(ret != -1, "machnet_send()");
 
             Console.WriteLine("Message sent successfully");
         }
         else
         {
             Console.WriteLine("Waiting for message from client");
-            ret = NSaaSShim.nsaas_listen(channel_ctx, options.LocalIp, kHelloWorldPort);
-            CustomCheck(ret == 0, "nsaas_listen()");
+            ret = MachnetShim.machnet_listen(channel_ctx, options.LocalIp, kHelloWorldPort);
+            CustomCheck(ret == 0, "machnet_listen()");
 
             while (true)
             {
                 byte[] buf = new byte[1024];
-                NSaaSNetFlow_t flow = new NSaaSNetFlow_t();
-                int bytesRead = NSaaSShim.nsaas_recv(channel_ctx, buf, new IntPtr(buf.Length), ref flow);
+                MachnetFlow_t flow = new MachnetFlow_t();
+                int bytesRead = MachnetShim.machnet_recv(channel_ctx, buf, new IntPtr(buf.Length), ref flow);
 
                 if (bytesRead == -1)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("Error: nsaas_recv() failed");
+                    Console.WriteLine("Error: machnet_recv() failed");
                     Console.ResetColor();
                     break;
                 }

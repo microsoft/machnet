@@ -1,24 +1,24 @@
 #!/bin/bash
 #
-# Summary: Create an Azure VM with two NICs: one standard, and the other for NSaaS with accelerated networking enabled.
+# Summary: Create an Azure VM with two NICs: one standard, and the other for Machnet with accelerated networking enabled.
 #
 # See the capitalized parameters below for the configuration
 
-VM_NAME_1=nsaas_demo_1
-VM_NAME_2=nsaas_demo_2
+VM_NAME_1=machnet_demo_1
+VM_NAME_2=machnet_demo_2
 
 PUBLIC_IP_NAME_SUFFIX="-publicIP"
 EXTERNAL_NIC_NAME_SUFFIX="-externalNIC"
-NSAAS_NIC_NAME_SUFFIX="-nsaasNIC"
+MACHNET_NIC_NAME_SUFFIX="-machnetNIC"
 
 IMAGE="Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:latest"
 SSH_KEY_FILE="${HOME}/.ssh/id_rsa.pub"
 AZURE_USER="$USER"
 
-VNET_NAME="nsaas_demo_vnet"
-NSG_NAME="nsaas_demo_nsg"
-SUBNET_NAME="nsaas_demo_subnet"
-RESOURCE_GROUP="nsaas_demo_rg"
+VNET_NAME="machnet_demo_vnet"
+NSG_NAME="machnet_demo_nsg"
+SUBNET_NAME="machnet_demo_subnet"
+RESOURCE_GROUP="machnet_demo_rg"
 ADDRESS_PREFIX="10.0.0.0/21"
 VM_SKU="Standard_F8s_v2"
 LOCATION="westus"
@@ -50,7 +50,7 @@ if [[ ! $response =~ ^([yY][eE][sS]|[yY])$ ]]; then
   exit 1
 fi
 
-blue "Have you deleted all previous Azure resources with the "nsaas_demo" prefix before running this script? "
+blue "Have you deleted all previous Azure resources with the "machnet_demo" prefix before running this script? "
 blue "This usually requires two runs of find all plus delete in the Azure portal."
 blue "Continue? (y/n)"
 read -r response
@@ -92,7 +92,7 @@ echo "Subnet created successfully."
 for vm_name in $VM_NAME_1 $VM_NAME_2; do 
   public_ip_name=${vm_name}${PUBLIC_IP_NAME_SUFFIX}
   external_nic_name=${vm_name}${EXTERNAL_NIC_NAME_SUFFIX}
-  nsaas_nic_name=${vm_name}${NSAAS_NIC_NAME_SUFFIX}
+  machnet_nic_name=${vm_name}${MACHNET_NIC_NAME_SUFFIX}
 
   # Create public IP address
   echo "Creating Public IP for VM $vm_name..."
@@ -104,8 +104,8 @@ for vm_name in $VM_NAME_1 $VM_NAME_2; do
   echo "External NIC created successfully."
 
   # Create internal network interface with accelerated networking
-  echo "Creating NSaaS NIC with accelerated networking for VM $vm_name..."
-  az network nic create --resource-group $RESOURCE_GROUP --name $nsaas_nic_name --vnet-name $VNET_NAME --subnet $SUBNET_NAME --accelerated-networking true 1>/dev/null || { echo 'Internal NIC creation failed' ; exit 1; }
+  echo "Creating Machnet NIC with accelerated networking for VM $vm_name..."
+  az network nic create --resource-group $RESOURCE_GROUP --name $machnet_nic_name --vnet-name $VNET_NAME --subnet $SUBNET_NAME --accelerated-networking true 1>/dev/null || { echo 'Internal NIC creation failed' ; exit 1; }
   echo "Internal NIC created successfully."
 
   # Create the VM
@@ -115,7 +115,7 @@ for vm_name in $VM_NAME_1 $VM_NAME_2; do
     exit 1
   fi
 
-  az vm create --resource-group $RESOURCE_GROUP --name $vm_name --image $IMAGE --size $VM_SKU --nics $external_nic_name $nsaas_demo_vnet --admin-username $AZURE_USER --ssh-key-value $SSH_KEY_FILE 1>/dev/null || { echo 'VM creation failed' ; exit 1; }
+  az vm create --resource-group $RESOURCE_GROUP --name $vm_name --image $IMAGE --size $VM_SKU --nics $external_nic_name $machnet_demo_vnet --admin-username $AZURE_USER --ssh-key-value $SSH_KEY_FILE 1>/dev/null || { echo 'VM creation failed' ; exit 1; }
   blue "VM $vm_name created successfully. Listing SSH address for VM $vm_name:"
 
   az vm list-ip-addresses --resource-group $RESOURCE_GROUP --name $vm_name --query "[].virtualMachine.network.publicIpAddresses[*].ipAddress" --output tsv || { echo 'Failed to list SSH address for the VM' ; exit 1; }

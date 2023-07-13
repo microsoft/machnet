@@ -1,7 +1,7 @@
-This document is for developers of the NSaaS service. It is not intended for
-users of the NSaaS service. For users, see the [README](README.md).
+This document is for developers of the Machnet service. It is not intended for
+users of the Machnet service. For users, see the [README](README.md).
 
-## Compiling NSaaS
+## Compiling Machnet
 
 - Required packages: latest `cmake`, `gflags`, `pkg-config`, `nlohmann-json-dev`, `ninja`, `gcc>=10`, `g++>=10`, `doxygen`, `graphviz`.
 
@@ -20,7 +20,7 @@ export RTE_SDK=/path/to/dpdk-21.11/
 cd ${RTE_SDK} && meson build && cd build && ninja && DESTDIR=${PWD}/install ninja install
 ```
 
-### Build NSaaS
+### Build Machnet
 
 Then, from `${REPOROOT}`:
 ```bash
@@ -33,9 +33,9 @@ mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -GNinja ../ && ninja
 mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../ && ninja
 ```
 
-The `nsaas` binary will be available in `${REPOROOT}/build/src/apps/`.  You may
-see more details about the `NSaaS` program in this
-[README](src/apps/nsaas/README.md).
+The `machnet` binary will be available in `${REPOROOT}/build/src/apps/`.  You may
+see more details about the `Machnet` program in this
+[README](src/apps/machnet/README.md).
 
 ## Tests
 

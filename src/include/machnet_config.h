@@ -1,5 +1,5 @@
-#ifndef SRC_INCLUDE_NSAAS_CONFIG_H_
-#define SRC_INCLUDE_NSAAS_CONFIG_H_
+#ifndef SRC_INCLUDE_MACHNET_CONFIG_H_
+#define SRC_INCLUDE_MACHNET_CONFIG_H_
 
 #include <glog/logging.h>
 
@@ -76,11 +76,11 @@ struct hash<juggler::NetworkInterfaceConfig> {
 
 namespace juggler {
 /**
- * @brief This is NSaaS configuration JSON reader. The following is an example
- * of NSaaS config on a single host:
+ * @brief This is Machnet configuration JSON reader. The following is an example
+ * of Machnet config on a single host:
  *
  * {
- *   "nsaas_config": {
+ *   "machnet_config": {
  *     "00:0d:3a:d6:9b:6a": {
  *         "ip": "10.0.0.1",
  *         "engine_threads": "1",
@@ -89,16 +89,16 @@ namespace juggler {
  *   }
  * }
  *
- * Each item in the "nsaas_config" dictionary is a network interface MAC
+ * Each item in the "machnet_config" dictionary is a network interface MAC
  * address. The MAC address is the only reliable way to identify a network
  * interface especially on Azure.
  *
  * Note that `engine_threads` (decimal) and `cpu_mask` (hex) are optional. If
  * not specified, the default value is 1 and 0xFFFFFFFF respectively.
  */
-class NSaaSConfigProcessor {
+class MachnetConfigProcessor {
  public:
-  explicit NSaaSConfigProcessor(const std::string &config_json_filename);
+  explicit MachnetConfigProcessor(const std::string &config_json_filename);
 
   std::unordered_set<NetworkInterfaceConfig> &interfaces_config() {
     return interfaces_config_;
@@ -106,10 +106,10 @@ class NSaaSConfigProcessor {
   utils::CmdLineOpts GetEalOpts() const;
 
  private:
-  void AssertJsonValidNSaaSConfig();
+  void AssertJsonValidMachnetConfig();
   void DiscoverInterfaceConfiguration();
 
-  static constexpr const char *kNSaaSConfigJsonKey = "nsaas_config";
+  static constexpr const char *kMachnetConfigJsonKey = "machnet_config";
   const std::string config_json_filename_;
   std::unordered_set<NetworkInterfaceConfig> interfaces_config_;
   nlohmann::json json_;
@@ -117,4 +117,4 @@ class NSaaSConfigProcessor {
 
 }  // namespace juggler
 
-#endif  // SRC_INCLUDE_NSAAS_CONFIG_H_
+#endif  // SRC_INCLUDE_MACHNET_CONFIG_H_

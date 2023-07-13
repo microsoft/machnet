@@ -1,12 +1,12 @@
 # Packet Generator (pktgen)
 
-This is a simple packet generator application. It does not use the NSaaS stack.
+This is a simple packet generator application. It does not use the Machnet stack.
 
 This packet generator could be used to generate packets with a specific payload size, and send them to a specific destination. It could be used to generate traffic for testing purposes (for example, to test PPS performance of a system).
 
 ## Prerequisites
 
-Successful build of the `NSaaS` project (see main [README](../../../README.md)).
+Successful build of the `Machnet` project (see main [README](../../../README.md)).
 
 ## Running the application
 

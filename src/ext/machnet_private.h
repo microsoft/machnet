@@ -1,11 +1,11 @@
 /**
- * @file nsaas_private.h
+ * @file machnet_private.h
  *
- * Helper functions to integreate NSaaS with shared memory channels.
+ * Helper functions to integreate Machnet with shared memory channels.
  * This is an internal API, not to be used from applications.
  */
-#ifndef SRC_EXT_NSAAS_PRIVATE_H_
-#define SRC_EXT_NSAAS_PRIVATE_H_
+#ifndef SRC_EXT_MACHNET_PRIVATE_H_
+#define SRC_EXT_MACHNET_PRIVATE_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,10 +18,10 @@ extern "C" {
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "nsaas_common.h"
+#include "machnet_common.h"
 
-#define NSAAS_CHANNEL_CTRL_SQ_SLOT_NR 2
-#define NSAAS_CHANNEL_CTRL_CQ_SLOT_NR (NSAAS_CHANNEL_CTRL_SQ_SLOT_NR)
+#define MACHNET_CHANNEL_CTRL_SQ_SLOT_NR 2
+#define MACHNET_CHANNEL_CTRL_CQ_SLOT_NR (MACHNET_CHANNEL_CTRL_SQ_SLOT_NR)
 
 // Count the number of array elements.
 // clang-format off
@@ -34,55 +34,55 @@ extern "C" {
 #define ROUNDUP_U64_POW2(x) (1ULL << (64 - __builtin_clzll(((uint64_t)x) - 1)))
 
 /**
- * Calculate the memory size needed for an NSaaS Dataplane channel.
+ * Calculate the memory size needed for an Machnet Dataplane channel.
  *
- * An NSaaS Dataplane channel contains two rings for message passing in each
- * direction (NSaaS -> Application, Application -> NSaas), and one ring that
+ * An Machnet Dataplane channel contains two rings for message passing in each
+ * direction (Machnet -> Application, Application -> NSaas), and one ring that
  * holds free buffers (used for allocations).
  *
  * This function returns the number of bytes needed for the channel area, given
  * the number of elements in each of the rings of the channel and the desired
  * buffer size.
  *
- * @param nsaas_ring_slot_nr The number of NSaaS->App messaging ring slots (must
+ * @param machnet_ring_slot_nr The number of Machnet->App messaging ring slots (must
  *                           be power of 2).
- * @param app_ring_slot_nr   The number of App->NSaaS messaging ring slots (must
+ * @param app_ring_slot_nr   The number of App->Machnet messaging ring slots (must
  *                           be power of 2).
  * @param buf_ring_slot_nr   The number of buffers + 1 in the pool (must be
  *                           power of 2).
  * @param buffer_size        The usable size of each buffer.
  * @param is_posix_shm       Whether the channel will be a POSIX shared memory.
  * @return
- *   - The memory size in bytes needed for the NSaaS channel on success.
+ *   - The memory size in bytes needed for the Machnet channel on success.
  *   - (size_t)-1 - Some parameter is not a power of 2, or the buffer size is
  *                  bad (too big).
  */
-static inline size_t __nsaas_channel_dataplane_calculate_size(
-    size_t nsaas_ring_slot_nr, size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
+static inline size_t __machnet_channel_dataplane_calculate_size(
+    size_t machnet_ring_slot_nr, size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
     size_t buffer_size, int is_posix_shm) {
   // Check that all parameters are power of 2.
-  if (!IS_POW2(nsaas_ring_slot_nr) || !IS_POW2(app_ring_slot_nr) ||
+  if (!IS_POW2(machnet_ring_slot_nr) || !IS_POW2(app_ring_slot_nr) ||
       !IS_POW2(buf_ring_slot_nr))
     return -1;
 
   const size_t total_buffer_size = ROUNDUP_U64_POW2(
-      buffer_size + NSAAS_MSGBUF_SPACE_RESERVED + NSAAS_MSGBUF_HEADROOM_MAX);
+      buffer_size + MACHNET_MSGBUF_SPACE_RESERVED + MACHNET_MSGBUF_HEADROOM_MAX);
 
   const size_t kPageSize = (is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE);
   if (buffer_size > kPageSize) return -1;
 
   // Add the size of the channel's header.
-  size_t total_size = sizeof(NSaaSChannelCtx_t);
+  size_t total_size = sizeof(MachnetChannelCtx_t);
 
   // Size of statistics structure.
-  total_size += sizeof(NSaaSChannelStats_t);
+  total_size += sizeof(MachnetChannelStats_t);
 
-  // Add the size of the rings (NSaaS, Application, BufferRing).
-  size_t ring_sizes[] = {nsaas_ring_slot_nr, app_ring_slot_nr,
+  // Add the size of the rings (Machnet, Application, BufferRing).
+  size_t ring_sizes[] = {machnet_ring_slot_nr, app_ring_slot_nr,
                          buf_ring_slot_nr};
   for (size_t i = 0; i < COUNT_OF(ring_sizes); i++) {
     size_t acc =
-        jring_get_buf_ring_size(sizeof(NSaaSRingSlot_t), ring_sizes[i]);
+        jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), ring_sizes[i]);
     if (acc == (size_t)-1) return -1;
     total_size += acc;
   }
@@ -100,9 +100,9 @@ static inline size_t __nsaas_channel_dataplane_calculate_size(
 }
 
 /**
- * Initialiaze an NSaaS Dataplane channel.
+ * Initialiaze an Machnet Dataplane channel.
  *
- * This function initializes the memory of an NSaaS Dataplane channel. It
+ * This function initializes the memory of an Machnet Dataplane channel. It
  * initializes the context, the rings and buffers required to facilitate
  * bidirectional communication.
  *
@@ -111,32 +111,32 @@ static inline size_t __nsaas_channel_dataplane_calculate_size(
  * @param is_posix_shm       Whether the channel is based on POSIX shared
  *                           memory(1, or 0 otherwise).
  * @param name               The name of the channel.
- * @param nsaas_ring_slot_nr The number of NSaaS->App messaging ring slots.
- * @param app_ring_slot_nr   The number of App->NSaaS messaging ring slots.
+ * @param machnet_ring_slot_nr The number of Machnet->App messaging ring slots.
+ * @param app_ring_slot_nr   The number of App->Machnet messaging ring slots.
  * @param buf_ring_slot_nr   The number of buffers + 1 to be used in this
  *                           channel (must sum up to a power of 2).
  * @param buffer_size        The size of each buffer.
- * @param is_multithread     1 if NSaaS is using multiple threads per channel, 0
+ * @param is_multithread     1 if Machnet is using multiple threads per channel, 0
  *                           otherwise.
  * @return                   '0' on success, '-1' on failure.
  */
-static inline int __nsaas_channel_dataplane_init(
+static inline int __machnet_channel_dataplane_init(
     uchar_t *shm, size_t shm_size, int is_posix_shm, const char *name,
-    size_t nsaas_ring_slot_nr, size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
+    size_t machnet_ring_slot_nr, size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
     size_t buffer_size, int is_multithread) {
-  size_t total_size = __nsaas_channel_dataplane_calculate_size(
-      nsaas_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
+  size_t total_size = __machnet_channel_dataplane_calculate_size(
+      machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
       is_posix_shm);
   // Guard against mismatches.
   if (total_size > shm_size || total_size == (size_t)-1) return -1;
 
-  // TODO(ilias): Check that we can always accomodate an NSAAS_MSG_MAX_LEN sized
+  // TODO(ilias): Check that we can always accomodate an MACHNET_MSG_MAX_LEN sized
   // mesage with the number of buffers and buffer_size provided here.
 
-  // Check the memory layout in "nsaas_common.h".
+  // Check the memory layout in "machnet_common.h".
   // Initialize the channel context.
-  NSaaSChannelCtx_t *ctx = (NSaaSChannelCtx_t *)shm;
-  ctx->version = NSAAS_CHANNEL_VERSION;
+  MachnetChannelCtx_t *ctx = (MachnetChannelCtx_t *)shm;
+  ctx->version = MACHNET_CHANNEL_VERSION;
   ctx->size = total_size;
   strncpy(ctx->name, name, sizeof(ctx->name));
   ctx->name[sizeof(ctx->name) - 1] = '\0';
@@ -146,7 +146,7 @@ static inline int __nsaas_channel_dataplane_init(
 
   // Clear out statatistics.
   ctx->data_ctx.stats_ofs = sizeof(*ctx);
-  NSaaSChannelStats_t *stats = (NSaaSChannelStats_t *)__nsaas_channel_mem_ofs(
+  MachnetChannelStats_t *stats = (MachnetChannelStats_t *)__machnet_channel_mem_ofs(
       ctx, ctx->data_ctx.stats_ofs);
   memset(stats, 0, sizeof(*stats));
 
@@ -154,60 +154,60 @@ static inline int __nsaas_channel_dataplane_init(
 
   // Ring0 (ctrl - SQ) follows immediately after the statistics.
   ctx->data_ctx.ctrl_sq_ring_ofs = ctx->data_ctx.stats_ofs + sizeof(*stats);
-  int ret = jring_init(__nsaas_channel_ctrl_sq_ring(ctx),
-                       NSAAS_CHANNEL_CTRL_SQ_SLOT_NR,
-                       sizeof(NSaaSCtrlQueueEntry_t), is_multithread, 0);
+  int ret = jring_init(__machnet_channel_ctrl_sq_ring(ctx),
+                       MACHNET_CHANNEL_CTRL_SQ_SLOT_NR,
+                       sizeof(MachnetCtrlQueueEntry_t), is_multithread, 0);
   if (ret != 0) return ret;
 
   // Ring1 (ctrl - CQ) follows immediately after the first ring.
   ctx->data_ctx.ctrl_cq_ring_ofs =
       ctx->data_ctx.ctrl_sq_ring_ofs +
-      jring_get_buf_ring_size(sizeof(NSaaSRingSlot_t),
-                              NSAAS_CHANNEL_CTRL_SQ_SLOT_NR);
-  ret = jring_init(__nsaas_channel_ctrl_cq_ring(ctx),
-                   NSAAS_CHANNEL_CTRL_CQ_SLOT_NR, sizeof(NSaaSCtrlQueueEntry_t),
+      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t),
+                              MACHNET_CHANNEL_CTRL_SQ_SLOT_NR);
+  ret = jring_init(__machnet_channel_ctrl_cq_ring(ctx),
+                   MACHNET_CHANNEL_CTRL_CQ_SLOT_NR, sizeof(MachnetCtrlQueueEntry_t),
                    0, is_multithread);
   if (ret != 0) return ret;
 
-  // Initialize the NSaaS->Application ring.
-  ctx->data_ctx.nsaas_ring_ofs =
+  // Initialize the Machnet->Application ring.
+  ctx->data_ctx.machnet_ring_ofs =
       ctx->data_ctx.ctrl_cq_ring_ofs +
-      jring_get_buf_ring_size(sizeof(NSaaSRingSlot_t),
-                              NSAAS_CHANNEL_CTRL_CQ_SLOT_NR);
+      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t),
+                              MACHNET_CHANNEL_CTRL_CQ_SLOT_NR);
 
-  jring_t *nsaas_ring = __nsaas_channel_nsaas_ring(ctx);
-  ret = jring_init(nsaas_ring, nsaas_ring_slot_nr, sizeof(NSaaSRingSlot_t),
+  jring_t *machnet_ring = __machnet_channel_machnet_ring(ctx);
+  ret = jring_init(machnet_ring, machnet_ring_slot_nr, sizeof(MachnetRingSlot_t),
                    is_multithread, kMultiThread);
   if (ret != 0) return ret;
 
-  // App->NSaaS ring follows immediately after the NSaaS->App ring.
+  // App->Machnet ring follows immediately after the Machnet->App ring.
   ctx->data_ctx.app_ring_ofs =
-      ctx->data_ctx.nsaas_ring_ofs +
-      jring_get_buf_ring_size(sizeof(NSaaSRingSlot_t), nsaas_ring_slot_nr);
-  jring_t *app_ring = __nsaas_channel_app_ring(ctx);
-  ret = jring_init(app_ring, app_ring_slot_nr, sizeof(NSaaSRingSlot_t),
+      ctx->data_ctx.machnet_ring_ofs +
+      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), machnet_ring_slot_nr);
+  jring_t *app_ring = __machnet_channel_app_ring(ctx);
+  ret = jring_init(app_ring, app_ring_slot_nr, sizeof(MachnetRingSlot_t),
                    kMultiThread, is_multithread);
   if (ret != 0) return ret;
 
   // jring_get_buf_ring_size() cannot fail here.
   ctx->data_ctx.buf_ring_ofs =
       ctx->data_ctx.app_ring_ofs +
-      jring_get_buf_ring_size(sizeof(NSaaSRingSlot_t), app_ring_slot_nr);
+      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), app_ring_slot_nr);
 
   // Initialize the buffer ring.
-  jring_t *buf_ring = __nsaas_channel_buf_ring(ctx);
-  ret = jring_init(buf_ring, buf_ring_slot_nr, sizeof(NSaaSRingSlot_t),
+  jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
+  ret = jring_init(buf_ring, buf_ring_slot_nr, sizeof(MachnetRingSlot_t),
                    kMultiThread, kMultiThread);
   if (ret != 0) return ret;
 
   // Offset in memory channel where the final ring ends (buf_ring).
   size_t buf_ring_end_ofs =
       ctx->data_ctx.buf_ring_ofs +
-      jring_get_buf_ring_size(sizeof(NSaaSRingSlot_t), buf_ring_slot_nr);
+      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), buf_ring_slot_nr);
 
   // Calculate the actual buffer size (incl. metadata).
   const size_t kTotalBufSize = ROUNDUP_U64_POW2(
-      buffer_size + NSAAS_MSGBUF_SPACE_RESERVED + NSAAS_MSGBUF_HEADROOM_MAX);
+      buffer_size + MACHNET_MSGBUF_SPACE_RESERVED + MACHNET_MSGBUF_HEADROOM_MAX);
   // Initialize the buffers. Note that the buffer pool start is aligned to the
   // page_size boundary.
   const size_t kPageSize = is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE;
@@ -218,18 +218,18 @@ static inline int __nsaas_channel_dataplane_init(
 
   // Initialize the message header of each buffer.
   for (uint32_t i = 0; i < buf_ring->capacity; i++) {
-    NSaaSMsgBuf_t *buf = __nsaas_channel_buf(ctx, i);
-    __nsaas_channel_buf_init(buf);
+    MachnetMsgBuf_t *buf = __machnet_channel_buf(ctx, i);
+    __machnet_channel_buf_init(buf);
     // The following fields should only be initialized once here.
-    *__DECONST(uint32_t *, &buf->magic) = NSAAS_MSGBUF_MAGIC;
+    *__DECONST(uint32_t *, &buf->magic) = MACHNET_MSGBUF_MAGIC;
     *__DECONST(uint32_t *, &buf->index) = i;
     *__DECONST(uint32_t *, &buf->size) =
-        buffer_size + NSAAS_MSGBUF_HEADROOM_MAX;
+        buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
   }
 
   // Initialize the buffer index table, and make all these buffers available.
-  NSaaSRingSlot_t *buf_index_table =
-      (NSaaSRingSlot_t *)malloc(buf_ring->capacity * sizeof(NSaaSRingSlot_t));
+  MachnetRingSlot_t *buf_index_table =
+      (MachnetRingSlot_t *)malloc(buf_ring->capacity * sizeof(MachnetRingSlot_t));
   if (buf_index_table == NULL) return -1;
 
   for (size_t i = 0; i < buf_ring->capacity; i++) buf_index_table[i] = i;
@@ -243,14 +243,14 @@ static inline int __nsaas_channel_dataplane_init(
 
   // Set the header magic at the end.
   __sync_synchronize();
-  ctx->magic = NSAAS_CHANNEL_CTX_MAGIC;
+  ctx->magic = MACHNET_CHANNEL_CTX_MAGIC;
   __sync_synchronize();
 
   return 0;
 }
 
 /**
- * This function creates a POSIX shared memory region to be used as an NSaaS
+ * This function creates a POSIX shared memory region to be used as an Machnet
  * channel. The shared memory region is created with the given name and size and
  * does not support huge pages.
  *
@@ -262,11 +262,11 @@ static inline int __nsaas_channel_dataplane_init(
  * @return                   Pointer to channel's memory area on success, NULL
  *                           otherwise.
  */
-static inline NSaaSChannelCtx_t *__nsaas_channel_posix_create(
+static inline MachnetChannelCtx_t *__machnet_channel_posix_create(
     const char *channel_name, size_t channel_size, int *shm_fd) {
   assert(channel_name != NULL);
   assert(shm_fd != NULL);
-  NSaaSChannelCtx_t *channel = NULL;
+  MachnetChannelCtx_t *channel = NULL;
   int shm_flags, prot_flags;
 
   // Create the shared memory segment.
@@ -285,7 +285,7 @@ static inline NSaaSChannelCtx_t *__nsaas_channel_posix_create(
   // Map the shared memory segment into the address space of the process.
   prot_flags = PROT_READ | PROT_WRITE;
   shm_flags = MAP_SHARED | MAP_POPULATE;
-  channel = (NSaaSChannelCtx_t *)mmap(NULL, channel_size, prot_flags, shm_flags,
+  channel = (MachnetChannelCtx_t *)mmap(NULL, channel_size, prot_flags, shm_flags,
                                       *shm_fd, 0);
   if (channel == MAP_FAILED) {
     perror("mmap()");
@@ -312,7 +312,7 @@ fail:
 }
 
 /**
- * This function creates a POSIX shared memory region to be used as an NSaaS
+ * This function creates a POSIX shared memory region to be used as an Machnet
  * channel. The shared memory region is created with the given name and size and
  * does not support huge pages.
  *
@@ -324,11 +324,11 @@ fail:
  * @return                   Pointer to channel's memory area on success, NULL
  *                           otherwise.
  */
-static inline NSaaSChannelCtx_t *__nsaas_channel_hugetlbfs_create(
+static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
     const char *channel_name, size_t channel_size, int *shm_fd) {
   assert(channel_name != NULL);
   assert(shm_fd != NULL);
-  NSaaSChannelCtx_t *channel = NULL;
+  MachnetChannelCtx_t *channel = NULL;
   int shm_flags;
 
   // Check if channel size is huge page aligned.
@@ -351,7 +351,7 @@ static inline NSaaSChannelCtx_t *__nsaas_channel_hugetlbfs_create(
 
   // Map the shared memory segment into the address space of the process.
   shm_flags = MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
-  channel = (NSaaSChannelCtx_t *)mmap(
+  channel = (MachnetChannelCtx_t *)mmap(
       NULL, channel_size, PROT_READ | PROT_WRITE, shm_flags, *shm_fd, 0);
   if (channel == MAP_FAILED) {
     perror("mmap()");
@@ -377,7 +377,7 @@ fail:
 }
 
 /**
- * This function unmaps, and destroys an NSaaS channel, releasing the shared
+ * This function unmaps, and destroys an Machnet channel, releasing the shared
  * memory segment.
  *
  * @param[in] mapped_mem             Pointer to the mapped memory area of the
@@ -389,7 +389,7 @@ fail:
  * @param[in] channel_name           The name of the shared memory segment (if
  * POSIX shmem). Can be NULL if this is not POSIX shmem.
  */
-static inline void __nsaas_channel_destroy(void *mapped_mem,
+static inline void __machnet_channel_destroy(void *mapped_mem,
                                            size_t mapped_mem_size, int *shm_fd,
                                            int is_posix_shm,
                                            const char *channel_name) {
@@ -410,10 +410,10 @@ static inline void __nsaas_channel_destroy(void *mapped_mem,
 }
 
 /**
- * This function creates a shared memory region to be used as an NSaaS channel.
+ * This function creates a shared memory region to be used as an Machnet channel.
  *
  * @param[in] channel_name           The name of the shared memory segment.
- * @param[in] nsaas_ring_slot_nr     Number of slots in the NSaaS ring.
+ * @param[in] machnet_ring_slot_nr     Number of slots in the Machnet ring.
  * @param[in] app_ring_slot_nr       Number of slots in the application ring.
  * @param[in] buf_ring_slot_nr       Number of slots in the buffer ring.
  * @param[out] channel_mem_size      (ptr) The real size of the underlying
@@ -426,8 +426,8 @@ static inline void __nsaas_channel_destroy(void *mapped_mem,
  * @return                           Pointer to channel's memory area on
  * success, NULL otherwise.
  */
-static inline NSaaSChannelCtx_t *__nsaas_channel_create(
-    const char *channel_name, size_t nsaas_ring_slot_nr,
+static inline MachnetChannelCtx_t *__machnet_channel_create(
+    const char *channel_name, size_t machnet_ring_slot_nr,
     size_t app_ring_slot_nr, size_t buf_ring_slot_nr, size_t buffer_size,
     size_t *channel_mem_size, int *is_posix_shm, int *shm_fd) {
   assert(channel_name != NULL);
@@ -435,15 +435,15 @@ static inline NSaaSChannelCtx_t *__nsaas_channel_create(
   assert(channel_mem_size != NULL);
   assert(is_posix_shm != NULL);
   assert(shm_fd != NULL);
-  NSaaSChannelCtx_t *channel;
+  MachnetChannelCtx_t *channel;
 
   *is_posix_shm = 0;
-  *channel_mem_size = __nsaas_channel_dataplane_calculate_size(
-      nsaas_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
+  *channel_mem_size = __machnet_channel_dataplane_calculate_size(
+      machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
       *is_posix_shm);
   // Try creating and mapping a hugetlbfs backed shared memory segment.
   channel =
-      __nsaas_channel_hugetlbfs_create(channel_name, *channel_mem_size, shm_fd);
+      __machnet_channel_hugetlbfs_create(channel_name, *channel_mem_size, shm_fd);
   if (channel != NULL) goto out;
 
   fprintf(stderr,
@@ -453,11 +453,11 @@ static inline NSaaSChannelCtx_t *__nsaas_channel_create(
   // Hugetlbfs backed shared memory segment creation failed. Fallback to a
   // regular POSIX shm segment.
   *is_posix_shm = 1;
-  *channel_mem_size = __nsaas_channel_dataplane_calculate_size(
-      nsaas_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
+  *channel_mem_size = __machnet_channel_dataplane_calculate_size(
+      machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
       *is_posix_shm);
   channel =
-      __nsaas_channel_posix_create(channel_name, *channel_mem_size, shm_fd);
+      __machnet_channel_posix_create(channel_name, *channel_mem_size, shm_fd);
   if (channel != NULL) goto out;
 
   // Failed to create shared memory segment.
@@ -465,29 +465,29 @@ static inline NSaaSChannelCtx_t *__nsaas_channel_create(
 
 out:
   // The shared memory segment is created and mapped. Initialize it.
-  int ret = __nsaas_channel_dataplane_init(
+  int ret = __machnet_channel_dataplane_init(
       (uchar_t *)channel, *channel_mem_size, *is_posix_shm, channel_name,
-      nsaas_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size, 0);
+      machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size, 0);
   if (ret != 0) {
-    __nsaas_channel_destroy((void *)channel, *channel_mem_size, shm_fd,
+    __machnet_channel_destroy((void *)channel, *channel_mem_size, shm_fd,
                             *is_posix_shm, channel_name);
     *channel_mem_size = 0;
-    // shm_fd is set to -1 by __nsaas_channel_destroy().
+    // shm_fd is set to -1 by __machnet_channel_destroy().
     return NULL;
   }
 
   return channel;
 }
 
-static inline __attribute__((always_inline)) uint32_t __nsaas_channel_enqueue(
-    const NSaaSChannelCtx_t *ctx, unsigned int n, const NSaaSRingSlot_t *bufs) {
+static inline __attribute__((always_inline)) uint32_t __machnet_channel_enqueue(
+    const MachnetChannelCtx_t *ctx, unsigned int n, const MachnetRingSlot_t *bufs) {
   assert(ctx != NULL);
-  jring_t *nsaas_ring = __nsaas_channel_nsaas_ring(ctx);
+  jring_t *machnet_ring = __machnet_channel_machnet_ring(ctx);
 
-  return jring_enqueue_bulk(nsaas_ring, bufs, n, NULL);
+  return jring_enqueue_bulk(machnet_ring, bufs, n, NULL);
 }
 
 #ifdef __cplusplus
 }
 #endif
-#endif  // SRC_EXT_NSAAS_PRIVATE_H_
+#endif  // SRC_EXT_MACHNET_PRIVATE_H_

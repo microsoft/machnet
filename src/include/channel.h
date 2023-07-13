@@ -1,7 +1,7 @@
 /**
  * @file channel.h
  *
- * NSaaS Channel abstraction and management classes.
+ * Machnet Channel abstraction and management classes.
  */
 #ifndef SRC_INCLUDE_CHANNEL_H_
 #define SRC_INCLUDE_CHANNEL_H_
@@ -10,8 +10,8 @@
 #include <common.h>
 #include <flow_key.h>
 #include <glog/logging.h>
-#include <nsaas_common.h>
-#include <nsaas_private.h>
+#include <machnet_common.h>
+#include <machnet_private.h>
 #include <rte_eal.h>
 #include <rte_mbuf_core.h>
 
@@ -25,7 +25,7 @@
 #include <unordered_set>
 
 namespace juggler {
-class NSaaSEngine;  // forward declaration
+class MachnetEngine;  // forward declaration
 }
 
 namespace juggler {
@@ -40,7 +40,7 @@ namespace juggler {
 namespace shm {
 
 /**
- * @brief Class `ShmChannel' abstracts NSaaS shared memory channels.
+ * @brief Class `ShmChannel' abstracts Machnet shared memory channels.
  * It provides useful methods to allocate, enqueue and dequeue messages to
  * channels.
  *
@@ -55,7 +55,7 @@ class ShmChannel {
   /**
    * @brief `ShmChannel' Constructor.
    * @param channel_name  The name of the channel.
-   * @param channel_ctx   The NSaaS channel context.
+   * @param channel_ctx   The Machnet channel context.
    * @param channel_mem_size The size of the underlying memory region. This can
    * be different that the size of memory used by the channel (e.g., memory
    * region might be aligned to huge page size)
@@ -64,15 +64,15 @@ class ShmChannel {
    * @param channel_fd    The file descriptor of the channel.
    */
   ShmChannel(const std::string channel_name,
-             const NSaaSChannelCtx_t *channel_ctx,
+             const MachnetChannelCtx_t *channel_ctx,
              const size_t channel_mem_size, const bool is_posix_shm,
              int channel_fd);
   ~ShmChannel();
   ShmChannel &operator=(const ShmChannel &) = delete;
 
   // Return a pointer to the channel's context.
-  NSaaSChannelCtx_t *ctx() const {
-    return const_cast<NSaaSChannelCtx_t *>(ctx_);
+  MachnetChannelCtx_t *ctx() const {
+    return const_cast<MachnetChannelCtx_t *>(ctx_);
   }
 
   // Get the channel's file descriptor.
@@ -84,11 +84,11 @@ class ShmChannel {
   // Get the address of the channel's buffer pool.
   template <typename T = uchar_t *>
   const T GetBufPoolAddr() const {
-    return reinterpret_cast<T>(__nsaas_channel_buf_pool(ctx()));
+    return reinterpret_cast<T>(__machnet_channel_buf_pool(ctx()));
   }
 
   // Get total buffer pool size in bytes.
-  size_t GetBufPoolSize() const { return __nsaas_channel_buf_pool_size(ctx()); }
+  size_t GetBufPoolSize() const { return __machnet_channel_buf_pool_size(ctx()); }
 
   // Is this channel backed by a POSIX shared memory?
   bool IsPosixShm() const { return is_posix_shm_; }
@@ -99,19 +99,19 @@ class ShmChannel {
   // Total size of each channel's buffer in bytes.
   uint32_t GetTotalBufSize() const { return ctx_->data_ctx.buf_size; }
 
-  // NSaaS channel `MsgBuf' have reserved space for headers.
+  // Machnet channel `MsgBuf' have reserved space for headers.
   // This method returns the space in the `MsgBuf' that can be used to store the
   // payload. There is still headroom for possible packet headers.
   uint32_t GetUsableBufSize() const { return ctx_->data_ctx.buf_mss; }
 
   // Total amount of buffers in the channel.
   uint32_t GetTotalBufCount() const {
-    return __nsaas_channel_buf_ring(ctx_)->capacity;
+    return __machnet_channel_buf_ring(ctx_)->capacity;
   }
 
   // Get the number of buffers that are currently available (i.e., not in use).
   uint32_t GetFreeBufCount() const {
-    return __nsaas_channel_buffers_avail(ctx_);
+    return __machnet_channel_buffers_avail(ctx_);
   }
 
   /**
@@ -121,8 +121,8 @@ class ShmChannel {
    * @param index       The index of the buffer.
    * @return MsgBuf*     A pointer to the buffer.
    */
-  MsgBuf *GetMsgBuf(NSaaSRingSlot_t index) {
-    return reinterpret_cast<MsgBuf *>(__nsaas_channel_buf(ctx_, index));
+  MsgBuf *GetMsgBuf(MachnetRingSlot_t index) {
+    return reinterpret_cast<MsgBuf *>(__machnet_channel_buf(ctx_, index));
   }
 
   /**
@@ -133,33 +133,33 @@ class ShmChannel {
    * @return index      The index of the buffer.
    */
   uint32_t GetBufIndex(MsgBuf *msg_buf) {
-    return __nsaas_channel_buf_index(
-        ctx_, reinterpret_cast<NSaaSMsgBuf_t *>(msg_buf));
+    return __machnet_channel_buf_index(
+        ctx_, reinterpret_cast<MachnetMsgBuf_t *>(msg_buf));
   }
 
   /**
    * @brief Dequeues pending control work queue entries from the channel.
    *
-   * @param ctrl_entries  A pointer to the array of `NSaaSCtrlQueueEntry_t'
+   * @param ctrl_entries  A pointer to the array of `MachnetCtrlQueueEntry_t'
    * @param nb_entries    The max number of entries in the array above.
    * @return              The number of entries dequeued.
    */
-  uint32_t DequeueCtrlRequests(NSaaSCtrlQueueEntry_t *ctrl_entries,
+  uint32_t DequeueCtrlRequests(MachnetCtrlQueueEntry_t *ctrl_entries,
                                uint32_t nb_entries) {
-    return __nsaas_channel_ctrl_sq_dequeue(ctx_, nb_entries, ctrl_entries);
+    return __machnet_channel_ctrl_sq_dequeue(ctx_, nb_entries, ctrl_entries);
   }
 
   /**
    * @brief Enqueue a batch of WQE completions (CQE) to the channel (destined to
    * the application).
    *
-   * @param ctrl_entries  A pointer to the array of `NSaaSCtrlQueueEntry_t'.
+   * @param ctrl_entries  A pointer to the array of `MachnetCtrlQueueEntry_t'.
    * @param nb_entries    The number of entries in the array above.
    * @return              The number of entries enqueued.
    */
-  uint32_t EnqueueCtrlCompletions(NSaaSCtrlQueueEntry_t *ctrl_entries,
+  uint32_t EnqueueCtrlCompletions(MachnetCtrlQueueEntry_t *ctrl_entries,
                                   uint32_t nb_entries) {
-    return __nsaas_channel_ctrl_cq_enqueue(ctx_, nb_entries, ctrl_entries);
+    return __machnet_channel_ctrl_cq_enqueue(ctx_, nb_entries, ctrl_entries);
   }
 
   /**
@@ -170,8 +170,8 @@ class ShmChannel {
    * @param nb_msgs          The number of entries in the array above.
    * @return                 The number of messages enqueued.
    */
-  uint32_t EnqueueMessages(NSaaSRingSlot_t *msgbuf_indices, uint32_t nb_msgs) {
-    return __nsaas_channel_nsaas_ring_enqueue(ctx_, nb_msgs, msgbuf_indices);
+  uint32_t EnqueueMessages(MachnetRingSlot_t *msgbuf_indices, uint32_t nb_msgs) {
+    return __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs, msgbuf_indices);
   }
 
   /**
@@ -185,12 +185,12 @@ class ShmChannel {
    * @return           The number of messages enqueued.
    */
   uint32_t EnqueueMessages(MsgBuf *const *msgs, uint32_t nb_msgs) {
-    NSaaSRingSlot_t slots[MsgBufBatch::kMaxBurst];
+    MachnetRingSlot_t slots[MsgBufBatch::kMaxBurst];
     auto nmsgs = std::min(nb_msgs, MsgBufBatch::kMaxBurst);
 
     for (uint32_t i = 0; i < nmsgs; i++) {
-      slots[i] = __nsaas_channel_buf_index(
-          ctx_, reinterpret_cast<const NSaaSMsgBuf_t *>(msgs[i]));
+      slots[i] = __machnet_channel_buf_index(
+          ctx_, reinterpret_cast<const MachnetMsgBuf_t *>(msgs[i]));
     }
 
     return EnqueueMessages(slots, nmsgs);
@@ -209,20 +209,20 @@ class ShmChannel {
 
   /**
    * @brief Dequeues a number of messages from the channel (destined to the
-   * NSaaS stack).
+   * Machnet stack).
    *
-   * @param msg_indices        A pointer to the array of `NSaaSRingSlot_t'
+   * @param msg_indices        A pointer to the array of `MachnetRingSlot_t'
    *                           objects (indices of buffers).
    * @param msgs               A pointer to the array of pointers to `MsgBuf'
    *                           objects.
    * @param nb_msgs            The number of messages to dequeue.
    */
-  uint32_t DequeueMessages(NSaaSRingSlot_t *msg_indices, MsgBuf **msgs,
+  uint32_t DequeueMessages(MachnetRingSlot_t *msg_indices, MsgBuf **msgs,
                            uint32_t nb_msgs) {
-    uint32_t ret = __nsaas_channel_app_ring_dequeue(ctx_, nb_msgs, msg_indices);
+    uint32_t ret = __machnet_channel_app_ring_dequeue(ctx_, nb_msgs, msg_indices);
     for (uint32_t i = 0; i < ret; i++) {
       msgs[i] =
-          reinterpret_cast<MsgBuf *>(__nsaas_channel_buf(ctx_, msg_indices[i]));
+          reinterpret_cast<MsgBuf *>(__machnet_channel_buf(ctx_, msg_indices[i]));
     }
 
     return ret;
@@ -230,7 +230,7 @@ class ShmChannel {
 
   /**
    * @brief Dequeues a batch of messages from the channel (destined to the
-   * NSaaS stack).
+   * Machnet stack).
    *
    * @param batch       A pointer to an empty `MsgBufBatch' object to hold the
    *                    dequeued messages.
@@ -251,9 +251,9 @@ class ShmChannel {
    * @return - pointer to the buffer on success, nullptr otherwise.
    */
   MsgBuf *MsgBufAlloc() {
-    NSaaSRingSlot_t indices[1];
-    NSaaSMsgBuf_t *buf[1];
-    auto ret = __nsaas_channel_buf_alloc_bulk(ctx_, 1, indices, buf);
+    MachnetRingSlot_t indices[1];
+    MachnetMsgBuf_t *buf[1];
+    auto ret = __machnet_channel_buf_alloc_bulk(ctx_, 1, indices, buf);
     if (ret == 1) [[likely]] return reinterpret_cast<MsgBuf *>(buf[0]);
     return nullptr;
   }
@@ -266,12 +266,12 @@ class ShmChannel {
    */
   bool MsgBufFree(MsgBuf *buf) {
     (void)DCHECK_NOTNULL(buf);
-    NSaaSRingSlot_t index[1] = {__nsaas_channel_buf_index(
-        ctx_, reinterpret_cast<const NSaaSMsgBuf_t *>(buf))};
+    MachnetRingSlot_t index[1] = {__machnet_channel_buf_index(
+        ctx_, reinterpret_cast<const MachnetMsgBuf_t *>(buf))};
     int retries = 5;
     int ret;
     do {
-      ret = __nsaas_channel_buf_free_bulk(ctx_, 1, index);
+      ret = __machnet_channel_buf_free_bulk(ctx_, 1, index);
     } while (ret == 0 && retries-- > 0);
 
     return ret;
@@ -288,10 +288,10 @@ class ShmChannel {
   bool MsgBufBulkAlloc(MsgBufBatch *batch,
                        uint32_t cnt = MsgBufBatch::kMaxBurst) {
     (void)DCHECK_NOTNULL(batch);
-    uint32_t ret = __nsaas_channel_buf_alloc_bulk(
+    uint32_t ret = __machnet_channel_buf_alloc_bulk(
         ctx_, std::min(cnt, static_cast<uint32_t>(batch->GetRoom())),
         batch->buf_indices(),
-        reinterpret_cast<NSaaSMsgBuf_t **>(batch->bufs()));
+        reinterpret_cast<MachnetMsgBuf_t **>(batch->bufs()));
     batch->IncrCount(ret);
     if (ret == 0) [[unlikely]] return false;
     return true;
@@ -312,7 +312,7 @@ class ShmChannel {
     int ret;
     do {
       // Attempt to release the buffers.
-      ret = __nsaas_channel_buf_free_bulk(ctx_, batch->GetSize(),
+      ret = __machnet_channel_buf_free_bulk(ctx_, batch->GetSize(),
                                           batch->buf_indices());
     } while (ret == 0 && retries-- > 0);
 
@@ -324,16 +324,16 @@ class ShmChannel {
 
  private:
   const std::string name_;
-  const NSaaSChannelCtx_t *ctx_;
+  const MachnetChannelCtx_t *ctx_;
   const size_t mem_size_;
   const bool is_posix_shm_;
   int channel_fd_;
 };
 
 /**
- * @brief Class `Channel' abstracts NSaaS shared memory channels and provides
+ * @brief Class `Channel' abstracts Machnet shared memory channels and provides
  * some extra functionality (compared the base `ShmChannel') to associate
- * channels with flows and listeners which are used by the NSaaS engine.
+ * channels with flows and listeners which are used by the Machnet engine.
  *
  * This class is non-copyable.
  */
@@ -344,7 +344,7 @@ class Channel : public ShmChannel {
   /**
    * @brief `ShmChannel' Constructor.
    * @param channel_name  The name of the channel.
-   * @param channel_ctx   The NSaaS channel context.
+   * @param channel_ctx   The Machnet channel context.
    * @param channel_mem_size The size of the underlying memory region. This can
    * be different that the size of memory used by the channel (e.g., memory
    * region might be aligned to huge page size)
@@ -352,7 +352,7 @@ class Channel : public ShmChannel {
    * or anonymous huge pages.
    * @param channel_fd    The file descriptor of the channel.
    */
-  Channel(const std::string &name, const NSaaSChannelCtx_t *ctx,
+  Channel(const std::string &name, const MachnetChannelCtx_t *ctx,
           const size_t channel_mem_size, const bool is_posix_shm,
           int channel_fd);
   ~Channel();
@@ -445,7 +445,7 @@ class Channel : public ShmChannel {
   std::vector<void *> buffer_pages_va_{};
   std::vector<uint64_t> buffer_pages_iova_{};
 
-  friend class juggler::NSaaSEngine;
+  friend class juggler::MachnetEngine;
   template <class T>
   class ChannelManager;
 };
@@ -453,7 +453,7 @@ class Channel : public ShmChannel {
 /**
  * @brief Class `ChannelManager' is a class that can be used to manage channels.
  * A `ChannelManager' provides method to create, destroy and access the
- * underlying NSaaS Channels it holds.
+ * underlying Machnet Channels it holds.
  */
 template <class T = Channel,
           class =
@@ -469,13 +469,13 @@ class ChannelManager {
   ChannelManager &operator=(const ChannelManager &) = delete;
 
   /**
-   * Create a new NSaaS dataplane channel.
+   * Create a new Machnet dataplane channel.
    *
    * @param name               Name of the channel (POSIX shared memory
    *                           segment)
-   * @param nsaas_ring_slot_nr The number of NSaaS->App messaging ring slots
+   * @param machnet_ring_slot_nr The number of Machnet->App messaging ring slots
    *                           (must be power of 2).
-   * @param app_ring_slot_nr   The number of App->NSaaS messaging ring slots
+   * @param app_ring_slot_nr   The number of App->Machnet messaging ring slots
    *                           (must be power of 2).
    * @param buf_ring_slot_nr   The number of buffers + 1 in the pool (must be
    *                           power of 2).
@@ -484,7 +484,7 @@ class ChannelManager {
    *   - `true` if the channel was successfully created.
    *   - `false` otherwise.
    */
-  bool AddChannel(const char *name, size_t nsaas_ring_slot_nr,
+  bool AddChannel(const char *name, size_t machnet_ring_slot_nr,
                   size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
                   size_t buffer_size) {
     const std::lock_guard<std::mutex> lock(mtx_);
@@ -501,8 +501,8 @@ class ChannelManager {
     int channel_fd;
     size_t shm_segment_size;
     int is_posix_shm;
-    auto *ctx = __nsaas_channel_create(
-        name, nsaas_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr,
+    auto *ctx = __machnet_channel_create(
+        name, machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr,
         buffer_size, &shm_segment_size, &is_posix_shm, &channel_fd);
     if (ctx == nullptr) {
       LOG(WARNING) << "Failed to create channel " << name

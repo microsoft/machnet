@@ -2,7 +2,7 @@ const ref = require("ref-napi");
 const dgram = require("dgram");
 const commander = require("commander");
 const chalk = require("chalk");
-const { nsaas_shim, NSaaSNetFlow_t } = require("./nsaas_shim");
+const { machnet_shim, MachnetFlow_t } = require("./machnet_shim");
 
 const kRocksDbServerPort = 888;
 
@@ -11,7 +11,7 @@ commander
   .option("-r, --remote_ip <ip>", "Remote IP address")
   .option("-n, --num_keys <num>", "Number of keys at the server")
   .option("-o, --num_ops <num>", "Number of operations to perform")
-  .option("-t, --transport <transport>", "Transport to use: nsaas/udp")
+  .option("-t, --transport <transport>", "Transport to use: machnet/udp")
   .parse(process.argv);
 
 const options = commander.opts();
@@ -27,8 +27,8 @@ if (
   process.exit(1);
 }
 
-if (options.transport === "nsaas" && !options.local_ip) {
-  console.log(chalk.red("Error: local_ip is required for nsaas transport"));
+if (options.transport === "machnet" && !options.local_ip) {
+  console.log(chalk.red("Error: local_ip is required for machnet transport"));
   process.exit(1);
 }
 
@@ -56,35 +56,35 @@ function print_stats(arr) {
         99.9th: ${Math.floor(ninety_nine_nine)} us`);
 }
 
-async function nsaasTransportClientAsync() {
+async function machnetTransportClientAsync() {
   // Main logic
-  var ret = nsaas_shim.nsaas_init();
-  customCheck(ret === 0, "nsaas_init()");
+  var ret = machnet_shim.machnet_init();
+  customCheck(ret === 0, "machnet_init()");
 
-  var channel_ctx = nsaas_shim.nsaas_attach();
-  customCheck(channel_ctx !== null, "nsaas_attach()");
+  var channel_ctx = machnet_shim.machnet_attach();
+  customCheck(channel_ctx !== null, "machnet_attach()");
 
   const latencies_us = [];
 
-  const tx_flow = new NSaaSNetFlow_t();
-  var ret = nsaas_shim.nsaas_connect(
+  const tx_flow = new MachnetFlow_t();
+  var ret = machnet_shim.machnet_connect(
     channel_ctx,
     ref.allocCString(options.local_ip),
     ref.allocCString(options.remote_ip),
     kRocksDbServerPort,
     tx_flow.ref()
   );
-  customCheck(ret === 0, "nsaas_connect()");
+  customCheck(ret === 0, "machnet_connect()");
 
-  ret = nsaas_shim.nsaas_listen(
+  ret = machnet_shim.machnet_listen(
     channel_ctx,
     ref.allocCString(options.local_ip),
     kRocksDbServerPort
   );
-  customCheck(ret === 0, "nsaas_listen()");
+  customCheck(ret === 0, "machnet_listen()");
 
   let msgCounter = 0;
-  const rx_flow = new NSaaSNetFlow_t();
+  const rx_flow = new MachnetFlow_t();
   const rx_buf = Buffer.alloc(1024);
 
   console.log(`Sending ${options.num_ops} queries`);
@@ -99,14 +99,14 @@ async function nsaasTransportClientAsync() {
 
     try {
       await new Promise((resolve, reject) => {
-        ret = nsaas_shim.nsaas_send(
+        ret = machnet_shim.machnet_send(
           channel_ctx,
           tx_flow,
           key_buffer,
           key_buffer.length
         );
         if (ret === -1) {
-          reject(new Error(`Error: nsaas_send() failed for key ${key}`));
+          reject(new Error(`Error: machnet_send() failed for key ${key}`));
         } else {
           resolve();
         }
@@ -115,14 +115,14 @@ async function nsaasTransportClientAsync() {
       await new Promise((resolve, reject) => {
         let bytesRead = 0;
         while (bytesRead === 0) {
-          const result = nsaas_shim.nsaas_recv(
+          const result = machnet_shim.machnet_recv(
             channel_ctx,
             rx_buf,
             rx_buf.length,
             rx_flow.ref()
           );
           if (result === -1) {
-            reject(new Error(`Error: nsaas_recv() failed for key ${key}`));
+            reject(new Error(`Error: machnet_recv() failed for key ${key}`));
           }
           bytesRead = result;
         }
@@ -236,8 +236,8 @@ async function udpTransportClient() {
   nextRequest();
 }
 
-if (options.transport === "nsaas") {
-  nsaasTransportClientAsync();
+if (options.transport === "machnet") {
+  machnetTransportClientAsync();
 } else {
   udpTransportClient();
 }

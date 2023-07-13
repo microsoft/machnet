@@ -1,7 +1,7 @@
 const ref = require('ref-napi');
 const commander = require('commander');
 const chalk = require('chalk');
-const {nsaas_shim, NSaaSNetFlow_t} = require('./nsaas_shim');
+const {machnet_shim, MachnetFlow_t} = require('./machnet_shim');
 
 const kHelloWorldPort = 888;
 commander.option('-l, --local_ip <ip>', 'Local IP address')
@@ -39,52 +39,52 @@ function print_stats(arr) {
 }
 
 // Main logic
-var ret = nsaas_shim.nsaas_init();
-customCheck(ret === 0, 'nsaas_init()');
+var ret = machnet_shim.machnet_init();
+customCheck(ret === 0, 'machnet_init()');
 
-var channel_ctx = nsaas_shim.nsaas_attach();
-customCheck(channel_ctx !== null, 'nsaas_attach()');
+var channel_ctx = machnet_shim.machnet_attach();
+customCheck(channel_ctx !== null, 'machnet_attach()');
 
 const NUM_MESSAGES = 100000;
 const latencies_us = [];
 
-const tx_flow = new NSaaSNetFlow_t();
-var ret = nsaas_shim.nsaas_connect(
+const tx_flow = new MachnetFlow_t();
+var ret = machnet_shim.machnet_connect(
     channel_ctx, ref.allocCString(options.local_ip),
     ref.allocCString(options.remote_ip), kHelloWorldPort, tx_flow.ref());
-customCheck(ret === 0, 'nsaas_connect()');
+customCheck(ret === 0, 'machnet_connect()');
 
-ret = nsaas_shim.nsaas_listen(
+ret = machnet_shim.machnet_listen(
     channel_ctx, ref.allocCString(options.local_ip), kHelloWorldPort);
-customCheck(ret === 0, 'nsaas_listen()');
+customCheck(ret === 0, 'machnet_listen()');
 
 if (options.is_client) {
   // Client
   console.log('Running as client');
 
   let msgCounter = 0;
-  const rx_flow = new NSaaSNetFlow_t();
+  const rx_flow = new MachnetFlow_t();
   const rx_buf = Buffer.alloc(1024);
   const msg = `Hello World!`;
   const msg_buffer = Buffer.from(msg, 'utf8');
 
   while (msgCounter < NUM_MESSAGES) {
     const startTime = process.hrtime();
-    ret = nsaas_shim.nsaas_send(
+    ret = machnet_shim.machnet_send(
         channel_ctx, tx_flow, msg_buffer, msg_buffer.length);
 
     if (ret === -1) {
       console.log(
-          chalk.red(`Error: nsaas_send() failed for message ${msgCounter}`));
+          chalk.red(`Error: machnet_send() failed for message ${msgCounter}`));
       exit(1);
     } else {
       let bytesRead = 0;
       while (bytesRead === 0) {
-        const result = nsaas_shim.nsaas_recv(
+        const result = machnet_shim.machnet_recv(
             channel_ctx, rx_buf, rx_buf.length, rx_flow.ref());
         if (result === -1) {
           console.log(chalk.red(
-              `Error: nsaas_recv() failed for message ${msgCounter}`));
+              `Error: machnet_recv() failed for message ${msgCounter}`));
           exit(1);
         }
         bytesRead = result;
@@ -109,19 +109,19 @@ if (options.is_client) {
   // Server
   console.log('Running as server, waiting for messages from client');
   const buf = Buffer.alloc(1024);
-  const rx_flow = new NSaaSNetFlow_t();
+  const rx_flow = new MachnetFlow_t();
   const replyMsg = `yes`;
   const replyBuffer = Buffer.from(replyMsg, 'utf8');
 
   while (true) {
     const bytesRead =
-        nsaas_shim.nsaas_recv(channel_ctx, buf, buf.length, rx_flow.ref());
+        machnet_shim.machnet_recv(channel_ctx, buf, buf.length, rx_flow.ref());
 
     if (bytesRead === -1) {
-      console.log(chalk.red('Error: nsaas_recv() failed'));
+      console.log(chalk.red('Error: machnet_recv() failed'));
       continue;  // continue to poll for messages
     } else if (bytesRead > 0) {
-      nsaas_shim.nsaas_send(
+      machnet_shim.machnet_send(
           channel_ctx, tx_flow, replyBuffer, replyBuffer.length);
     }
   }

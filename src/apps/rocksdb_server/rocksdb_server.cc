@@ -2,7 +2,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <netinet/in.h>
-#include <nsaas.h>
+#include <machnet.h>
 #include <rocksdb/db.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -18,29 +18,29 @@
 DEFINE_int32(num_keys, 1000, "Number of keys to insert and retrieve");
 DEFINE_int32(num_probes, 10000, "Number of probes to perform");
 DEFINE_int32(value_size, 200, "Size of value in bytes");
-DEFINE_string(local, "", "Local IP address, needed for NSaaS only");
-DEFINE_string(transport, "nsaas", "Transport to use (nsaas, udp)");
+DEFINE_string(local, "", "Local IP address, needed for Machnet only");
+DEFINE_string(transport, "machnet", "Transport to use (machnet, udp)");
 
 static constexpr uint16_t kPort = 888;
 const std::string kNsaasRocksDbServerFile = "/tmp/testdb";
 
-void NSaaSTransportServer(rocksdb::DB *db) {
-  // Initialize nsaas and attach
-  int ret = nsaas_init();
-  CHECK_EQ(ret, 0) << "nsaas_init() failed";
-  void *channel = nsaas_attach();
+void MachnetTransportServer(rocksdb::DB *db) {
+  // Initialize machnet and attach
+  int ret = machnet_init();
+  CHECK_EQ(ret, 0) << "machnet_init() failed";
+  void *channel = machnet_attach();
 
-  CHECK(channel != nullptr) << "nsaas_attach() failed";
-  ret = nsaas_listen(channel, FLAGS_local.c_str(), kPort);
-  CHECK_EQ(ret, 0) << "nsaas_listen() failed";
+  CHECK(channel != nullptr) << "machnet_attach() failed";
+  ret = machnet_listen(channel, FLAGS_local.c_str(), kPort);
+  CHECK_EQ(ret, 0) << "machnet_listen() failed";
 
   // Handle client requests
   LOG(INFO) << "Waiting for client requests";
   while (true) {
     std::array<char, 1024> buf;
-    NSaaSNetFlow rx_flow;
-    const ssize_t ret = nsaas_recv(channel, buf.data(), buf.size(), &rx_flow);
-    CHECK_GE(ret, 0) << "nsaas_recv() failed";
+    MachnetFlow rx_flow;
+    const ssize_t ret = machnet_recv(channel, buf.data(), buf.size(), &rx_flow);
+    CHECK_GE(ret, 0) << "machnet_recv() failed";
     if (ret == 0) {
       usleep(1);
       continue;
@@ -53,17 +53,17 @@ void NSaaSTransportServer(rocksdb::DB *db) {
     const rocksdb::Status status = db->Get(rocksdb::ReadOptions(), key, &value);
 
     if (status.ok()) {
-      NSaaSNetFlow tx_flow;
+      MachnetFlow tx_flow;
       tx_flow.dst_ip = rx_flow.src_ip;
       tx_flow.src_ip = rx_flow.dst_ip;
       tx_flow.dst_port = rx_flow.src_port;
       tx_flow.src_port = rx_flow.dst_port;
 
       ssize_t send_ret =
-          nsaas_send(channel, tx_flow, value.data(), value.size());
+          machnet_send(channel, tx_flow, value.data(), value.size());
       VLOG(1) << "Sent value of size " << value.size() << " bytes to client";
       if (send_ret == -1) {
-        LOG(ERROR) << "nsaas_send() failed";
+        LOG(ERROR) << "machnet_send() failed";
       }
     } else {
       LOG(ERROR) << "Error retrieving key: " << status.ToString();
@@ -157,8 +157,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if (FLAGS_transport == "nsaas") {
-    NSaaSTransportServer(db);
+  if (FLAGS_transport == "machnet") {
+    MachnetTransportServer(db);
   } else if (FLAGS_transport == "udp") {
     UDPTransportServer(db);
   } else {

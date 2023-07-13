@@ -1,15 +1,15 @@
 /**
- * @file nsaas_controller.h
- * @brief This file contains the NSaaSController class. It is responsible for
- * the control plane of the NSaaS stack.
+ * @file machnet_controller.h
+ * @brief This file contains the MachnetController class. It is responsible for
+ * the control plane of the Machnet stack.
  */
-#ifndef SRC_INCLUDE_NSAAS_CONTROLLER_H_
-#define SRC_INCLUDE_NSAAS_CONTROLLER_H_
+#ifndef SRC_INCLUDE_MACHNET_CONTROLLER_H_
+#define SRC_INCLUDE_MACHNET_CONTROLLER_H_
 
 #include <channel.h>
-#include <nsaas_config.h>
-#include <nsaas_ctrl.h>
-#include <nsaas_engine.h>
+#include <machnet_config.h>
+#include <machnet_ctrl.h>
+#include <machnet_engine.h>
 #include <ud_socket.h>
 #include <uuid/uuid.h>
 
@@ -20,27 +20,27 @@
 
 namespace juggler {
 /**
- * @class NSaaSController
- * @brief This class is responsible for the control plane of the NSaaS stack.
+ * @class MachnetController
+ * @brief This class is responsible for the control plane of the Machnet stack.
  * It is responsible for creating new channels, listening to specific ports, and
  * for creating new connections based on the requests received from the
  * applications.
  */
-class NSaaSController {
+class MachnetController {
  public:
   using UDSocket = juggler::net::UDSocket;
   using UDServer = juggler::net::UDServer;
   using ChannelManager = juggler::shm::ChannelManager<juggler::shm::Channel>;
   // Timeout for idle connections in seconds.
   static constexpr uint32_t kConnectionTimeoutInSec = 2;
-  NSaaSController(const NSaaSController &) = delete;
+  MachnetController(const MachnetController &) = delete;
   // Delete constructor and assignment operator.
-  NSaaSController &operator=(const NSaaSController &) = delete;
+  MachnetController &operator=(const MachnetController &) = delete;
 
   // Create a singleton instance of the controller.
-  static NSaaSController *Create(const std::string &conf_file) {
+  static MachnetController *Create(const std::string &conf_file) {
     if (instance_ == nullptr) {
-      instance_ = new NSaaSController(conf_file);
+      instance_ = new MachnetController(conf_file);
     }
     return instance_;
   }
@@ -79,7 +79,7 @@ class NSaaSController {
 
  private:
   // Default constructor is private.
-  explicit NSaaSController(const std::string &conf_file);
+  explicit MachnetController(const std::string &conf_file);
   /**
    * @brief Callback to handle new connections to the controller.
    *
@@ -130,7 +130,7 @@ class NSaaSController {
    * otherwise.
    */
   bool RegisterApplication(const uuid_t app_uuid,
-                           const nsaas_app_info_t *app_info);
+                           const machnet_app_info_t *app_info);
 
   /**
    * @brief Unregister an application from the controller. Releases all the
@@ -147,7 +147,7 @@ class NSaaSController {
    * @return True if the channel has been created successfully, false otherwise.
    */
   bool CreateChannel(const uuid_t app_uuid,
-                     const nsaas_channel_info_t *channel_info, int *fd);
+                     const machnet_channel_info_t *channel_info, int *fd);
 
   /**
    * @brief The main loop of the controller.
@@ -160,17 +160,17 @@ class NSaaSController {
   void StopController();
 
  private:
-  static inline NSaaSController *instance_;
-  NSaaSConfigProcessor config_processor_;
+  static inline MachnetController *instance_;
+  MachnetConfigProcessor config_processor_;
   ChannelManager channel_manager_;
   bool running_{false};
   dpdk::Dpdk dpdk_{};
   std::vector<std::shared_ptr<dpdk::PmdPort>> pmd_ports_{};
-  std::vector<std::shared_ptr<NSaaSEngine>> engines_{};
+  std::vector<std::shared_ptr<MachnetEngine>> engines_{};
   std::unique_ptr<UDServer> server_{nullptr};
   std::unordered_map<std::string, std::unordered_set<std::string>>
       applications_registered_{};
 };
 }  // namespace juggler
 
-#endif  //  SRC_INCLUDE_NSAAS_CONTROLLER_H_
+#endif  //  SRC_INCLUDE_MACHNET_CONTROLLER_H_

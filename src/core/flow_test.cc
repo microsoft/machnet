@@ -8,7 +8,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <nsaas.h>
+#include <machnet.h>
 #include <packet_pool.h>
 #include <pmd.h>
 
@@ -17,7 +17,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "nsaas_pkthdr.h"
+#include "machnet_pkthdr.h"
 
 namespace juggler {
 namespace net {
@@ -43,7 +43,7 @@ class FlowTest : public ::testing::Test {
     return file;
   }
   const char *fname = file_name(__FILE__);
-  const uint32_t kChannelRingSize = 1 << 8;  // 256 slots for NSaaS, App rings.
+  const uint32_t kChannelRingSize = 1 << 8;  // 256 slots for Machnet, App rings.
   const uint32_t kBufferRingSize = 1 << 13;  // 8K Buffers.
   const uint32_t kBufferSize = 1 << 11;      // 2KB for each buffer.
   const uint32_t kMbufsNr = 1 << 13;         // 8K mbufs.
@@ -83,7 +83,7 @@ class FlowTest : public ::testing::Test {
   }
 
   /**
-   * @brief Create an 'NSaaS' message buffer train to hold the content of
+   * @brief Create an 'Machnet' message buffer train to hold the content of
    * data.
    * @param data The data to be copied into the message buffer train.
    * @return A pointer to the first message buffer in the train.
@@ -130,8 +130,8 @@ class FlowTest : public ::testing::Test {
   }
 
   /**
-   * @brief Given a message buffer, construct a train of NSaaS packets. This
-   * emulates the  NSaaS network packetization process, and is used to test
+   * @brief Given a message buffer, construct a train of Machnet packets. This
+   * emulates the  Machnet network packetization process, and is used to test
    * the receiving end of the flow.
    *
    * @param pcb  The flow's protocol control block (PCB), that contains the
@@ -146,7 +146,7 @@ class FlowTest : public ::testing::Test {
     const auto max_packet_size = dpdk::PmdRing::kDefaultFrameSize;
     constexpr auto packet_hdr_size = sizeof(net::Ethernet) + sizeof(net::Ipv4) +
                                      sizeof(net::Udp) +
-                                     sizeof(net::NSaaSPktHdr);
+                                     sizeof(net::MachnetPktHdr);
     const auto max_payload_size = max_packet_size - packet_hdr_size;
     auto num_packets = (data.size() + max_payload_size - 1) / max_payload_size;
 
@@ -168,19 +168,19 @@ class FlowTest : public ::testing::Test {
       // they are not used by the RXQeueue.
       auto *ipv4 = reinterpret_cast<net::Ipv4 *>(eh + 1);
       auto *udph = reinterpret_cast<net::Udp *>(ipv4 + 1);
-      auto *nsaash = reinterpret_cast<net::NSaaSPktHdr *>(udph + 1);
-      nsaash->magic = be16_t(net::NSaaSPktHdr::kMagic);
-      nsaash->net_flags = net::NSaaSPktHdr::NSaaSNetFlags::kData;
-      nsaash->seqno = be32_t(pcb->snd_nxt++);
-      nsaash->msg_flags = NSAAS_MSGBUF_FLAGS_SG;
+      auto *machneth = reinterpret_cast<net::MachnetPktHdr *>(udph + 1);
+      machneth->magic = be16_t(net::MachnetPktHdr::kMagic);
+      machneth->net_flags = net::MachnetPktHdr::MachnetFlags::kData;
+      machneth->seqno = be32_t(pcb->snd_nxt++);
+      machneth->msg_flags = MACHNET_MSGBUF_FLAGS_SG;
       if (data_offset == 0) {
-        nsaash->msg_flags |= NSAAS_MSGBUF_FLAGS_SYN;
+        machneth->msg_flags |= MACHNET_MSGBUF_FLAGS_SYN;
       }
       if (data_offset + payload_size == data.size()) {
-        nsaash->msg_flags |= NSAAS_MSGBUF_FLAGS_FIN;
-        nsaash->msg_flags &= ~NSAAS_MSGBUF_FLAGS_SG;
+        machneth->msg_flags |= MACHNET_MSGBUF_FLAGS_FIN;
+        machneth->msg_flags &= ~MACHNET_MSGBUF_FLAGS_SG;
       }
-      auto *payload = reinterpret_cast<uint8_t *>(nsaash + 1);
+      auto *payload = reinterpret_cast<uint8_t *>(machneth + 1);
       utils::Copy(payload, &data[data_offset], payload_size);
 
       // Update the data offset.
@@ -213,7 +213,7 @@ TEST_F(FlowTest, TXQueue_init) {
 TEST_F(FlowTest, TXQueue_PushPop) {
   std::mt19937 engine(rng_);
   std::uniform_int_distribution<std::mt19937::result_type> dist(
-      1, NSAAS_MSG_MAX_LEN);
+      1, MACHNET_MSG_MAX_LEN);
   auto msg_len = dist(rng_);
   auto buffers_nr = (msg_len + channel_->GetUsableBufSize() - 1) /
                     channel_->GetUsableBufSize();
@@ -274,7 +274,7 @@ TEST_F(FlowTest, RXQueue_init) {
 TEST_F(FlowTest, RXQueue_Push) {
   std::mt19937 engine(rng_);
   std::uniform_int_distribution<std::mt19937::result_type> dist(
-      1, NSAAS_MSG_MAX_LEN);
+      1, MACHNET_MSG_MAX_LEN);
   const size_t kNumTries = 1;
   for (size_t i = 0; i < kNumTries; i++) {
     // Fill a message with random data.
@@ -305,15 +305,15 @@ TEST_F(FlowTest, RXQueue_Push) {
 
     // At this point the message should have been delivered to the application.
     std::vector<uint8_t> rx_message(msg_len);
-    NSaaSIovec_t rx_iov;
+    MachnetIovec_t rx_iov;
     rx_iov.base = rx_message.data();
     rx_iov.len = rx_message.size();
-    NSaaSMsgHdr_t rx_msghdr;
+    MachnetMsgHdr_t rx_msghdr;
     rx_msghdr.flags = 0;
     rx_msghdr.flow_info = {0, 0, 0, 0};
     rx_msghdr.msg_iov = &rx_iov;
     rx_msghdr.msg_iovlen = 1;
-    auto ret = nsaas_recvmsg(channel_->ctx(), &rx_msghdr);
+    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr);
     EXPECT_EQ(ret, 1) << "Failed to deliver message to application";
     EXPECT_EQ(tx_message, rx_message);
     EXPECT_EQ(channel_->GetFreeBufCount(), channel_->GetTotalBufCount());
@@ -327,7 +327,7 @@ TEST_F(FlowTest, RXQueue_Push) {
 
 TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
   constexpr auto packet_hdr_size = sizeof(net::Ethernet) + sizeof(net::Ipv4) +
-                                   sizeof(net::Udp) + sizeof(net::NSaaSPktHdr);
+                                   sizeof(net::Udp) + sizeof(net::MachnetPktHdr);
   const auto packet_payload_size =
       dpdk::PmdRing::kDefaultFrameSize - packet_hdr_size;
   std::mt19937 engine(rng_);
@@ -384,15 +384,15 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
 
     // At this point the message should have been delivered to the application.
     std::vector<uint8_t> rx_message(msg_len);
-    NSaaSIovec_t rx_iov;
+    MachnetIovec_t rx_iov;
     rx_iov.base = rx_message.data();
     rx_iov.len = rx_message.size();
-    NSaaSMsgHdr_t rx_msghdr;
+    MachnetMsgHdr_t rx_msghdr;
     rx_msghdr.flags = 0;
     rx_msghdr.flow_info = {0, 0, 0, 0};
     rx_msghdr.msg_iov = &rx_iov;
     rx_msghdr.msg_iovlen = 1;
-    auto ret = nsaas_recvmsg(channel_->ctx(), &rx_msghdr);
+    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr);
     EXPECT_EQ(ret, 1) << "Failed to deliver message to application";
     EXPECT_EQ(tx_message, rx_message);
     EXPECT_EQ(channel_->GetFreeBufCount(), channel_->GetTotalBufCount());
@@ -412,7 +412,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
  * out-of-order batches and is repeated multiple times.
  */
 TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
-  const auto msg_len = NSAAS_MSG_MAX_LEN;
+  const auto msg_len = MACHNET_MSG_MAX_LEN;
 
   std::mt19937 engine(rng_);
 
@@ -483,15 +483,15 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
 
     // At this point the message should have been delivered to the application.
     std::vector<uint8_t> rx_message(msg_len);
-    NSaaSIovec_t rx_iov;
+    MachnetIovec_t rx_iov;
     rx_iov.base = rx_message.data();
     rx_iov.len = rx_message.size();
-    NSaaSMsgHdr_t rx_msghdr;
+    MachnetMsgHdr_t rx_msghdr;
     rx_msghdr.flags = 0;
     rx_msghdr.flow_info = {0, 0, 0, 0};
     rx_msghdr.msg_iov = &rx_iov;
     rx_msghdr.msg_iovlen = 1;
-    auto ret = nsaas_recvmsg(channel_->ctx(), &rx_msghdr);
+    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr);
     EXPECT_EQ(ret, 1) << "Failed to deliver message to application";
     EXPECT_EQ(tx_message, rx_message);
     EXPECT_EQ(channel_->GetFreeBufCount(), channel_->GetTotalBufCount());

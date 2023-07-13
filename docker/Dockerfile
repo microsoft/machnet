@@ -45,16 +45,16 @@ WORKDIR build/
 RUN DESTDIR=${RTE_SDK}/build/install ninja install
 RUN rm -rf ${RTE_SDK}/app ${RTE_SDK}/drivers ${RTE_SDK}/.git ${RTE_SDK}/build/app
 
-# Build NSaaS
+# Build Machnet
 RUN apt-get install -y libgflags-dev libgflags2.2 libhugetlbfs-dev pciutils libunwind-dev uuid-dev nlohmann-json3-dev
 RUN apt-get install -y gcc-10 g++-10
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
 RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
 RUN update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-10 100
 
-# Image/nsaas contains all the NSaaS repo files needed to build the container
+# Image/machnet contains all the Machnet repo files needed to build the container
 ADD Image /root
-WORKDIR /root/nsaas
+WORKDIR /root/machnet
 RUN mkdir build
 WORKDIR build
 RUN cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../ && ninja

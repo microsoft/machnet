@@ -10,4 +10,4 @@ endif()
 
 find_package(RocksDB REQUIRED)
 add_executable (${target_name} rocksdb_server.cc)
-target_link_libraries(${target_name} PUBLIC glog core nsaas_shim rt ${LIBDPDK_LIBRARIES} RocksDB::rocksdb)
+target_link_libraries(${target_name} PUBLIC glog core machnet_shim rt ${LIBDPDK_LIBRARIES} RocksDB::rocksdb)

@@ -1,9 +1,9 @@
 /**
- * @file  nsaas_engine.h
- * @brief Contains the class definition for the main NSaaS engine.
+ * @file  machnet_engine.h
+ * @brief Contains the class definition for the main Machnet engine.
  */
-#ifndef SRC_INCLUDE_NSAAS_ENGINE_H_
-#define SRC_INCLUDE_NSAAS_ENGINE_H_
+#ifndef SRC_INCLUDE_MACHNET_ENGINE_H_
+#define SRC_INCLUDE_MACHNET_ENGINE_H_
 
 #include <arp.h>
 #include <channel.h>
@@ -31,17 +31,17 @@
 namespace juggler {
 
 /**
- * @brief Class `NSaaSEngineSharedState' contains any state that might need to
+ * @brief Class `MachnetEngineSharedState' contains any state that might need to
  * be shared among different engines. This might be required when multiple
  * engine threads operate on a single PMD, sharing one or more IP addresses.
  */
-class NSaaSEngineSharedState {
+class MachnetEngineSharedState {
  public:
   static const size_t kSrcPortMin = (1 << 10);      // 1024
   static const size_t kSrcPortMax = (1 << 16) - 1;  // 65535
   static constexpr size_t kSrcPortBitmapSize =
       (kSrcPortMax + 1) / sizeof(uint64_t) / 8;
-  explicit NSaaSEngineSharedState(std::vector<uint8_t> rss_key,
+  explicit MachnetEngineSharedState(std::vector<uint8_t> rss_key,
                                   net::Ethernet::Address l2addr,
                                   std::vector<net::Ipv4::Address> ipv4_addrs)
       : rss_key_(rss_key), arp_handler_(l2addr, ipv4_addrs) {
@@ -333,10 +333,10 @@ class NSaaSEngineSharedState {
 };
 
 /**
- * @brief Class `NSaaSEngine' abstracts the main NSaaS engine. This engine
+ * @brief Class `MachnetEngine' abstracts the main Machnet engine. This engine
  * contains all the functionality need to be run by the stack's threads.
  */
-class NSaaSEngine {
+class MachnetEngine {
  public:
   using Ethernet = net::Ethernet;
   using Arp = net::Arp;
@@ -351,11 +351,11 @@ class NSaaSEngine {
   // Flow creation timeout in slow ticks (# of periodic executions since
   // flow creation request).
   const size_t kFlowCreationTimeoutSlowTicks = 3;
-  NSaaSEngine() = delete;
-  NSaaSEngine(NSaaSEngine const &) = delete;
+  MachnetEngine() = delete;
+  MachnetEngine(MachnetEngine const &) = delete;
 
   /**
-   * @brief Construct a new NSaaSEngine object.
+   * @brief Construct a new MachnetEngine object.
    *
    * @param pmd_port      Pointer to the PMD port to be used by the engine. The
    *                      PMD port must be initialized (i.e., call
@@ -363,12 +363,12 @@ class NSaaSEngine {
    * @param rx_queue_id   RX queue index to be used by the engine.
    * @param tx_queue_id   TX queue index to be used by the engine. The TXRing
    *                      associated should be initialized with a packet pool.
-   * @param channels      (optional) NSaaS channels the engine will be
+   * @param channels      (optional) Machnet channels the engine will be
    *                      responsible for (if any).
    */
-  NSaaSEngine(std::shared_ptr<PmdPort> pmd_port, uint16_t rx_queue_id,
+  MachnetEngine(std::shared_ptr<PmdPort> pmd_port, uint16_t rx_queue_id,
               uint16_t tx_queue_id,
-              std::shared_ptr<NSaaSEngineSharedState> shared_state,
+              std::shared_ptr<MachnetEngineSharedState> shared_state,
               std::vector<std::shared_ptr<shm::Channel>> channels = {})
       : pmd_port_(CHECK_NOTNULL(pmd_port)),
         rxring_(pmd_port_->GetRing<dpdk::RxRing>(rx_queue_id)),
@@ -406,8 +406,8 @@ class NSaaSEngine {
   }
 
   /**
-   * @brief This is the main event cycle of the NSaaS engine.
-   * It is called repeatedly by the main thread of the NSaaS engine.
+   * @brief This is the main event cycle of the Machnet engine.
+   * It is called repeatedly by the main thread of the Machnet engine.
    * On each cycle, the engine processes incoming packets in the RX queue and
    * enqueued messages in all channels that it is responsible for.
    * This method is not thread-safe.
@@ -472,7 +472,7 @@ class NSaaSEngine {
  protected:
   void DumpStatus() {
     std::string s;
-    s += "[NSaaS Engine Status]";
+    s += "[Machnet Engine Status]";
     s += "[PMD Port: " + std::to_string(pmd_port_->GetPortId()) +
          ", RX_Q: " + std::to_string(rxring_->GetRingId()) +
          ", TX_Q: " + std::to_string(txring_->GetRingId()) + "]\n";
@@ -609,23 +609,23 @@ class NSaaSEngine {
    * It is called periodically.
    */
   void ProcessControlRequests() {
-    NSaaSCtrlQueueEntry_t reqs[NSAAS_CHANNEL_CTRL_SQ_SLOT_NR];
+    MachnetCtrlQueueEntry_t reqs[MACHNET_CHANNEL_CTRL_SQ_SLOT_NR];
     for (const auto &channel : channels_) {
       // Peek the control SQ.
       const auto nreqs =
-          channel->DequeueCtrlRequests(reqs, NSAAS_CHANNEL_CTRL_SQ_SLOT_NR);
+          channel->DequeueCtrlRequests(reqs, MACHNET_CHANNEL_CTRL_SQ_SLOT_NR);
       for (auto i = 0u; i < nreqs; i++) {
         const auto &req = reqs[i];
         auto emit_completion = [&req, &channel](bool success) {
-          NSaaSCtrlQueueEntry_t resp;
+          MachnetCtrlQueueEntry_t resp;
           resp.id = req.id;
-          resp.opcode = NSAAS_CTRL_OP_STATUS;
+          resp.opcode = MACHNET_CTRL_OP_STATUS;
           resp.status =
-              success ? NSAAS_CTRL_STATUS_OK : NSAAS_CTRL_STATUS_ERROR;
+              success ? MACHNET_CTRL_STATUS_OK : MACHNET_CTRL_STATUS_ERROR;
           channel->EnqueueCtrlCompletions(&resp, 1);
         };
         switch (req.opcode) {
-          case NSAAS_CTRL_OP_CREATE_FLOW:
+          case MACHNET_CTRL_OP_CREATE_FLOW:
             // clang-format off
             {
               const Ipv4::Address src_addr(req.flow_info.src_ip);
@@ -644,9 +644,9 @@ class NSaaSEngine {
             }
             break;
             // clang-format on
-          case NSAAS_CTRL_OP_DESTROY_FLOW:
+          case MACHNET_CTRL_OP_DESTROY_FLOW:
             break;
-          case NSAAS_CTRL_OP_LISTEN:
+          case MACHNET_CTRL_OP_LISTEN:
             // clang-format off
             {
               const Ipv4::Address local_ip(req.listener_info.ip);
@@ -761,10 +761,10 @@ class NSaaSEngine {
       auto application_callback = [req_id = req.id](
                                       shm::Channel *channel, bool success,
                                       const juggler::net::flow::Key &flow_key) {
-        NSaaSCtrlQueueEntry_t resp;
+        MachnetCtrlQueueEntry_t resp;
         resp.id = req_id;
-        resp.opcode = NSAAS_CTRL_OP_STATUS;
-        resp.status = success ? NSAAS_CTRL_STATUS_OK : NSAAS_CTRL_STATUS_ERROR;
+        resp.opcode = MACHNET_CTRL_OP_STATUS;
+        resp.status = success ? MACHNET_CTRL_STATUS_OK : MACHNET_CTRL_STATUS_ERROR;
         resp.flow_info.src_ip = flow_key.local_addr.address.value();
         resp.flow_info.src_port = flow_key.local_port.port.value();
         resp.flow_info.dst_ip = flow_key.remote_addr.address.value();
@@ -891,9 +891,9 @@ class NSaaSEngine {
           const auto &remote_udp_port = udph->src_port;
 
           // Check if it is a SYN packet.
-          const auto *nsaash = pkt->head_data<net::NSaaSPktHdr *>(
+          const auto *machneth = pkt->head_data<net::MachnetPktHdr *>(
               sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
-          if (nsaash->net_flags != net::NSaaSPktHdr::NSaaSNetFlags::kSyn) {
+          if (machneth->net_flags != net::MachnetPktHdr::MachnetFlags::kSyn) {
             LOG(WARNING) << "Received a non-SYN packet on a listening port";
             break;
           }
@@ -1024,7 +1024,7 @@ class NSaaSEngine {
   // with other engines/threads.
   dpdk::PacketPool *packet_pool_;
   // Shared State instance for this engine.
-  std::shared_ptr<NSaaSEngineSharedState> shared_state_;
+  std::shared_ptr<MachnetEngineSharedState> shared_state_;
   // Local IPv4 addresses bound to this engine/interface.
   std::unordered_set<Ipv4::Address> local_ipv4_addrs_;
   // Vector of active channels this engine is serving.
@@ -1049,11 +1049,11 @@ class NSaaSEngine {
   // Vector of channels to be removed from the list of active channels.
   std::vector<std::shared_ptr<shm::Channel>> channels_to_dequeue_{};
   // List of pending control plane requests.
-  std::list<std::tuple<uint64_t, NSaaSCtrlQueueEntry_t,
+  std::list<std::tuple<uint64_t, MachnetCtrlQueueEntry_t,
                        const std::shared_ptr<shm::Channel>>>
       pending_requests_{};
 };
 
 }  // namespace juggler
 
-#endif  // SRC_INCLUDE_NSAAS_ENGINE_H_
+#endif  // SRC_INCLUDE_MACHNET_ENGINE_H_

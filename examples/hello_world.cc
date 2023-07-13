@@ -1,6 +1,6 @@
 /**
  * @file main.cc
- * Simple hello world application using only NSaaS public APIs
+ * Simple hello world application using only Machnet public APIs
  * Usage:
  *  - First start the server: ./hello_world --local=<local IP>
  *  - Client:
@@ -8,7 +8,7 @@
  */
 
 #include <gflags/gflags.h>
-#include <nsaas.h>
+#include <machnet.h>
 
 #include <array>
 
@@ -28,36 +28,36 @@ void assert_with_msg(bool cond, const char *msg) {
 int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  int ret = nsaas_init();
-  assert_with_msg(ret == 0, "nsaas_init() failed");
+  int ret = machnet_init();
+  assert_with_msg(ret == 0, "machnet_init() failed");
 
-  void *channel = nsaas_attach();
-  assert_with_msg(channel != nullptr, "nsaas_attach() failed");
+  void *channel = machnet_attach();
+  assert_with_msg(channel != nullptr, "machnet_attach() failed");
 
-  ret = nsaas_listen(channel, FLAGS_local.c_str(), kPort);
-  assert_with_msg(ret == 0, "nsaas_listen() failed");
+  ret = machnet_listen(channel, FLAGS_local.c_str(), kPort);
+  assert_with_msg(ret == 0, "machnet_listen() failed");
 
   printf("Listening on %s:%d\n", FLAGS_local.c_str(), kPort);
 
   if (FLAGS_remote != "") {
     printf("Sending message to %s:%d\n", FLAGS_remote.c_str(), kPort);
-    NSaaSNetFlow flow;
+    MachnetFlow flow;
     std::string msg = "Hello World!";
-    ret = nsaas_connect(channel, FLAGS_local.c_str(), FLAGS_remote.c_str(),
+    ret = machnet_connect(channel, FLAGS_local.c_str(), FLAGS_remote.c_str(),
                         kPort, &flow);
-    assert_with_msg(ret == 0, "nsaas_connect() failed");
+    assert_with_msg(ret == 0, "machnet_connect() failed");
 
-    const int ret = nsaas_send(channel, flow, msg.data(), msg.size());
-    if (ret == -1) printf("nsaas_send() failed\n");
+    const int ret = machnet_send(channel, flow, msg.data(), msg.size());
+    if (ret == -1) printf("machnet_send() failed\n");
   } else {
     printf("Waiting for message from client\n");
     size_t count = 0;
 
     while (true) {
       std::array<char, 1024> buf;
-      NSaaSNetFlow flow;
-      const ssize_t ret = nsaas_recv(channel, buf.data(), buf.size(), &flow);
-      assert_with_msg(ret >= 0, "nsaas_recvmsg() failed");
+      MachnetFlow flow;
+      const ssize_t ret = machnet_recv(channel, buf.data(), buf.size(), &flow);
+      assert_with_msg(ret >= 0, "machnet_recvmsg() failed");
       if (ret == 0) {
         usleep(10);
         continue;

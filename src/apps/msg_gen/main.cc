@@ -1,7 +1,7 @@
 /**
  * @file main.cc
  * @brief This application is a simple message generator that supports sending
- * and receiving network messages using NSaaS.
+ * and receiving network messages using Machnet.
  */
 
 #include <gflags/gflags.h>
@@ -14,14 +14,14 @@
 #include <sstream>
 #include <thread>
 #include <hdr/hdr_histogram.h>
-#include <nsaas.h>
+#include <machnet.h>
 
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 using std::chrono::time_point;
 
-DEFINE_string(local_ip, "", "IP of the local NSaaS interface");
-DEFINE_string(remote_ip, "", "IP of the remote server's NSaaS interface");
+DEFINE_string(local_ip, "", "IP of the local Machnet interface");
+DEFINE_string(remote_ip, "", "IP of the remote server's Machnet interface");
 DEFINE_uint32(remote_port, 888, "Remote port to connect to.");
 DEFINE_uint32(tx_msg_size, 64,
               "Size of the message (request/response) to send.");
@@ -59,12 +59,12 @@ class ThreadCtx {
   };
 
  public:
-  ThreadCtx(const void *channel_ctx, const NSaaSNetFlow_t *flow_info)
+  ThreadCtx(const void *channel_ctx, const MachnetFlow_t *flow_info)
       : channel_ctx(CHECK_NOTNULL(channel_ctx)), flow(flow_info), stats() {
     // Fill-in max-sized messages, we'll send the actual size later
-    rx_message.resize(NSAAS_MSG_MAX_LEN);
-    tx_message.resize(NSAAS_MSG_MAX_LEN);
-    message_gold.resize(NSAAS_MSG_MAX_LEN);
+    rx_message.resize(MACHNET_MSG_MAX_LEN);
+    tx_message.resize(MACHNET_MSG_MAX_LEN);
+    message_gold.resize(MACHNET_MSG_MAX_LEN);
     std::iota(message_gold.begin(), message_gold.end(), 0);
     std::memcpy(tx_message.data(), message_gold.data(), tx_message.size());
 
@@ -94,7 +94,7 @@ class ThreadCtx {
 
  public:
   const void *channel_ctx;
-  const NSaaSNetFlow_t *flow;
+  const MachnetFlow_t *flow;
   std::vector<uint8_t> rx_message;
   std::vector<uint8_t> tx_message;
   std::vector<uint8_t> message_gold;
@@ -167,9 +167,9 @@ void ServerLoop(void *channel_ctx) {
     auto &stats_cur = thread_ctx.stats.current;
     const auto *channel_ctx = thread_ctx.channel_ctx;
 
-    NSaaSNetFlow_t rx_flow;
+    MachnetFlow_t rx_flow;
     const ssize_t rx_size =
-        nsaas_recv(channel_ctx, thread_ctx.rx_message.data(),
+        machnet_recv(channel_ctx, thread_ctx.rx_message.data(),
                    thread_ctx.rx_message.size(), &rx_flow);
     if (rx_size <= 0) continue;
     stats_cur.rx_count++;
@@ -184,13 +184,13 @@ void ServerLoop(void *channel_ctx) {
         reinterpret_cast<msg_hdr_t *>(thread_ctx.tx_message.data());
     tx_msg_hdr->window_slot = msg_hdr->window_slot;
 
-    NSaaSNetFlow_t tx_flow;
+    MachnetFlow_t tx_flow;
     tx_flow.dst_ip = rx_flow.src_ip;
     tx_flow.src_ip = rx_flow.dst_ip;
     tx_flow.src_port = rx_flow.dst_port;
     tx_flow.dst_port = rx_flow.src_port;
 
-    const int ret = nsaas_send(channel_ctx, tx_flow,
+    const int ret = machnet_send(channel_ctx, tx_flow,
                                thread_ctx.tx_message.data(), FLAGS_tx_msg_size);
     if (ret == 0) {
       stats_cur.tx_success++;
@@ -220,7 +220,7 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
       reinterpret_cast<msg_hdr_t *>(thread_ctx->tx_message.data());
   msg_hdr->window_slot = window_slot;
 
-  const int ret = nsaas_send(thread_ctx->channel_ctx, *thread_ctx->flow,
+  const int ret = machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
                              thread_ctx->tx_message.data(), FLAGS_tx_msg_size);
   if (ret == 0) {
     stats_cur.tx_success++;
@@ -242,9 +242,9 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
       return 0;
     }
 
-    NSaaSNetFlow_t rx_flow;
+    MachnetFlow_t rx_flow;
     const ssize_t rx_size =
-        nsaas_recv(channel_ctx, thread_ctx->rx_message.data(),
+        machnet_recv(channel_ctx, thread_ctx->rx_message.data(),
                    thread_ctx->rx_message.size(), &rx_flow);
     if (rx_size <= 0) continue;
 
@@ -282,7 +282,7 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
   return 0;
 }
 
-void ClientLoop(void *channel_ctx, NSaaSNetFlow *flow) {
+void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
   ThreadCtx thread_ctx(channel_ctx, flow);
   LOG(INFO) << "Client Loop: Starting.";
 
@@ -314,7 +314,7 @@ void ClientLoop(void *channel_ctx, NSaaSNetFlow *flow) {
 int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  gflags::SetUsageMessage("Simple NSaaS-based message generator.");
+  gflags::SetUsageMessage("Simple Machnet-based message generator.");
   signal(SIGINT, SigIntHandler);
 
   CHECK_GT(FLAGS_tx_msg_size, sizeof(msg_hdr_t)) << "Message size too small";
@@ -324,15 +324,15 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Starting in client mode, request size " << FLAGS_tx_msg_size;
   }
 
-  CHECK_EQ(nsaas_init(), 0) << "Failed to initialize NSaaS library.";
-  void *channel_ctx = nsaas_attach();
+  CHECK_EQ(machnet_init(), 0) << "Failed to initialize Machnet library.";
+  void *channel_ctx = machnet_attach();
   CHECK_NOTNULL(channel_ctx);
 
-  NSaaSNetFlow_t flow;
+  MachnetFlow_t flow;
   if (FLAGS_active_generator) {
-    int ret = nsaas_connect(channel_ctx, FLAGS_local_ip.c_str(),
+    int ret = machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
                             FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
-    CHECK(ret == 0) << "Failed to connect to remote host. nsaas_connect() "
+    CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
                        "error: "
                     << strerror(ret);
 
@@ -340,8 +340,8 @@ int main(int argc, char *argv[]) {
               << " <-> " << FLAGS_remote_ip << ":" << flow.dst_port << "]";
   } else {
     int ret =
-        nsaas_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_remote_port);
-    CHECK(ret == 0) << "Failed to listen on local port. nsaas_listen() error: "
+        machnet_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_remote_port);
+    CHECK(ret == 0) << "Failed to listen on local port. machnet_listen() error: "
                     << strerror(ret);
 
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_remote_port

@@ -3,7 +3,7 @@ const ref = require('ref-napi');
 const Struct = require('ref-struct-napi');
 
 // Basic types and loading the lib
-const NSaaSNetFlow_t = Struct({
+const MachnetFlow_t = Struct({
   src_ip: 'uint32',
   dst_ip: 'uint32',
   src_port: 'uint16',
@@ -14,22 +14,22 @@ const size_t = ref.types.size_t;
 const voidPtr = ref.refType(ref.types.void);
 const charPtr = ref.refType(ref.types.char);
 const uint16 = ref.types.uint16;
-const NSaaSNetFlowPtr = ref.refType(NSaaSNetFlow_t);
+const MachnetFlowPtr = ref.refType(MachnetFlow_t);
 
 var dir = __dirname;
-const libnsaas_shim_location = dir + '/libnsaas_shim.so';
+const libmachnet_shim_location = dir + '/libmachnet_shim.so';
 
-console.log('Loading libnsaas_shim');
-var nsaas_shim = ffi.Library(libnsaas_shim_location, {
-  'nsaas_init': ['int', []],
-  'nsaas_attach': ['pointer', []],
-  'nsaas_listen': ['int', [voidPtr, charPtr, uint16]],
-  'nsaas_connect': ['int', [voidPtr, charPtr, charPtr, uint16, NSaaSNetFlowPtr]],
-  'nsaas_send': ['int', [voidPtr, NSaaSNetFlow_t, voidPtr, size_t]],
-  'nsaas_recv': ['int', [voidPtr, voidPtr, size_t, NSaaSNetFlowPtr]]
+console.log('Loading libmachnet_shim');
+var machnet_shim = ffi.Library(libmachnet_shim_location, {
+  'machnet_init': ['int', []],
+  'machnet_attach': ['pointer', []],
+  'machnet_listen': ['int', [voidPtr, charPtr, uint16]],
+  'machnet_connect': ['int', [voidPtr, charPtr, charPtr, uint16, MachnetFlowPtr]],
+  'machnet_send': ['int', [voidPtr, MachnetFlow_t, voidPtr, size_t]],
+  'machnet_recv': ['int', [voidPtr, voidPtr, size_t, MachnetFlowPtr]]
 });
 
 module.exports = {
-  nsaas_shim: nsaas_shim,
-  NSaaSNetFlow_t: NSaaSNetFlow_t
+  machnet_shim: machnet_shim,
+  MachnetFlow_t: MachnetFlow_t
 };
