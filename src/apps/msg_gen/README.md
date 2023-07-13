@@ -1,4 +1,4 @@
-# Mesage Generator (msg_gen)
+# Message Generator (msg_gen)
 
 This is a simple message generator application that uses the Machnet stack.
 
