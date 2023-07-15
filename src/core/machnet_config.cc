@@ -10,8 +10,8 @@
 
 namespace juggler {
 
-static std::optional<std::string> GetPCIeAddress(
-    const juggler::net::Ethernet::Address &l2_addr) {
+static std::optional<std::string>
+GetPCIeAddressSysfs(const juggler::net::Ethernet::Address &l2_addr) {
   LOG(INFO) << "Walking /sys/class/net to find PCIe address for L2 address "
             << l2_addr.ToString();
 
@@ -50,6 +50,9 @@ static std::optional<std::string> GetPCIeAddress(
       }
     }
   }
+
+  LOG(WARNING) << "Failed to get PCI address for L2 address "
+               << l2_addr.ToString() << " by the sysfs method.";
   return std::nullopt;
 }
 
@@ -77,7 +80,8 @@ void MachnetConfigProcessor::AssertJsonValidMachnetConfig() {
                  << config_json_filename_;
     }
     for (const auto &[key, _] : interface.items()) {
-      if (key != "ip" && key != "engine_threads" && key != "cpu_mask") {
+      if (key != "ip" && key != "engine_threads" && key != "cpu_mask" &&
+          key != "pcie") {
         LOG(FATAL) << "Invalid key " << key << " in " << interface << " in "
                    << config_json_filename_;
       }
@@ -96,6 +100,11 @@ void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
 
     if (val.find("engine_threads") != val.end()) {
       engine_threads = val.at("engine_threads");
+      LOG(INFO) << "Using " << engine_threads << " engine threads for "
+                << l2_addr.ToString();
+    } else {
+      LOG(INFO) << "Using default engine threads = " << engine_threads
+                << " for " << l2_addr.ToString();
     }
 
     if (val.find("cpu_mask") != val.end()) {
@@ -103,13 +112,24 @@ void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
       const size_t cpu_mask_val =
           std::stoull(cpu_mask_str.c_str(), nullptr, 16);
       cpu_mask = utils::calculate_cpu_mask(cpu_mask_val);
+      LOG(INFO) << "Using CPU mask " << cpu_mask_str << " for "
+                << l2_addr.ToString();
+    } else {
+      LOG(INFO) << "Using default CPU mask for " << l2_addr.ToString();
     }
 
-    // Get PCIe address of the interface for this mac address.
-    auto pci_addr = GetPCIeAddress(l2_addr);
-    if (!pci_addr) {
-      LOG(FATAL) << "Failed to find PCI address for interface with MAC "
-                 << l2_addr.ToString() << ".";
+    std::optional<std::string> pci_addr;
+    if (val.find("pcie") != val.end()) {
+      pci_addr = val.at("pcie");
+      LOG(INFO) << "Using config file PCIe address " << pci_addr.value()
+                << " for " << l2_addr.ToString();
+    } else {
+      pci_addr = GetPCIeAddressSysfs(l2_addr);
+      if (!pci_addr) {
+        LOG(FATAL) << "Failed to get PCIe address from sysfs for L2 address "
+                   << l2_addr.ToString()
+                   << ", and no PCIe address specified in config file.";
+      }
     }
 
     interfaces_config_.emplace(pci_addr.value(), l2_addr, ip_addr,
@@ -132,4 +152,4 @@ utils::CmdLineOpts MachnetConfigProcessor::GetEalOpts() const {
   return eal_opts;
 }
 
-}  // namespace juggler
+} // namespace juggler
