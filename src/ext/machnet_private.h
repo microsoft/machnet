@@ -333,19 +333,24 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
 
   // Check if channel size is huge page aligned.
   if ((channel_size & (HUGE_PAGE_2M_SIZE - 1)) != 0) {
-    fprintf(stderr, "Channel size is not huge page aligned.\n");
+    fprintf(stderr, "Channel size %zu is not huge page aligned.\n",
+            channel_size);
     return NULL;
   }
 
   // Create the shared memory segment.
   *shm_fd = memfd_create(channel_name, MFD_HUGETLB);
   if (*shm_fd < 0) {
+    fprintf(stderr, "memfd_create() failed, error = %s\n", strerror(errno));
     return NULL;
   }
 
   // Set the size of the shared memory segment.
   if (ftruncate(*shm_fd, channel_size) == -1) {
-    perror("ftruncate()");
+    fprintf(stderr,
+            "%s: ftruncate() failed, error = %s. This can happen if (1) there "
+            "are no hugepages, or (2) the hugepage size is not 2MB.\n",
+            __FILE__, strerror(errno));
     goto fail;
   }
 
@@ -354,13 +359,13 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
   channel = (MachnetChannelCtx_t *)mmap(
       NULL, channel_size, PROT_READ | PROT_WRITE, shm_flags, *shm_fd, 0);
   if (channel == MAP_FAILED) {
-    perror("mmap()");
+    fprintf(stderr, "mmap() failed, error = %s\n", strerror(errno));
     goto fail;
   }
 
   // Lock the memory segment in RAM.
   if (mlock((void *)channel, channel_size) != 0) {
-    perror("mlock()");
+    fprintf(stderr, "mlock() failed, error = %s\n", strerror(errno));
     goto fail;
   }
 
