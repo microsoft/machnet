@@ -1,5 +1,6 @@
 #include <glog/logging.h>
 
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <thread>
@@ -64,19 +65,30 @@ void ProducerThread(jring_t *ring) {
   BindThisThreadToCore(kProducerCpuCoreId);
   SetThisThreadName("jring_producer");
 
-  size_t epoch = 0;
+  struct timespec msr_start;
+  clock_gettime(CLOCK_REALTIME, &msr_start);
+  size_t num_msg_since_last_msr = 0;
+
   while (true) {
-    LOG(INFO) << "Producer epoch: " << epoch++ << ", will send " << kOpsPerEpoch
-              << " messages";
-    for (size_t i = 0; i < kOpsPerEpoch; ++i) {
-      msg_t msg;
-      clock_gettime(CLOCK_REALTIME, &msg.ts);
-      while (jring_sp_enqueue_bulk(ring, &msg, 1, nullptr) != 1) {
-        // do nothing
-      }
-      BusySleepNs(300);  // Assume 3 million packets/sec
+    msg_t msg;
+    clock_gettime(CLOCK_REALTIME, &msg.ts);
+    while (jring_sp_enqueue_bulk(ring, &msg, 1, nullptr) != 1) {
+      // do nothing
     }
-    BusySleepNs(1000 * 1000 * 1000);  // 1 sec
+
+    BusySleepNs(500);  // Emulate 2 Mpps
+
+    // check if 1 sec has elapsed since last msr, using msg.ts
+    const size_t ns_since_last_msr = (msg.ts.tv_sec - msr_start.tv_sec) * 1e9 +
+                                     (msg.ts.tv_nsec - msr_start.tv_nsec);
+    if (ns_since_last_msr >= 1e9) {
+      const size_t kpps = num_msg_since_last_msr / 1e3;
+      LOG(INFO) << "Producer: " << kpps << " Kpps";
+      num_msg_since_last_msr = 0;
+      msr_start = msg.ts;
+    } else {
+      ++num_msg_since_last_msr;
+    }
   }
 }
 
@@ -85,26 +97,36 @@ void ConsumerThread(jring_t *ring) {
             << kConsumerCpuCoreId;
   BindThisThreadToCore(kConsumerCpuCoreId);
   SetThisThreadName("jring_consumer");
-  size_t epoch = 0;
+
+  struct timespec msr_start;
+  clock_gettime(CLOCK_REALTIME, &msr_start);
+  size_t num_rx = 0;
+  size_t ns_sum = 0;
 
   while (true) {
-    size_t epoch_lat_sum_ns = 0;
-
-    for (size_t i = 0; i < kOpsPerEpoch; ++i) {
-      msg_t msg;
-      while (jring_sc_dequeue_bulk(ring, &msg, 1, nullptr) != 1) {
-        // do nothing
-      }
-      struct timespec end_time;
-      clock_gettime(CLOCK_REALTIME, &end_time);
-      long latency = (end_time.tv_sec - msg.ts.tv_sec) * 1e9 +
-                     (end_time.tv_nsec - msg.ts.tv_nsec);
-      epoch_lat_sum_ns += latency;
+    msg_t msg;
+    while (jring_sc_dequeue_bulk(ring, &msg, 1, nullptr) != 1) {
+      // do nothing
     }
+    num_rx++;
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
 
-    LOG(INFO) << "Consumer epoch: " << epoch++
-              << " avg latency: " << epoch_lat_sum_ns / kOpsPerEpoch
-              << " ns over " << kOpsPerEpoch << " messages";
+    const size_t msg_lat_ns =
+        (ts.tv_sec - msg.ts.tv_sec) * 1e9 + (ts.tv_nsec - msg.ts.tv_nsec);
+    ns_sum += msg_lat_ns;
+
+    const size_t ns_since_last_msr = (ts.tv_sec - msr_start.tv_sec) * 1e9 +
+                                     (ts.tv_nsec - msr_start.tv_nsec);
+    if (ns_since_last_msr >= 1e9) {
+      const double kpps = num_rx / 1e3;
+      const size_t avg_lat_ns = ns_sum / num_rx;
+      LOG(INFO) << "Consumer: " << kpps << " Kpps, avg latency: " << avg_lat_ns
+                << " ns";
+      num_rx = 0;
+      ns_sum = 0;
+      msr_start = ts;
+    }
   }
 }
 
