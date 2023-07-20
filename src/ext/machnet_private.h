@@ -77,12 +77,21 @@ static inline size_t __machnet_channel_dataplane_calculate_size(
   // Size of statistics structure.
   total_size += sizeof(MachnetChannelStats_t);
 
-  // Add the size of the rings (Machnet, Application, BufferRing).
-  size_t ring_sizes[] = {machnet_ring_slot_nr, app_ring_slot_nr,
-                         buf_ring_slot_nr};
-  for (size_t i = 0; i < COUNT_OF(ring_sizes); i++) {
+  // Add the size of the control rings.
+  size_t ctrl_ring_sizes[] = {MACHNET_CHANNEL_CTRL_SQ_SLOT_NR, MACHNET_CHANNEL_CTRL_CQ_SLOT_NR};
+  for (size_t i = 0; i < COUNT_OF(ctrl_ring_sizes); i++) {
     size_t acc =
-        jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), ring_sizes[i]);
+        jring_get_buf_ring_size(sizeof(MachnetCtrlQueueEntry_t), ctrl_ring_sizes[i]);
+    if (acc == (size_t)-1) return -1;
+    total_size += acc;
+  }
+
+  // Add the size of the rings (Machnet, Application, BufferRing).
+  size_t data_ring_sizes[] = {machnet_ring_slot_nr, app_ring_slot_nr,
+                         buf_ring_slot_nr};
+  for (size_t i = 0; i < COUNT_OF(data_ring_sizes); i++) {
+    size_t acc =
+        jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), data_ring_sizes[i]);
     if (acc == (size_t)-1) return -1;
     total_size += acc;
   }
@@ -162,7 +171,7 @@ static inline int __machnet_channel_dataplane_init(
   // Ring1 (ctrl - CQ) follows immediately after the first ring.
   ctx->data_ctx.ctrl_cq_ring_ofs =
       ctx->data_ctx.ctrl_sq_ring_ofs +
-      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t),
+      jring_get_buf_ring_size(sizeof(MachnetCtrlQueueEntry_t),
                               MACHNET_CHANNEL_CTRL_SQ_SLOT_NR);
   ret = jring_init(__machnet_channel_ctrl_cq_ring(ctx),
                    MACHNET_CHANNEL_CTRL_CQ_SLOT_NR, sizeof(MachnetCtrlQueueEntry_t),
@@ -172,7 +181,7 @@ static inline int __machnet_channel_dataplane_init(
   // Initialize the Machnet->Application ring.
   ctx->data_ctx.machnet_ring_ofs =
       ctx->data_ctx.ctrl_cq_ring_ofs +
-      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t),
+      jring_get_buf_ring_size(sizeof(MachnetCtrlQueueEntry_t),
                               MACHNET_CHANNEL_CTRL_CQ_SLOT_NR);
 
   jring_t *machnet_ring = __machnet_channel_machnet_ring(ctx);

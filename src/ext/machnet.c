@@ -220,7 +220,11 @@ MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size) {
   }
 
   // Map the shared memory segment into the address space of the process.
-  shm_flags = MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
+  shm_flags = MAP_SHARED | MAP_POPULATE; 
+  if (stat_buf.st_blksize > getpagesize()) {
+    /* TODO(ilias): Hack to detect if mapping is huge page backed. */
+    shm_flags |= MAP_HUGETLB;
+  }
   channel = (MachnetChannelCtx_t *)mmap(
       NULL, stat_buf.st_size, PROT_READ | PROT_WRITE, shm_flags, shm_fd, 0);
   if (channel == MAP_FAILED) {
