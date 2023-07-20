@@ -1,4 +1,6 @@
 #include <glog/logging.h>
+
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <thread>
@@ -8,7 +10,7 @@
 static constexpr size_t kNumRingElems = (1024 * 64);
 static constexpr size_t kMsgSize = 128;
 static constexpr size_t kOpsPerEpoch = kNumRingElems;
-static constexpr size_t kProducerCpuCoreId  = 2;
+static constexpr size_t kProducerCpuCoreId = 2;
 static constexpr size_t kConsumerCpuCoreId = 3;
 
 // Message struct for queue.
@@ -29,22 +31,21 @@ void SetThisThreadName(const std::string &name) {
   pthread_setname_np(pthread_self(), name.c_str());
 }
 
-void BusySleep(size_t msec) {
+void BusySleepNs(size_t nsec) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
-  size_t start = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+  size_t start_ns = ts.tv_sec * 1000000000 + ts.tv_nsec;
   while (true) {
     clock_gettime(CLOCK_REALTIME, &ts);
-    size_t now = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-    if (now - start >= msec) {
-      break;
-    }
+    size_t now_ns = ts.tv_sec * 1000000000 + ts.tv_nsec;
+    if (now_ns - start_ns >= nsec) break;
   }
 }
 
 jring_t *init_ring(size_t element_count) {
   size_t ring_sz = jring_get_buf_ring_size(sizeof(msg_t), element_count);
-  LOG(INFO) << "Ring size: " << ring_sz << " bytes";
+  LOG(INFO) << "Ring size: " << ring_sz << " bytes, msg size: " << sizeof(msg_t)
+            << " bytes, element count: " << element_count;
   jring_t *ring = (jring_t *)malloc(ring_sz);
   if (ring == nullptr) {
     LOG(ERROR) << "Failed to allocate memory " << ring_sz
@@ -59,51 +60,79 @@ jring_t *init_ring(size_t element_count) {
 }
 
 void ProducerThread(jring_t *ring) {
-  LOG(INFO) << "Producer thread started, binding to core " << kProducerCpuCoreId ;
-  BindThisThreadToCore(kProducerCpuCoreId );
+  LOG(INFO) << "Producer thread started, binding to core "
+            << kProducerCpuCoreId;
+  BindThisThreadToCore(kProducerCpuCoreId);
   SetThisThreadName("jring_producer");
 
-  size_t epoch = 0;
+  struct timespec msr_start;
+  clock_gettime(CLOCK_REALTIME, &msr_start);
+  size_t num_msg_since_last_msr = 0;
+
   while (true) {
-    LOG(INFO) << "Producer epoch: " << epoch++;
-    for (size_t i = 0; i < kOpsPerEpoch; ++i) {
-      msg_t msg;
-      clock_gettime(CLOCK_REALTIME, &msg.ts);
-      while (jring_sp_enqueue_bulk(ring, &msg, 1, nullptr) != 1) {
-        // do nothing
-      }
+    msg_t msg;
+    clock_gettime(CLOCK_REALTIME, &msg.ts);
+    while (jring_sp_enqueue_bulk(ring, &msg, 1, nullptr) != 1) {
+      // do nothing
     }
-    BusySleep(1000 /* 1 sec */);
+
+    BusySleepNs(500);  // Emulate 2 Mpps
+
+    // check if 1 sec has elapsed since last msr, using msg.ts
+    const size_t ns_since_last_msr = (msg.ts.tv_sec - msr_start.tv_sec) * 1e9 +
+                                     (msg.ts.tv_nsec - msr_start.tv_nsec);
+    if (ns_since_last_msr >= 1e9) {
+      const size_t kpps = num_msg_since_last_msr / 1e3;
+      LOG(INFO) << "Producer: " << kpps << " Kpps";
+      num_msg_since_last_msr = 0;
+      msr_start = msg.ts;
+    } else {
+      ++num_msg_since_last_msr;
+    }
   }
 }
 
 void ConsumerThread(jring_t *ring) {
-  LOG(INFO) << "Consumer thread started, binding to core " << kConsumerCpuCoreId;
+  LOG(INFO) << "Consumer thread started, binding to core "
+            << kConsumerCpuCoreId;
   BindThisThreadToCore(kConsumerCpuCoreId);
   SetThisThreadName("jring_consumer");
-  size_t epoch = 0;
+
+  struct timespec msr_start;
+  clock_gettime(CLOCK_REALTIME, &msr_start);
+  size_t num_rx = 0;
+  size_t ns_sum = 0;
 
   while (true) {
-    size_t epoch_lat_sum_ns = 0;
-
-    for (size_t i = 0; i < kOpsPerEpoch; ++i) {
-      msg_t msg;
-      while (jring_sc_dequeue_bulk(ring, &msg, 1, nullptr) != 1) {
-        // do nothing
-      }
-      struct timespec end_time;
-      clock_gettime(CLOCK_REALTIME, &end_time);
-      long latency = (end_time.tv_sec - msg.ts.tv_sec) * 1e9 +
-                     (end_time.tv_nsec - msg.ts.tv_nsec);
-      epoch_lat_sum_ns += latency;
+    msg_t msg;
+    while (jring_sc_dequeue_bulk(ring, &msg, 1, nullptr) != 1) {
+      // do nothing
     }
+    num_rx++;
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
 
-    LOG(INFO) << "Consumer epoch: " << epoch++
-              << " avg latency: " << epoch_lat_sum_ns / kOpsPerEpoch << " ns";
+    const size_t msg_lat_ns =
+        (ts.tv_sec - msg.ts.tv_sec) * 1e9 + (ts.tv_nsec - msg.ts.tv_nsec);
+    ns_sum += msg_lat_ns;
+
+    const size_t ns_since_last_msr = (ts.tv_sec - msr_start.tv_sec) * 1e9 +
+                                     (ts.tv_nsec - msr_start.tv_nsec);
+    if (ns_since_last_msr >= 1e9) {
+      const double kpps = num_rx / 1e3;
+      const size_t avg_lat_ns = ns_sum / num_rx;
+      LOG(INFO) << "Consumer: " << kpps << " Kpps, avg latency: " << avg_lat_ns
+                << " ns";
+      num_rx = 0;
+      ns_sum = 0;
+      msr_start = ts;
+    }
   }
 }
 
 int main() {
+  google::InitGoogleLogging("jring_bench");
+  FLAGS_logtostderr = true;
   jring_t *ring = init_ring(kNumRingElems);
   std::thread producer(ProducerThread, ring);
   std::thread consumer(ConsumerThread, ring);
