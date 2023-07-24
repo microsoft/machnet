@@ -23,53 +23,55 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-
 #ifndef JRING2_H
 #define JRING2_H
 
-#include <stdatomic.h>
-#include <stdbool.h>
+#include <errno.h>
+#include <malloc.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <errno.h>
 
 #define CACHELINE_SIZE 64
 
 typedef struct {
-  uint8_t full; // Updated by both writing and reading thread
-  char data[CACHELINE_SIZE - 1];
+  uint64_t full;  // Updated by both writing and reading thread
+  char data[CACHELINE_SIZE - sizeof(uint64_t)];
 } jring2_ent_t __attribute__((aligned(CACHELINE_SIZE)));
 
-/// @brief  Single producer single consumer ring buffer with cache line sized
-/// entries.
+/// @brief SPSC ring buffer with cache line sized entries
 typedef struct {
   uint32_t cnt;
+  uint8_t pad0[CACHELINE_SIZE];
   jring2_ent_t* blk;
 
   uint8_t pad1[CACHELINE_SIZE];
-  volatile uint64_t write_idx; // Used only by writing thread
-
+  uint64_t write_idx;  // Used only by writing thread
   // Number of slots the writer can write to without overwriting unread entries
-  volatile uint64_t free_write_cnt;
+  uint64_t free_write_cnt;
 
   uint8_t pad3[CACHELINE_SIZE];
-  volatile uint64_t read_idx; // Used by both writing and reading thread
+  volatile uint64_t read_idx;  // Used by both writing and reading thread
 } jring2_t;
 
-static inline void jring2_init(jring2_t* cl_ring, uint32_t n_ent) {
-  cl_ring->blk = (jring2_ent_t*)calloc(n_ent, sizeof(jring2_ent_t));
+// n_ent must be a power of 2
+static inline int jring2_init(jring2_t* cl_ring, uint32_t n_ent) {
+  if (n_ent == 0 || (n_ent & (n_ent - 1)) != 0) {
+    return -EINVAL;
+  }
+
+  cl_ring->blk =
+      (jring2_ent_t*)memalign(CACHELINE_SIZE, n_ent * sizeof(jring2_ent_t));
   cl_ring->write_idx = 0;
   cl_ring->read_idx = 0;
   cl_ring->free_write_cnt = n_ent - 1;
+
   cl_ring->cnt = n_ent;
+  return 0;
 }
 
-static inline void jring2_deinit(jring2_t* ring) {
-  free(ring->blk);
-  free(ring);
-}
+static inline void jring2_deinit(jring2_t* ring) {free(ring->blk); }
 
-static int jring2_enqueue(jring2_t* ring, jring2_ent_t* ent) {
+static int jring2_enqueue(jring2_t* ring, const jring2_ent_t* ent) {
   if (ring->free_write_cnt == 0) {
     const uint32_t rd_idx = ring->read_idx;
     asm volatile("" ::: "memory");
@@ -77,7 +79,7 @@ static int jring2_enqueue(jring2_t* ring, jring2_ent_t* ent) {
     // We need to calculate number of slots from writer to reader, which
     // requires some cirular arithmetic.
     ring->free_write_cnt =
-        (rd_idx - ring->write_idx + ring->cnt - 1) % ring->cnt;
+        (rd_idx - ring->write_idx + ring->cnt - 1) & (ring->cnt - 1);
     if (ring->free_write_cnt == 0) {
       return -ENOBUFS;
     }
@@ -86,6 +88,7 @@ static int jring2_enqueue(jring2_t* ring, jring2_ent_t* ent) {
   ring->blk[ring->write_idx] = *ent;
   asm volatile("" ::: "memory");
   ring->blk[ring->write_idx].full = 1;
+  ring->write_idx = (ring->write_idx + 1) & (ring->cnt - 1);
 
   return 0;
 }
@@ -98,7 +101,7 @@ static int jring2_dequeue(jring2_t* ring, jring2_ent_t* ent) {
   *ent = ring->blk[ring->read_idx];
   asm volatile("" ::: "memory");
   ring->blk[ring->read_idx].full = 0;
-  ring->read_idx = (ring->read_idx + 1) % ring->cnt;
+  ring->read_idx = (ring->read_idx + 1) & (ring->cnt - 1);
 
   return 0;
 }
