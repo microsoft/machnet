@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ARG timezone
 
 RUN ln -snf /usr/share/zoneinfo/${timezone} /etc/localtime && echo ${timezone} > /etc/timezone
@@ -12,6 +12,7 @@ RUN apt-get install -y git build-essential cmake meson pkg-config libudev-dev \
     libnl-3-dev libnl-route-3-dev python3-dev \
     python3-docutils python3-pyelftools libnuma-dev
 RUN apt-get install -y ca-certificates
+RUN apt-get --purge remove rdma-core librdmacm1 ibverbs-providers libibverbs-dev libibverbs1
 
 # Build uWebSockets from source
 # WORKDIR /root
@@ -47,10 +48,10 @@ RUN rm -rf ${RTE_SDK}/app ${RTE_SDK}/drivers ${RTE_SDK}/.git ${RTE_SDK}/build/ap
 
 # Build Machnet
 RUN apt-get install -y libgflags-dev libgflags2.2 libhugetlbfs-dev pciutils libunwind-dev uuid-dev nlohmann-json3-dev
-RUN apt-get install -y gcc-10 g++-10
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
-RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
-RUN update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-10 100
+# RUN apt-get install -y gcc-10 g++-10
+# RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+# RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+# RUN update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-10 100
 
 # Image/machnet contains all the Machnet repo files needed to build the container
 ADD Image /root
