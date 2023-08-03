@@ -10,4 +10,4 @@
 [submodule "third_party/googlebench"]
 	path = third_party/googlebench
 	url = https://github.com/google/benchmark.git
-	branch = v1.6.1
+	branch = v1.8.2
