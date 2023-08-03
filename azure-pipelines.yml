@@ -8,6 +8,7 @@ variables:
   timezone: 'America/Los_Angeles'
   rdma_core: '$(Pipeline.Workspace)/rdma-core'
   rte_sdk: '$(Pipeline.Workspace)/dpdk'
+  cityhash_sdk: '$(Pipeline.Workspace)/cityhash'
 
 steps:
 - script: |
@@ -24,7 +25,7 @@ steps:
 - script: |
     cd $(Pipeline.Workspace)
     git clone --depth=1 --recurse-submodules https://github.com/google/cityhash.git
-    cd cityhash
+    cd $(cityhash_sdk)
     ./configure --enable-sse4.2
     make all check CXXFLAGS="-O3 -msse4.2"
   displayName: 'Build cityhash from source'
@@ -57,6 +58,6 @@ steps:
     cd $(Pipeline.Workspace)/machnet
     mkdir build
     cd build
-    cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
+    CITYHASH_SDK=$(cityhash_sdk) RTE_SDK=$(rte_sdk) cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
     ninja
   displayName: 'Build Machnet'
