@@ -308,7 +308,7 @@ __machnet_channel_buf_pool_size(const MachnetChannelCtx_t *ctx) {
  */
 static inline __attribute__((always_inline)) MachnetMsgBuf_t *__machnet_channel_buf(
     const MachnetChannelCtx_t *ctx, uint32_t index) {
-  size_t buf_ofs = ctx->data_ctx.buf_pool_ofs + index * ctx->data_ctx.buf_size;
+  size_t buf_ofs = ctx->data_ctx.buf_pool_ofs + (size_t)index * ctx->data_ctx.buf_size;
   return (MachnetMsgBuf_t *)__machnet_channel_mem_ofs(ctx, buf_ofs);
 }
 

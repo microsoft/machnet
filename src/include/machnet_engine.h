@@ -438,7 +438,7 @@ class MachnetEngine {
     for (auto &channel : channels_) {
       // TODO(ilias): Revisit the number of messages to dequeue.
       const auto nb_msg_dequeued = channel->DequeueMessages(&msg_buf_batch);
-      for (uint16_t i = 0; i < nb_msg_dequeued; i++) {
+      for (uint32_t i = 0; i < nb_msg_dequeued; i++) {
         auto *msg = msg_buf_batch.bufs()[i];
         process_msg(channel.get(), msg, now);
       }
@@ -692,7 +692,7 @@ class MachnetEngine {
       const auto &[timestamp_, req, channel] = *it;
       if (periodic_ticks_ - timestamp_ > kPendingRequestTimeoutSlowTicks) {
         LOG(ERROR) << utils::Format(
-            "Pending request timeout: [ID: %u, Opcode: %u]", req.id,
+            "Pending request timeout: [ID: %lu, Opcode: %u]", req.id,
             req.opcode);
         it = pending_requests_.erase(it);
         continue;

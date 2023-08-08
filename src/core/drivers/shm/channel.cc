@@ -109,14 +109,15 @@ bool Channel::RegisterMemForDMA(rte_device *dev) {
     if (ret != 0) {
       LOG(ERROR) << utils::Format(
           "Failed to DMA map page %u (VA: %p, IOVA: %p, size: %zu) (%s)", i,
-          buffer_pages_va_[i], buffer_pages_iova_[i], page_size,
-          rte_strerror(rte_errno));
+          buffer_pages_va_[i], static_cast<uintptr_t>(buffer_pages_iova_[i]),
+          page_size, rte_strerror(rte_errno));
       return false;
     }
     LOG(INFO) << utils::Format(
         "[+] DMA mapping: VA [%p, %p) - IOVA [%p, %p)", buffer_pages_va_[i],
         static_cast<uchar_t *>(buffer_pages_va_[i]) + page_size,
-        buffer_pages_iova_[i], buffer_pages_iova_[i] + page_size);
+        static_cast<uintptr_t>(buffer_pages_iova_[i]),
+        static_cast<uintptr_t>(buffer_pages_iova_[i] + page_size));
   }
 
   attached_dev_ = dev;
@@ -135,7 +136,8 @@ void Channel::UnregisterDMAMem() {
     LOG(INFO) << utils::Format(
         "[-] DMA unmapping: VA [%p, %p) - IOVA [%p, %p)", buffer_pages_va_[i],
         static_cast<uchar_t *>(buffer_pages_va_[i]) + page_size,
-        buffer_pages_iova_[i], buffer_pages_iova_[i] + page_size);
+        static_cast<uintptr_t>(buffer_pages_iova_[i]),
+        static_cast<uintptr_t>(buffer_pages_iova_[i]) + page_size);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     const auto ret = rte_dev_dma_unmap(attached_dev_, buffer_pages_va_[i],
@@ -144,8 +146,8 @@ void Channel::UnregisterDMAMem() {
     if (ret != 0) {
       LOG(ERROR) << utils::Format(
           "Failed to DMA unmap page %u (VA: %p, IOVA: %p, size: %zu) (%s)", i,
-          buffer_pages_va_[i], buffer_pages_iova_[i], page_size,
-          rte_strerror(rte_errno));
+          buffer_pages_va_[i], static_cast<uintptr_t>(buffer_pages_iova_[i]),
+          page_size, rte_strerror(rte_errno));
     }
   }
 

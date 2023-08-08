@@ -383,7 +383,7 @@ void tx(void *context) {
   auto packets_sent = tx->TrySendPackets(&batch);
   st->err_tx_drops += FLAGS_tx_batch_size - packets_sent;
   st->tx_success += packets_sent;
-  st->tx_bytes += packets_sent * ctx->packet_size;
+  st->tx_bytes += static_cast<uint64_t>(packets_sent * ctx->packet_size);
 }
 
 // Main network receive routine.
