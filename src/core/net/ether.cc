@@ -25,7 +25,7 @@ std::string Ethernet::Address::ToString() const {
 std::string Ethernet::ToString() const {
   return juggler::utils::Format("[Eth: dst %s, src %s, eth_type %u]",
                                 dst_addr.ToString().c_str(),
-                                src_addr.ToString().c_str(), eth_type);
+                                src_addr.ToString().c_str(), eth_type.value());
 }
 
 }  // namespace net
