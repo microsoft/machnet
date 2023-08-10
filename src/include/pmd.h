@@ -160,6 +160,13 @@ class RxRing : public PmdRing {
   struct rte_eth_rxconf conf_;
 };
 
+/**
+ * @brief Factory function to create a ring.
+ * @tparam T Type of the ring to be created.
+ * @tparam Args Types of the arguments.
+ * @param params Arguments for ring's constructor.
+ * @return A unique pointer to the created ring.
+ */
 template <typename T, typename... Args>
 decltype(auto) makeRing(Args &&... params) {
   std::unique_ptr<T> ptr(nullptr);
