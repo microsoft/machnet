@@ -45,9 +45,10 @@ class NetworkInterfaceConfig {
     LOG(INFO) << "NetworkInterfaceConfig: "
               << utils::Format(
                      "[PCIe: %s, L2: %s, IP: %s, engine_threads: %zu, "
-                     "cpu_mask: %zu, dpdk_port_id: %d]",
+                     "cpu_mask: %lu, dpdk_port_id: %d]",
                      pcie_addr_.c_str(), l2_addr_.ToString().c_str(),
-                     ip_addr_.ToString().c_str(), engine_threads_, cpu_mask_,
+                     ip_addr_.ToString().c_str(), engine_threads_,
+                     utils::cpuset_to_sizet(cpu_mask_),
                      dpdk_port_id_.value_or(-1));
   }
 
