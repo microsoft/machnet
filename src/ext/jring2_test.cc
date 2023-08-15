@@ -14,16 +14,17 @@ static constexpr size_t kQueueSz = 1024;
 static constexpr size_t kWindowSize = 1;
 
 static constexpr size_t kMsgPayloadSize8B = 7;
+
+std::atomic<bool> g_stop{false};
+
 struct Msg {
+  // Constructor to initialize the message to zero.
+  Msg() { memset(this, 0, sizeof(Msg)); }
   size_t val[kMsgPayloadSize8B];
 };
-static_assert(sizeof(jring2_ent_t::data) == 56,
-              "jring2_ent_t::data is not 56 bytes");
-static_assert(sizeof(Msg) <= sizeof(jring2_ent_t::data),
-              "Msg is larger than jring2_ent_t::data");
 
-jring2_t g_p2c_ring;  // Producer to consumer ring
-jring2_t g_c2p_ring;  // Consumer to producer ring
+jring2_t *g_p2c_ring;  // Producer to consumer ring
+jring2_t *g_c2p_ring;  // Consumer to producer ring
 double g_rdtsc_freq_ghz = 0.0;
 
 void BindThisThreadToCore(size_t core) {
@@ -60,15 +61,15 @@ void ProducerThread() {
   uint64_t msr_start_cycles = rdtsc();
   srand(time(NULL));
 
-  std::array<uint64_t, kWindowSize> timestamps;
+  std::array<uint64_t, kWindowSize> timestamps{};
   size_t inflight_requests = 0;
 
-  while (true) {
+  while (!g_stop.load()) {
     // If there are kWindowSize outstanding requests, wait for a response
     if (inflight_requests == kWindowSize) {
-      jring2_ent_t resp_msg;
+      Msg resp_msg{};
       while (true) {
-        int result = jring2_dequeue(&g_c2p_ring, &resp_msg);
+        int result = jring2_dequeue(g_c2p_ring, &resp_msg);
         if (result == 0) break;
       }
 
@@ -77,11 +78,10 @@ void ProducerThread() {
       sum_lat_cycles += msg_lat_cycles;
 
       // Check message contents
-      const auto* data = reinterpret_cast<Msg*>(resp_msg.data);
       for (size_t i = 0; i < kMsgPayloadSize8B; i++) {
-        if (data->val[i] != seq_num) {
+        if (resp_msg.val[i] != seq_num) {
           std::cerr << "Producer error: val mismatch, expected: " << seq_num
-                    << " actual: " << data->val[i] << std::endl;
+                    << " actual(" << i << "): " << resp_msg.val[i] << std::endl;
           exit(1);
         }
       }
@@ -112,43 +112,44 @@ void ProducerThread() {
 
     // Issue a new request
     const uint64_t req_rdtsc = rdtsc();
-    jring2_ent_t req_ent;
-    auto* req_msg = reinterpret_cast<Msg*>(req_ent.data);
+    Msg req_msg{};
     for (size_t i = 0; i < kMsgPayloadSize8B; i++) {
-      req_msg->val[i] = seq_num + inflight_requests;
+      req_msg.val[i] = seq_num + inflight_requests;
     }
 
     timestamps[(seq_num + inflight_requests) % kWindowSize] = req_rdtsc;
-    jring2_enqueue(&g_p2c_ring, &req_ent);
+    jring2_enqueue(g_p2c_ring, &req_msg);
     inflight_requests++;
   }
+  std::cout << "Producer exiting" << std::endl;
+  exit(0);
 }
 
 void ConsumerThread() {
   BindThisThreadToCore(kConsumerCore);
 
-  while (true) {
-    jring2_ent_t req_ent;
+  while (!g_stop.load()) {
+    Msg req_msg{};
     while (true) {
-      int result = jring2_dequeue(&g_p2c_ring, &req_ent);
+      int result = jring2_dequeue(g_p2c_ring, &req_msg);
       if (result == 0) break;
     }
 
     // Send a response
-    jring2_ent_t resp_ent;
-    const auto* req_msg = reinterpret_cast<Msg*>(req_ent.data);
-    auto* resp_msg = reinterpret_cast<Msg*>(resp_ent.data);
+    Msg resp_msg{};
+    for (size_t i = 0; i < kMsgPayloadSize8B; i++) {
+      resp_msg.val[i] = req_msg.val[i];
+    }
 
-    if (!resp_msg) {
-      std::cerr << "ERROR: g_c2p_ring is full" << std::endl;
+    auto ret = jring2_enqueue(g_c2p_ring, &resp_msg);
+    if (ret != 0) {
+      std::cerr << "Consumer error: enqueue failed" << std::endl;
       exit(1);
     }
-    for (size_t i = 0; i < kMsgPayloadSize8B; i++) {
-      resp_msg->val[i] = req_msg->val[i];
-    }
-
-    jring2_enqueue(&g_c2p_ring, &resp_ent);
   }
+
+  std::cout << "Consumer exiting" << std::endl;
+  exit(0);
 }
 
 int main() {
@@ -160,8 +161,29 @@ int main() {
     exit(1);
   }
 
-  jring2_init(&g_p2c_ring, kQueueSz);
-  jring2_init(&g_c2p_ring, kQueueSz);
+  // Register signal handler.
+  signal(SIGINT, [](int) { g_stop.store(true); });
+
+  // Initialize
+  const auto kRingMemSz = jring2_get_buf_ring_size(sizeof(Msg), kQueueSz);
+  if (kRingMemSz == -1ull) {
+    std::cerr << "ERROR: jring2_get_buf_ring_size failed" << std::endl;
+    exit(1);
+  }
+  g_p2c_ring = static_cast<jring2_t *>(aligned_alloc(CACHELINE_SIZE, kRingMemSz));
+  if (g_p2c_ring == nullptr) {
+    std::cerr << "ERROR: aligned_alloc failed (g_p2c_ring)" << std::endl;
+    exit(1);
+  }
+
+  g_c2p_ring = static_cast<jring2_t *>(aligned_alloc(CACHELINE_SIZE, kRingMemSz));
+  if (g_c2p_ring == nullptr) {
+    std::cerr << "ERROR: aligned_alloc failed (g_c2p_ring)" << std::endl;
+    exit(1);
+  }
+
+  jring2_init(g_p2c_ring, kQueueSz, sizeof(Msg));
+  jring2_init(g_c2p_ring, kQueueSz, sizeof(Msg));
 
   std::cout << "Starting consumer thread" << std::endl;
   std::thread trecv(ConsumerThread);
@@ -173,8 +195,8 @@ int main() {
   tsend.join();
   trecv.join();
 
-  jring2_deinit(&g_p2c_ring);
-  jring2_deinit(&g_c2p_ring);
+  free(g_p2c_ring);
+  free(g_c2p_ring);
 
   return 0;
 }
