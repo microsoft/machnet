@@ -25,22 +25,28 @@ extern "C" {
     _a < _b ? _a : _b;      \
   })
 
-// This structure is being used as a descriptor to SG data that
-// constitute a message. Resembles `struct iovec'.
+/**
+ * @brief Descriptor for SG data that constitute a message.
+ *
+ * This structure resembles `struct iovec`.
+ */
 struct MachnetIovec {
-  void *base;
-  size_t len;
+  void *base;  ///< Pointer to the beginning of the SG data.
+  size_t len;  ///< Length of the SG data.
 };
 typedef struct MachnetIovec MachnetIovec_t;
 
-// This structure is being used as a descriptor to a message.
-// Resembles `struct msghdr', but a few adjustments.
-// - `msg_size' is the total size of the message payload.
-// - `peer_addr' is the address of the network peer that is the recipient or
-//    sender of the message (depending on the direction).
-// - `msg_iov' is a vector of `msg_iovlen' `MachnetIovec_t' structures.
-// - `msg_iovlen' is the number of `MachnetIovec_t' structures in `msg_iov'.
-// - `flags' is the message flags.
+/**
+ * @brief Descriptor for a message.
+ *
+ * This structure resembles `struct msghdr`, but with a few adjustments:
+ * - `msg_size` is the total size of the message payload.
+ * - `peer_addr` is the address of the network peer that is the recipient or
+ *    sender of the message (depending on the direction).
+ * - `msg_iov` is a vector of `msg_iovlen` `MachnetIovec_t` structures.
+ * - `msg_iovlen` is the number of `MachnetIovec_t` structures in `msg_iov`.
+ * - `flags` is the message flags.
+ */
 struct MachnetMsgHdr {
   uint32_t msg_size;
   MachnetFlow_t flow_info;
@@ -50,8 +56,8 @@ struct MachnetMsgHdr {
 };
 typedef struct MachnetMsgHdr MachnetMsgHdr_t;
 
-// This socket is the persistent connection between the  application and the
-// Machnet controller.
+/// @brief Persistent connection between the application and the Machnet
+/// controller.
 extern int g_ctrl_socket;
 
 /**

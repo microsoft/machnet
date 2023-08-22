@@ -1,4 +1,5 @@
-/** * @file  machnet.c
+/**
+ * @file  machnet.c
  * @brief All of the Machnet public API functions are implemented as inline in
  * `machnet.h' and `machnet_common.h'. The functions in this translation unit
  * are simple wrappers to generate a shared library with symbols for easier FFI
@@ -34,7 +35,7 @@ static uint32_t msg_id_counter;
  * @param resp Pointer to the response message buffer; response will be copied
  * there.
  * @param fd   Pointer to the file descriptor location (provided by the caller)
- * ; if the response message carries a file descriptor.)
+ * ; if the response message carries a file descriptor.
  * @return 0 on success.
  * @attention The caller is responsible for allocating the request and response
  * buffers. This function is thread-safe.
