@@ -308,17 +308,23 @@ class ShmChannel {
 
     if (batch->GetSize() == 0) [[unlikely]] return true;  // NOLINT
 
+    auto ret = MsgBufBulkFree(batch->buf_indices(), batch->GetSize());
+
+    if (ret == 0) [[unlikely]] return false;  // NOLINT
+    batch->Clear();
+    return true;
+  }
+
+  bool MsgBufBulkFree(MachnetRingSlot_t *indices, uint32_t cnt) {
     int retries = 5;
     int ret;
     do {
       // Attempt to release the buffers.
-      ret = __machnet_channel_buf_free_bulk(ctx_, batch->GetSize(),
-                                          batch->buf_indices());
+      ret = __machnet_channel_buf_free_bulk(ctx_, cnt, indices);
     } while (ret == 0 && retries-- > 0);
 
     if (ret == 0) [[unlikely]] return false;  // NOLINT
 
-    batch->Clear();
     return true;
   }
 

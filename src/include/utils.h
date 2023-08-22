@@ -191,7 +191,7 @@ namespace utils {
 }
 
 // Bind all threads of this process to run on this zero-indexed CPU core
-[[maybe_unused]] static void BindProcessToCore(uint8_t core) {
+[[maybe_unused]] static void BindThreadToCore(uint8_t core) {
   cpu_set_t mask;
   CPU_ZERO(&mask);
   CPU_SET(core, &mask);
