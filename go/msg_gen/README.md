@@ -11,7 +11,7 @@ Successful build of the `Machnet` project (see main [README](../../README.md)).
 
 ### Configuration
 
-Install the necessary go dependencies via:
+Install the necessary go dependencies by way of:
 
 ```
 cd apps/msg_gen
@@ -44,7 +44,7 @@ sudo GLOG_logtostderr=1 ./main --local_hostname poseidon --remote_hostname zeus 
 
 The active generator side will maintain a closed loop with a pre-set message window (that is, number of inflight messages). You can adjust the number of inflight messages by setting the `-msg_window` option. The default value is 8.
 
-### Flags for Message Generator Application
+### Options for Message Generator Application
 1. `msg_size`: Set the size of the message to test against.
 2. `msg_window`: Set the maximum number of messages in flight.
 3. `active_generator`: If set, the application actively sends messages and reports the stats.

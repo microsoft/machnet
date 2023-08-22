@@ -1,0 +1,26 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.1
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+- repo: https://gitlab.com/daverona/pre-commit-cpp
+  rev: 0.8.0          # use the most recent version
+  hooks:
+    - id: clang-format  # formatter of C/C++ code based on a style guide: LLVM, Google, Chromium, Mozilla, and WebKit available
+      args: ["-style=Google"]
+    - id: cpplint       # linter (or style-error checker) for Google C++ Style Guide
+    - id: cppcheck      # static analyzer of C/C++ code
+      args: ["--library=googletest"]
+- repo: https://github.com/google/pre-commit-tool-hooks
+  rev: v1.2.2 # Use the rev you want to point at.
+  hooks:
+    # - id: check-copyright
+    - id: check-google-doc-style
+    - id: check-links
+    - id: markdown-toc
+      # - id: ..

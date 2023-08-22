@@ -1,8 +1,8 @@
 #include <fcntl.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-#include <netinet/in.h>
 #include <machnet.h>
+#include <netinet/in.h>
 #include <rocksdb/db.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -22,7 +22,7 @@ DEFINE_string(local, "", "Local IP address, needed for Machnet only");
 DEFINE_string(transport, "machnet", "Transport to use (machnet, udp)");
 
 static constexpr uint16_t kPort = 888;
-const std::string kNsaasRocksDbServerFile = "/tmp/testdb";
+const char kNsaasRocksDbServerFile[] = "/tmp/testdb";
 
 void MachnetTransportServer(rocksdb::DB *db) {
   // Initialize machnet and attach

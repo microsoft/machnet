@@ -42,8 +42,8 @@ class MachnetEngineSharedState {
   static constexpr size_t kSrcPortBitmapSize =
       (kSrcPortMax + 1) / sizeof(uint64_t) / 8;
   explicit MachnetEngineSharedState(std::vector<uint8_t> rss_key,
-                                  net::Ethernet::Address l2addr,
-                                  std::vector<net::Ipv4::Address> ipv4_addrs)
+                                    net::Ethernet::Address l2addr,
+                                    std::vector<net::Ipv4::Address> ipv4_addrs)
       : rss_key_(rss_key), arp_handler_(l2addr, ipv4_addrs) {
     for (const auto &addr : ipv4_addrs) {
       CHECK(ipv4_port_bitmap_.find(addr) == ipv4_port_bitmap_.end());
@@ -367,9 +367,9 @@ class MachnetEngine {
    *                      responsible for (if any).
    */
   MachnetEngine(std::shared_ptr<PmdPort> pmd_port, uint16_t rx_queue_id,
-              uint16_t tx_queue_id,
-              std::shared_ptr<MachnetEngineSharedState> shared_state,
-              std::vector<std::shared_ptr<shm::Channel>> channels = {})
+                uint16_t tx_queue_id,
+                std::shared_ptr<MachnetEngineSharedState> shared_state,
+                std::vector<std::shared_ptr<shm::Channel>> channels = {})
       : pmd_port_(CHECK_NOTNULL(pmd_port)),
         rxring_(pmd_port_->GetRing<dpdk::RxRing>(rx_queue_id)),
         txring_(pmd_port_->GetRing<dpdk::TxRing>(tx_queue_id)),
@@ -764,7 +764,8 @@ class MachnetEngine {
         MachnetCtrlQueueEntry_t resp;
         resp.id = req_id;
         resp.opcode = MACHNET_CTRL_OP_STATUS;
-        resp.status = success ? MACHNET_CTRL_STATUS_OK : MACHNET_CTRL_STATUS_ERROR;
+        resp.status =
+            success ? MACHNET_CTRL_STATUS_OK : MACHNET_CTRL_STATUS_ERROR;
         resp.flow_info.src_ip = flow_key.local_addr.address.value();
         resp.flow_info.src_port = flow_key.local_port.port.value();
         resp.flow_info.dst_ip = flow_key.remote_addr.address.value();

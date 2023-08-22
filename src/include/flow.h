@@ -490,10 +490,12 @@ class Flow {
     auto* machneth = packet->head_data<MachnetPktHdr*>(net_hdr_len);
 
     // Sanity check on the Machnet header.
-    if (machneth->magic.value() != MachnetPktHdr::kMagic) [[unlikely]] {  // NOLINT
+    // clang-format off
+    if (machneth->magic.value() != MachnetPktHdr::kMagic) [[unlikely]] { // NOLINT
         LOG(ERROR) << "Invalid Machnet header magic: " << machneth->magic;
         return;
-      }  // NOLINT
+    } // NOLINT
+    // clang-format on
 
     switch (machneth->net_flags) {
       case MachnetPktHdr::MachnetFlags::kSyn:
@@ -669,10 +671,10 @@ class Flow {
   }
 
   void PrepareMachnetHdr(dpdk::Packet* packet, uint32_t seqno,
-                       const MachnetPktHdr::MachnetFlags& net_flags,
-                       uint8_t msg_flags = 0) {
-    auto* machneth = packet->head_data<MachnetPktHdr*>(sizeof(Ethernet) +
-                                                   sizeof(Ipv4) + sizeof(Udp));
+                         const MachnetPktHdr::MachnetFlags& net_flags,
+                         uint8_t msg_flags = 0) {
+    auto* machneth = packet->head_data<MachnetPktHdr*>(
+        sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
     machneth->magic = be16_t(MachnetPktHdr::kMagic);
     machneth->net_flags = net_flags;
     machneth->msg_flags = msg_flags;
@@ -770,8 +772,8 @@ class Flow {
     PrepareL4Header(packet);
 
     // Prepare the Machnet-specific header.
-    auto* machneth = packet->head_data<MachnetPktHdr*>(sizeof(Ethernet) +
-                                                   sizeof(Ipv4) + sizeof(Udp));
+    auto* machneth = packet->head_data<MachnetPktHdr*>(
+        sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
     machneth->magic = be16_t(MachnetPktHdr::kMagic);
     machneth->net_flags = MachnetPktHdr::MachnetFlags::kData;
     machneth->ackno = be32_t(UINT32_MAX);

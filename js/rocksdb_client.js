@@ -132,7 +132,7 @@ async function machnetTransportClientAsync() {
           (endTime[0] - startTime[0]) * 1e6 + (endTime[1] - startTime[1]) / 1e3;
         latencies_us.push(latency_us);
 
-        /*  
+        /*
         const value = rx_buf.toString("utf8", 0, bytesRead);
         const expected_value = "value" + "x".repeat(200);
         if (value !== expected_value) {

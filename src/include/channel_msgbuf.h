@@ -24,7 +24,8 @@ class MsgBuf {
 
   template <typename T = void *>
   const T head_data(uint32_t offset = 0) const {
-    return reinterpret_cast<T>(__machnet_channel_buf_data_ofs(&msg_buf_, offset));
+    return reinterpret_cast<T>(
+        __machnet_channel_buf_data_ofs(&msg_buf_, offset));
   }
 
   template <typename T = void *>
@@ -58,9 +59,13 @@ class MsgBuf {
   // Get the length of the data payload in this `MsgBuf'.
   uint32_t length() const { return msg_buf_.data_len; }
   // Returns the available space for prepending in the buffer.
-  uint32_t headroom() const { return __machnet_channel_buf_headroom(&msg_buf_); }
+  uint32_t headroom() const {
+    return __machnet_channel_buf_headroom(&msg_buf_);
+  }
   // Returns the available space for appending in the buffer.
-  uint32_t tailroom() const { return __machnet_channel_buf_tailroom(&msg_buf_); }
+  uint32_t tailroom() const {
+    return __machnet_channel_buf_tailroom(&msg_buf_);
+  }
   // Return the total size of the message in bytes.
   uint32_t msg_length() const { return msg_buf_.msg_len; }
   // Return the flags of this `MsgBuf'.

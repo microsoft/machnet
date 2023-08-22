@@ -42,8 +42,8 @@ bool app_msg_enqueue(MachnetChannelCtx_t *ctx, const std::vector<char> &msg) {
   return machnet_sendmsg(ctx, &msghdr) == 0;
 }
 
-// Check if the message we received in Machnet matches the original one sent from
-// the application.
+// Check if the message we received in Machnet matches the original one sent
+// from the application.
 bool check_msg(juggler::shm::ShmChannel *channel, juggler::shm::MsgBuf *msg,
                const std::vector<char> &expected) {
   uint32_t expected_msg_ofs = 0;
@@ -71,7 +71,7 @@ bool check_msg(juggler::shm::ShmChannel *channel, juggler::shm::MsgBuf *msg,
  * @return bool       True if the message was copied successfully.
  */
 bool machnet_msg_prepare(juggler::shm::MsgBufBatch *batch, const uint8_t *msg,
-                       const uint32_t msg_size) {
+                         const uint32_t msg_size) {
   uint32_t msg_ofs = 0;
   uint32_t msg_buf_index = 0;
   while (msg_ofs < msg_size) {
@@ -329,13 +329,14 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
     // Check the buffer pool status.
     EXPECT_EQ(channel->GetFreeBufCount(), channel->GetTotalBufCount());
 
-    std::vector<MachnetRingSlot_t> expected_buffers(channel->GetTotalBufCount());
+    std::vector<MachnetRingSlot_t> expected_buffers(
+        channel->GetTotalBufCount());
     std::iota(expected_buffers.begin(), expected_buffers.end(), 0);
     std::vector<MachnetRingSlot_t> buffers(channel->GetTotalBufCount());
 
     // Allocate all the buffers in the channel.
     EXPECT_EQ(__machnet_channel_buf_alloc_bulk(channel->ctx(), buffers.size(),
-                                             buffers.data(), nullptr),
+                                               buffers.data(), nullptr),
               buffers.size());
     EXPECT_EQ(channel->GetFreeBufCount(), 0);
     sort(buffers.begin(), buffers.end());

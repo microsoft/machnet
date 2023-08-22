@@ -56,7 +56,8 @@ bool Channel::RegisterMemForDMA(rte_device *dev) {
 
   // There is padding at the end of the memory region to make sure that the end
   // is page-aligned.
-  LOG_IF(FATAL, bufp_mem_end > __machnet_channel_end(ctx())) << "Out of bounds!";
+  LOG_IF(FATAL, bufp_mem_end > __machnet_channel_end(ctx()))
+      << "Out of bounds!";
 
   // Calculate the number of pages in the memory region, and the IOVA addresses
   // of each one.

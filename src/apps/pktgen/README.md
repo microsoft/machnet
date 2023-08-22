@@ -31,7 +31,7 @@ The configuration is done by editing the [servers.json](../../../servers.json) f
 The above entry corresponds to interface ```eth1```, which is an Azure vNIC with accelerated networking in VM `zeus`. Note that we need to get the PCIe address of the interface. In Azure VMs, two interfaces hold the same MAC address (synthetic and VF), but only one has a physical PCIe address. To get the PCIe address you may:
 
 ```bash
-IFACE=eth1 
+IFACE=eth1
 readlink -f /sys/class/net/${IFACE}/lower* | rev | cut -d '/' -f3 | rev
 ```
 

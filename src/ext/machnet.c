@@ -1,9 +1,11 @@
 /** * @file  machnet.c
  * @brief All of the Machnet public API functions are implemented as inline in
- * `machnet.h' and `machnet_common.h'. The functions in this translation unit are
- * simple wrappers to generate a shared library with symbols for easier FFI
+ * `machnet.h' and `machnet_common.h'. The functions in this translation unit
+ * are simple wrappers to generate a shared library with symbols for easier FFI
  * integration.
  */
+
+#include "machnet.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -14,7 +16,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "machnet.h"
 #include "machnet_ctrl.h"
 
 // Main socket/connection to the Machnet controller.
@@ -38,8 +39,8 @@ static uint32_t msg_id_counter;
  * @attention The caller is responsible for allocating the request and response
  * buffers. This function is thread-safe.
  */
-static int _machnet_ctrl_request(machnet_ctrl_msg_t *req, machnet_ctrl_msg_t *resp,
-                               int *fd) {
+static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
+                                 machnet_ctrl_msg_t *resp, int *fd) {
   // We do maintain a global socket to the controller for the duration of the
   // application's lifetime, but we rather open a new connection to the
   // controller for each request. The reason for this is to achieve thread
@@ -152,7 +153,7 @@ int machnet_init() {
 
   // Send REGISTER message.
   machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
-                          .msg_id = msg_id_counter++};
+                            .msg_id = msg_id_counter++};
   uuid_copy(req.app_uuid, g_app_uuid);
   machnet_ctrl_msg_t resp = {};
 
@@ -187,7 +188,8 @@ int machnet_init() {
   }
 
   // Check the response.
-  if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE || resp.msg_id != req.msg_id) {
+  if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
+      resp.msg_id != req.msg_id) {
     fprintf(stderr, "Got invalid response from controller.\n");
     return -1;
   }
@@ -220,7 +222,7 @@ MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size) {
   }
 
   // Map the shared memory segment into the address space of the process.
-  shm_flags = MAP_SHARED | MAP_POPULATE; 
+  shm_flags = MAP_SHARED | MAP_POPULATE;
   if (stat_buf.st_blksize > getpagesize()) {
     /* TODO(ilias): Hack to detect if mapping is huge page backed. */
     shm_flags |= MAP_HUGETLB;
@@ -273,7 +275,8 @@ void *machnet_attach() {
   }
 
   // Check the response from the Machnet control plane.
-  if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE || resp.msg_id != req.msg_id) {
+  if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
+      resp.msg_id != req.msg_id) {
     fprintf(stderr, "Got invalid response from controller.\n");
     return NULL;
   }
@@ -287,7 +290,7 @@ void *machnet_attach() {
 }
 
 int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
-                  uint16_t dst_port, MachnetFlow_t *flow) {
+                    uint16_t dst_port, MachnetFlow_t *flow) {
   assert(flow != NULL);
   MachnetChannelCtx_t *ctx = channel_ctx;
 
@@ -342,7 +345,8 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
   return 0;
 }
 
-int machnet_listen(void *channel_ctx, const char *local_ip, uint16_t local_port) {
+int machnet_listen(void *channel_ctx, const char *local_ip,
+                   uint16_t local_port) {
   assert(channel_ctx != NULL);
   MachnetChannelCtx_t *ctx = channel_ctx;
 
@@ -392,7 +396,7 @@ int machnet_listen(void *channel_ctx, const char *local_ip, uint16_t local_port)
 }
 
 int machnet_send(const void *channel_ctx, MachnetFlow_t flow, const void *buf,
-               size_t len) {
+                 size_t len) {
   struct MachnetIovec iov;
   iov.base = (void *)buf;
   iov.len = len;
@@ -504,8 +508,8 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   return 0;
 }
 
-int machnet_sendmmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr_iovec,
-                   int vlen) {
+int machnet_sendmmsg(const void *channel_ctx,
+                     const MachnetMsgHdr_t *msghdr_iovec, int vlen) {
   int msg_sent = 0;
 
   for (int msg_index = 0; msg_index < vlen; msg_index++) {
@@ -519,7 +523,7 @@ int machnet_sendmmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr_iove
 }
 
 ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
-                   MachnetFlow_t *flow) {
+                     MachnetFlow_t *flow) {
   MachnetMsgHdr_t msghdr;
   MachnetIovec_t iov;
   iov.base = buf;
@@ -611,7 +615,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
       // Do a batch buffer release if we reached the threshold.
       if (buffer_indices_index == kBufferBatchSize) {
         ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                            buffer_indices);
+                                              buffer_indices);
         assert(ret == buffer_indices_index);
         buffer_indices_index = 0;
       }
@@ -629,8 +633,8 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
   msghdr->flow_info = flow_info;
 
   // Free up any remaining buffers.
-  ret =
-      __machnet_channel_buf_free_bulk(ctx, buffer_indices_index, buffer_indices);
+  ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
+                                        buffer_indices);
   assert(ret == buffer_indices_index);
 
   // Success.
@@ -647,7 +651,7 @@ fail:
     }
     if (buffer == NULL || buffer_indices_index == kBufferBatchSize) {
       ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                          buffer_indices);
+                                            buffer_indices);
       assert(ret == buffer_indices_index);
       buffer_indices_index = 0;
     }

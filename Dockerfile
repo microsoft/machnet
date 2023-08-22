@@ -7,7 +7,7 @@ ARG timezone
 RUN ln -snf /usr/share/zoneinfo/${timezone} /etc/localtime && \
     echo ${timezone} > /etc/timezone && \
     echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
-    echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker 
+    echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker
 
 # Update and install dependencies
 RUN apt-get update && \
@@ -17,7 +17,7 @@ RUN apt-get update && \
         libnl-3-dev libnl-route-3-dev python3-dev \
         python3-docutils python3-pyelftools libnuma-dev \
         ca-certificates autoconf \
-        libgflags-dev libgflags2.2 libhugetlbfs-dev pciutils libunwind-dev uuid-dev nlohmann-json3-dev 
+        libgflags-dev libgflags2.2 libhugetlbfs-dev pciutils libunwind-dev uuid-dev nlohmann-json3-dev
 
 # Remove conflicting packages
 RUN apt-get --purge -y remove rdma-core librdmacm1 ibverbs-providers libibverbs-dev libibverbs1

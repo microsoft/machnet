@@ -1,16 +1,16 @@
-#include <glog/logging.h>
-#include <gflags/gflags.h>
-#include <ttime.h>
 #include <channel.h>
 #include <channel_msgbuf.h>
-#include <machnet_common.h>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <machnet.h>
-#include <thread>
-#include <unistd.h>
+#include <machnet_common.h>
 #include <signal.h>
+#include <ttime.h>
+#include <unistd.h>
 #include <utils.h>
-#include <numeric>
 
+#include <numeric>
+#include <thread>
 
 static constexpr uint8_t kStackCpuCoreId = 3;
 static constexpr uint8_t kAppCpuCoreId = 5;
@@ -20,16 +20,18 @@ using ChannelManager = juggler::shm::ChannelManager<ShmChannel>;
 
 constexpr const char *file_name(const char *path) {
   const char *file = path;
-  while (*path) { if (*path++ == '/') {
+  while (*path) {
+    if (*path++ == '/') {
       file = path;
     }
   }
-  return file; }
+  return file;
+}
 
 const char *channel_name = file_name(__FILE__);
 const uint32_t kRingSlotEntries = 1 << 8;
 const uint32_t kBuffersNr = 1 << 9;
-const uint32_t kBufferSize = 1500; // MTU
+const uint32_t kBufferSize = 1500;  // MTU
 static std::atomic<bool> g_start{false};
 static std::atomic<bool> g_should_stop{false};
 
@@ -48,7 +50,7 @@ struct thread_conf {
         finished(false) {}
   std::shared_ptr<ShmChannel> channel;
   uint8_t cpu_core;
-  uint64_t messages_to_send; 
+  uint64_t messages_to_send;
   uint64_t tx_message_size;
   uint64_t messages_to_receive;
   uint64_t messages_sent;
@@ -76,8 +78,8 @@ void stack_loop(thread_conf *conf) {
     __asm__ volatile("pause" ::: "memory");
   }
 
-  // Use a high precision timer to measure time in nanoseconds for this experiment (std::chrono)
-  // Start the timer.
+  // Use a high precision timer to measure time in nanoseconds for this
+  // experiment (std::chrono) Start the timer.
   auto start = std::chrono::high_resolution_clock::now();
   while (!g_should_stop.load()) {
     // Receive any messages.
@@ -89,12 +91,13 @@ void stack_loop(thread_conf *conf) {
       // We have received one message.
       conf->messages_received++;
       buffer_indexes.emplace_back(slot);
-      while(buf->has_next()) {
+      while (buf->has_next()) {
         buffer_indexes.emplace_back(buf->next());
         buf = channel->GetMsgBuf(buf->next());
       }
 
-      CHECK(channel->MsgBufBulkFree(buffer_indexes.data(), buffer_indexes.size()));
+      CHECK(channel->MsgBufBulkFree(buffer_indexes.data(),
+                                    buffer_indexes.size()));
       buffer_indexes.clear();
     }
 
@@ -129,9 +132,11 @@ void stack_loop(thread_conf *conf) {
   }
   // Calculate the duration in nanoseconds.
   auto end = std::chrono::high_resolution_clock::now();
-  conf->duration_in_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  conf->duration_in_ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
-  if (conf->messages_sent < conf->messages_to_send || conf->messages_received < conf->messages_to_receive) {
+  if (conf->messages_sent < conf->messages_to_send ||
+      conf->messages_received < conf->messages_to_receive) {
     LOG(ERROR) << "Not all messages were sent. Sent: " << conf->messages_sent
                << ", received: " << conf->messages_received
                << " expected: " << conf->messages_to_send << ", "
@@ -176,7 +181,8 @@ void application_loop(thread_conf *conf) {
     }
 
     // TX.
-    auto ret = machnet_send(channel->ctx(), flow, tx_buffer.data(), tx_buffer.size());
+    auto ret =
+        machnet_send(channel->ctx(), flow, tx_buffer.data(), tx_buffer.size());
     if (ret == 0) {
       conf->messages_sent++;
     }
@@ -184,9 +190,11 @@ void application_loop(thread_conf *conf) {
 
   // Calculate the duration in nanoseconds.
   auto end = std::chrono::high_resolution_clock::now();
-  conf->duration_in_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  conf->duration_in_ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
-  if (conf->messages_sent < conf->messages_to_send || conf->messages_received < conf->messages_to_receive) {
+  if (conf->messages_sent < conf->messages_to_send ||
+      conf->messages_received < conf->messages_to_receive) {
     LOG(ERROR) << "Not all messages were sent. Sent: " << conf->messages_sent
                << ", received: " << conf->messages_received
                << " expected: " << conf->messages_to_send << ", "
@@ -200,15 +208,20 @@ void application_loop(thread_conf *conf) {
 void print_results(const thread_conf &stack_conf, const thread_conf &app_conf) {
   // Print the results.
   auto channel = stack_conf.channel;
-  std::cout << juggler::utils::Format(
-      "[Channel:%s/HugePageBacked:%s/Size:%uKiB/BufferNr:%u/BufSize:%u]", channel_name,
-      channel->IsPosixShm() ? "0" : "1", channel->GetSize() / 1024,
-      channel->GetTotalBufCount(), channel->GetUsableBufSize()) << std::endl;
+  std::cout
+      << juggler::utils::Format(
+             "[Channel:%s/HugePageBacked:%s/Size:%uKiB/BufferNr:%u/BufSize:%u]",
+             channel_name, channel->IsPosixShm() ? "0" : "1",
+             channel->GetSize() / 1024, channel->GetTotalBufCount(),
+             channel->GetUsableBufSize())
+      << std::endl;
   // Print whether the stack and app are sending or not.
-  std::cout << juggler::utils::Format(
-      "[StackTX:%s/AppTX:%s]", stack_conf.messages_to_send ? "1" : "0",
-      app_conf.messages_to_send ? "1" : "0");
-  std::cout << juggler::utils::Format("[TX message size:%u]", stack_conf.tx_message_size) << std::endl;
+  std::cout << juggler::utils::Format("[StackTX:%s/AppTX:%s]",
+                                      stack_conf.messages_to_send ? "1" : "0",
+                                      app_conf.messages_to_send ? "1" : "0");
+  std::cout << juggler::utils::Format("[TX message size:%u]",
+                                      stack_conf.tx_message_size)
+            << std::endl;
   std::cout << "[Stack]" << std::endl;
   std::cout
       << juggler::utils::Format(
@@ -216,9 +229,10 @@ void print_results(const thread_conf &stack_conf, const thread_conf &app_conf) {
              stack_conf.messages_sent,
              stack_conf.messages_sent * stack_conf.tx_message_size,
              stack_conf.duration_in_ns,
-             stack_conf.messages_sent ? 
-             static_cast<double>(stack_conf.duration_in_ns) /
-                 stack_conf.messages_sent : 0.0,
+             stack_conf.messages_sent
+                 ? static_cast<double>(stack_conf.duration_in_ns) /
+                       stack_conf.messages_sent
+                 : 0.0,
              static_cast<double>(stack_conf.messages_sent) /
                  (static_cast<double>(stack_conf.duration_in_ns) / 1e9))
       << std::endl;
@@ -279,19 +293,21 @@ int main() {
   // Create a new channel using the channel manager.
   ChannelManager channel_manager;
   CHECK(channel_manager.AddChannel(channel_name, kRingSlotEntries,
-                                   kRingSlotEntries, kBuffersNr,
-                                   kBufferSize));
+                                   kRingSlotEntries, kBuffersNr, kBufferSize));
 
-  const uint64_t kMessagesToSend = 2*1e7;
+  const uint64_t kMessagesToSend = 2 * 1e7;
   const uint64_t kTxMessageSize = 64;
   std::vector<std::pair<uint64_t, uint64_t>> tx_conf;
 
-  tx_conf.emplace_back(kMessagesToSend, 0); // Stack sends all messages. Application RX-only.
-  tx_conf.emplace_back(0, kMessagesToSend); // App sends all messages. Stack RX-only.
-  tx_conf.emplace_back(kMessagesToSend, kMessagesToSend); // Both send and receive.
+  tx_conf.emplace_back(kMessagesToSend,
+                       0);  // Stack sends all messages. Application RX-only.
+  tx_conf.emplace_back(
+      0, kMessagesToSend);  // App sends all messages. Stack RX-only.
+  tx_conf.emplace_back(kMessagesToSend,
+                       kMessagesToSend);  // Both send and receive.
 
- std::cout << "\nRunning...\n\n";
- for (const auto &conf : tx_conf) {
+  std::cout << "\nRunning...\n\n";
+  for (const auto &conf : tx_conf) {
     thread_conf stack_conf{channel_manager.GetChannel(channel_name),
                            kStackCpuCoreId, conf.first, kTxMessageSize,
                            conf.second};
@@ -326,7 +342,7 @@ int main() {
     }
 
     print_results(stack_conf, app_conf);
- }
+  }
 
   return 0;
 }

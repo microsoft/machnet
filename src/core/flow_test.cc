@@ -43,7 +43,8 @@ class FlowTest : public ::testing::Test {
     return file;
   }
   const char *fname = file_name(__FILE__);
-  const uint32_t kChannelRingSize = 1 << 8;  // 256 slots for Machnet, App rings.
+  const uint32_t kChannelRingSize = 1
+                                    << 8;  // 256 slots for Machnet, App rings.
   const uint32_t kBufferRingSize = 1 << 13;  // 8K Buffers.
   const uint32_t kBufferSize = 1 << 11;      // 2KB for each buffer.
   const uint32_t kMbufsNr = 1 << 13;         // 8K mbufs.
@@ -327,7 +328,8 @@ TEST_F(FlowTest, RXQueue_Push) {
 
 TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
   constexpr auto packet_hdr_size = sizeof(net::Ethernet) + sizeof(net::Ipv4) +
-                                   sizeof(net::Udp) + sizeof(net::MachnetPktHdr);
+                                   sizeof(net::Udp) +
+                                   sizeof(net::MachnetPktHdr);
   const auto packet_payload_size =
       dpdk::PmdRing::kDefaultFrameSize - packet_hdr_size;
   std::mt19937 engine(rng_);

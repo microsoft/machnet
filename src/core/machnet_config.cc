@@ -10,8 +10,8 @@
 
 namespace juggler {
 
-static std::optional<std::string>
-GetPCIeAddressSysfs(const juggler::net::Ethernet::Address &l2_addr) {
+static std::optional<std::string> GetPCIeAddressSysfs(
+    const juggler::net::Ethernet::Address &l2_addr) {
   LOG(INFO) << "Walking /sys/class/net to find PCIe address for L2 address "
             << l2_addr.ToString();
 
@@ -152,4 +152,4 @@ utils::CmdLineOpts MachnetConfigProcessor::GetEalOpts() const {
   return eal_opts;
 }
 
-} // namespace juggler
+}  // namespace juggler

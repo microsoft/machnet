@@ -44,10 +44,10 @@ extern "C" {
  * the number of elements in each of the rings of the channel and the desired
  * buffer size.
  *
- * @param machnet_ring_slot_nr The number of Machnet->App messaging ring slots (must
- *                           be power of 2).
- * @param app_ring_slot_nr   The number of App->Machnet messaging ring slots (must
- *                           be power of 2).
+ * @param machnet_ring_slot_nr The number of Machnet->App messaging ring slots
+ * (must be power of 2).
+ * @param app_ring_slot_nr   The number of App->Machnet messaging ring slots
+ * (must be power of 2).
  * @param buf_ring_slot_nr   The number of buffers + 1 in the pool (must be
  *                           power of 2).
  * @param buffer_size        The usable size of each buffer.
@@ -58,15 +58,16 @@ extern "C" {
  *                  bad (too big).
  */
 static inline size_t __machnet_channel_dataplane_calculate_size(
-    size_t machnet_ring_slot_nr, size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
-    size_t buffer_size, int is_posix_shm) {
+    size_t machnet_ring_slot_nr, size_t app_ring_slot_nr,
+    size_t buf_ring_slot_nr, size_t buffer_size, int is_posix_shm) {
   // Check that all parameters are power of 2.
   if (!IS_POW2(machnet_ring_slot_nr) || !IS_POW2(app_ring_slot_nr) ||
       !IS_POW2(buf_ring_slot_nr))
     return -1;
 
-  const size_t total_buffer_size = ROUNDUP_U64_POW2(
-      buffer_size + MACHNET_MSGBUF_SPACE_RESERVED + MACHNET_MSGBUF_HEADROOM_MAX);
+  const size_t total_buffer_size =
+      ROUNDUP_U64_POW2(buffer_size + MACHNET_MSGBUF_SPACE_RESERVED +
+                       MACHNET_MSGBUF_HEADROOM_MAX);
 
   const size_t kPageSize = (is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE);
   if (buffer_size > kPageSize) return -1;
@@ -78,17 +79,18 @@ static inline size_t __machnet_channel_dataplane_calculate_size(
   total_size += sizeof(MachnetChannelStats_t);
 
   // Add the size of the control rings.
-  size_t ctrl_ring_sizes[] = {MACHNET_CHANNEL_CTRL_SQ_SLOT_NR, MACHNET_CHANNEL_CTRL_CQ_SLOT_NR};
+  size_t ctrl_ring_sizes[] = {MACHNET_CHANNEL_CTRL_SQ_SLOT_NR,
+                              MACHNET_CHANNEL_CTRL_CQ_SLOT_NR};
   for (size_t i = 0; i < COUNT_OF(ctrl_ring_sizes); i++) {
-    size_t acc =
-        jring_get_buf_ring_size(sizeof(MachnetCtrlQueueEntry_t), ctrl_ring_sizes[i]);
+    size_t acc = jring_get_buf_ring_size(sizeof(MachnetCtrlQueueEntry_t),
+                                         ctrl_ring_sizes[i]);
     if (acc == (size_t)-1) return -1;
     total_size += acc;
   }
 
   // Add the size of the rings (Machnet, Application, BufferRing).
   size_t data_ring_sizes[] = {machnet_ring_slot_nr, app_ring_slot_nr,
-                         buf_ring_slot_nr};
+                              buf_ring_slot_nr};
   for (size_t i = 0; i < COUNT_OF(data_ring_sizes); i++) {
     size_t acc =
         jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), data_ring_sizes[i]);
@@ -125,22 +127,22 @@ static inline size_t __machnet_channel_dataplane_calculate_size(
  * @param buf_ring_slot_nr   The number of buffers + 1 to be used in this
  *                           channel (must sum up to a power of 2).
  * @param buffer_size        The size of each buffer.
- * @param is_multithread     1 if Machnet is using multiple threads per channel, 0
- *                           otherwise.
+ * @param is_multithread     1 if Machnet is using multiple threads per channel,
+ * 0 otherwise.
  * @return                   '0' on success, '-1' on failure.
  */
 static inline int __machnet_channel_dataplane_init(
     uchar_t *shm, size_t shm_size, int is_posix_shm, const char *name,
-    size_t machnet_ring_slot_nr, size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
-    size_t buffer_size, int is_multithread) {
+    size_t machnet_ring_slot_nr, size_t app_ring_slot_nr,
+    size_t buf_ring_slot_nr, size_t buffer_size, int is_multithread) {
   size_t total_size = __machnet_channel_dataplane_calculate_size(
       machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
       is_posix_shm);
   // Guard against mismatches.
   if (total_size > shm_size || total_size == (size_t)-1) return -1;
 
-  // TODO(ilias): Check that we can always accomodate an MACHNET_MSG_MAX_LEN sized
-  // mesage with the number of buffers and buffer_size provided here.
+  // TODO(ilias): Check that we can always accomodate an MACHNET_MSG_MAX_LEN
+  // sized mesage with the number of buffers and buffer_size provided here.
 
   // Check the memory layout in "machnet_common.h".
   // Initialize the channel context.
@@ -155,8 +157,9 @@ static inline int __machnet_channel_dataplane_init(
 
   // Clear out statatistics.
   ctx->data_ctx.stats_ofs = sizeof(*ctx);
-  MachnetChannelStats_t *stats = (MachnetChannelStats_t *)__machnet_channel_mem_ofs(
-      ctx, ctx->data_ctx.stats_ofs);
+  MachnetChannelStats_t *stats =
+      (MachnetChannelStats_t *)__machnet_channel_mem_ofs(
+          ctx, ctx->data_ctx.stats_ofs);
   memset(stats, 0, sizeof(*stats));
 
   const int kMultiThread = 1;  // Assume the application always multithreaded.
@@ -174,8 +177,8 @@ static inline int __machnet_channel_dataplane_init(
       jring_get_buf_ring_size(sizeof(MachnetCtrlQueueEntry_t),
                               MACHNET_CHANNEL_CTRL_SQ_SLOT_NR);
   ret = jring_init(__machnet_channel_ctrl_cq_ring(ctx),
-                   MACHNET_CHANNEL_CTRL_CQ_SLOT_NR, sizeof(MachnetCtrlQueueEntry_t),
-                   0, is_multithread);
+                   MACHNET_CHANNEL_CTRL_CQ_SLOT_NR,
+                   sizeof(MachnetCtrlQueueEntry_t), 0, is_multithread);
   if (ret != 0) return ret;
 
   // Initialize the Machnet->Application ring.
@@ -185,8 +188,8 @@ static inline int __machnet_channel_dataplane_init(
                               MACHNET_CHANNEL_CTRL_CQ_SLOT_NR);
 
   jring_t *machnet_ring = __machnet_channel_machnet_ring(ctx);
-  ret = jring_init(machnet_ring, machnet_ring_slot_nr, sizeof(MachnetRingSlot_t),
-                   is_multithread, kMultiThread);
+  ret = jring_init(machnet_ring, machnet_ring_slot_nr,
+                   sizeof(MachnetRingSlot_t), is_multithread, kMultiThread);
   if (ret != 0) return ret;
 
   // App->Machnet ring follows immediately after the Machnet->App ring.
@@ -215,8 +218,9 @@ static inline int __machnet_channel_dataplane_init(
       jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), buf_ring_slot_nr);
 
   // Calculate the actual buffer size (incl. metadata).
-  const size_t kTotalBufSize = ROUNDUP_U64_POW2(
-      buffer_size + MACHNET_MSGBUF_SPACE_RESERVED + MACHNET_MSGBUF_HEADROOM_MAX);
+  const size_t kTotalBufSize =
+      ROUNDUP_U64_POW2(buffer_size + MACHNET_MSGBUF_SPACE_RESERVED +
+                       MACHNET_MSGBUF_HEADROOM_MAX);
   // Initialize the buffers. Note that the buffer pool start is aligned to the
   // page_size boundary.
   const size_t kPageSize = is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE;
@@ -237,8 +241,8 @@ static inline int __machnet_channel_dataplane_init(
   }
 
   // Initialize the buffer index table, and make all these buffers available.
-  MachnetRingSlot_t *buf_index_table =
-      (MachnetRingSlot_t *)malloc(buf_ring->capacity * sizeof(MachnetRingSlot_t));
+  MachnetRingSlot_t *buf_index_table = (MachnetRingSlot_t *)malloc(
+      buf_ring->capacity * sizeof(MachnetRingSlot_t));
   if (buf_index_table == NULL) return -1;
 
   for (size_t i = 0; i < buf_ring->capacity; i++) buf_index_table[i] = i;
@@ -294,8 +298,8 @@ static inline MachnetChannelCtx_t *__machnet_channel_posix_create(
   // Map the shared memory segment into the address space of the process.
   prot_flags = PROT_READ | PROT_WRITE;
   shm_flags = MAP_SHARED | MAP_POPULATE;
-  channel = (MachnetChannelCtx_t *)mmap(NULL, channel_size, prot_flags, shm_flags,
-                                      *shm_fd, 0);
+  channel = (MachnetChannelCtx_t *)mmap(NULL, channel_size, prot_flags,
+                                        shm_flags, *shm_fd, 0);
   if (channel == MAP_FAILED) {
     perror("mmap()");
     goto fail;
@@ -404,9 +408,9 @@ fail:
  * POSIX shmem). Can be NULL if this is not POSIX shmem.
  */
 static inline void __machnet_channel_destroy(void *mapped_mem,
-                                           size_t mapped_mem_size, int *shm_fd,
-                                           int is_posix_shm,
-                                           const char *channel_name) {
+                                             size_t mapped_mem_size,
+                                             int *shm_fd, int is_posix_shm,
+                                             const char *channel_name) {
   assert(mapped_mem != NULL);
   assert(mapped_mem_size > 0);
 
@@ -424,7 +428,8 @@ static inline void __machnet_channel_destroy(void *mapped_mem,
 }
 
 /**
- * This function creates a shared memory region to be used as an Machnet channel.
+ * This function creates a shared memory region to be used as an Machnet
+ * channel.
  *
  * @param[in] channel_name           The name of the shared memory segment.
  * @param[in] machnet_ring_slot_nr     Number of slots in the Machnet ring.
@@ -456,8 +461,8 @@ static inline MachnetChannelCtx_t *__machnet_channel_create(
       machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
       *is_posix_shm);
   // Try creating and mapping a hugetlbfs backed shared memory segment.
-  channel =
-      __machnet_channel_hugetlbfs_create(channel_name, *channel_mem_size, shm_fd);
+  channel = __machnet_channel_hugetlbfs_create(channel_name, *channel_mem_size,
+                                               shm_fd);
   if (channel != NULL) goto out;
 
   fprintf(stderr,
@@ -484,7 +489,7 @@ out:
       machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size, 0);
   if (ret != 0) {
     __machnet_channel_destroy((void *)channel, *channel_mem_size, shm_fd,
-                            *is_posix_shm, channel_name);
+                              *is_posix_shm, channel_name);
     *channel_mem_size = 0;
     // shm_fd is set to -1 by __machnet_channel_destroy().
     return NULL;
@@ -494,7 +499,8 @@ out:
 }
 
 static inline __attribute__((always_inline)) uint32_t __machnet_channel_enqueue(
-    const MachnetChannelCtx_t *ctx, unsigned int n, const MachnetRingSlot_t *bufs) {
+    const MachnetChannelCtx_t *ctx, unsigned int n,
+    const MachnetRingSlot_t *bufs) {
   assert(ctx != NULL);
   jring_t *machnet_ring = __machnet_channel_machnet_ring(ctx);
 

@@ -32,8 +32,9 @@ TEST(BasicMachnetEngineSharedStateTest, SrcPortAlloc) {
   using UdpPort = juggler::net::Udp::Port;
   using MachnetEngineSharedState = juggler::MachnetEngineSharedState;
 
-  EthAddr test_mac;
+  EthAddr test_mac{"00:00:00:00:00:01"};
   Ipv4Addr test_ip;
+  test_ip.FromString("10.0.0.1");
 
   MachnetEngineSharedState state({}, {test_mac}, {test_ip});
   std::vector<UdpPort> allocated_ports;

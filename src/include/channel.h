@@ -88,7 +88,9 @@ class ShmChannel {
   }
 
   // Get total buffer pool size in bytes.
-  size_t GetBufPoolSize() const { return __machnet_channel_buf_pool_size(ctx()); }
+  size_t GetBufPoolSize() const {
+    return __machnet_channel_buf_pool_size(ctx());
+  }
 
   // Is this channel backed by a POSIX shared memory?
   bool IsPosixShm() const { return is_posix_shm_; }
@@ -170,8 +172,10 @@ class ShmChannel {
    * @param nb_msgs          The number of entries in the array above.
    * @return                 The number of messages enqueued.
    */
-  uint32_t EnqueueMessages(MachnetRingSlot_t *msgbuf_indices, uint32_t nb_msgs) {
-    return __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs, msgbuf_indices);
+  uint32_t EnqueueMessages(MachnetRingSlot_t *msgbuf_indices,
+                           uint32_t nb_msgs) {
+    return __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs,
+                                                  msgbuf_indices);
   }
 
   /**
@@ -219,10 +223,11 @@ class ShmChannel {
    */
   uint32_t DequeueMessages(MachnetRingSlot_t *msg_indices, MsgBuf **msgs,
                            uint32_t nb_msgs) {
-    uint32_t ret = __machnet_channel_app_ring_dequeue(ctx_, nb_msgs, msg_indices);
+    uint32_t ret =
+        __machnet_channel_app_ring_dequeue(ctx_, nb_msgs, msg_indices);
     for (uint32_t i = 0; i < ret; i++) {
-      msgs[i] =
-          reinterpret_cast<MsgBuf *>(__machnet_channel_buf(ctx_, msg_indices[i]));
+      msgs[i] = reinterpret_cast<MsgBuf *>(
+          __machnet_channel_buf(ctx_, msg_indices[i]));
     }
 
     return ret;

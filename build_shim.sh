@@ -34,7 +34,7 @@ fi
 
 blue "Building Machnet examples..."
 EXAMPLES_DIR="${BASE_DIR}/examples"
-cd ${EXAMPLES_DIR} 
+cd ${EXAMPLES_DIR}
 make clean
 make
 blue "Machnet examples built successfully, see ${EXAMPLES_DIR} for binaries"

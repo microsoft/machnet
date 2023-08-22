@@ -16,7 +16,7 @@ Machnet provides the following benefits, in addition to the low latency:
 ## Get the Machnet binary
 
 The Machnet binary is provided in the form of a Docker image. To get this, you
-will need (1) access to the Machnet repo, (2) a Github personal access
+will need (1) access to the Machnet repository, (2) a Github personal access
 token (https://github.com/settings/tokens) with the read:packages scope, and (3)
 ask an admin to give you access.
 
@@ -30,7 +30,7 @@ sudo groupadd docker && sudo usermod -aG docker $USER && sudo reboot
 echo ${GITHUB_PAT} | docker login ghcr.io -u <github_username> --password-stdin
 docker pull ghcr.io/microsoft/machnet:latest
 
-# Start Machnet on the accelerated NIC (e.g., eth1 on Azure)
+# Start Machnet on the accelerated NIC (for example, eth1 on Azure)
 git clone git@github.com:microsoft/machnet.git
 cd machnet
 ./machnet.sh --mac <MAC address of eth1> --ip <IP address of eth1>

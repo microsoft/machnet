@@ -9,4 +9,3 @@ hello_world: hello_world.cc
 
 clean:
 	rm -f hello_world
-

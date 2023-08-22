@@ -6,6 +6,8 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <hdr/hdr_histogram.h>
+#include <machnet.h>
 
 #include <chrono>
 #include <csignal>
@@ -13,8 +15,6 @@
 #include <numeric>
 #include <sstream>
 #include <thread>
-#include <hdr/hdr_histogram.h>
-#include <machnet.h>
 
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
@@ -170,7 +170,7 @@ void ServerLoop(void *channel_ctx) {
     MachnetFlow_t rx_flow;
     const ssize_t rx_size =
         machnet_recv(channel_ctx, thread_ctx.rx_message.data(),
-                   thread_ctx.rx_message.size(), &rx_flow);
+                     thread_ctx.rx_message.size(), &rx_flow);
     if (rx_size <= 0) continue;
     stats_cur.rx_count++;
     stats_cur.rx_bytes += rx_size;
@@ -190,8 +190,8 @@ void ServerLoop(void *channel_ctx) {
     tx_flow.src_port = rx_flow.dst_port;
     tx_flow.dst_port = rx_flow.src_port;
 
-    const int ret = machnet_send(channel_ctx, tx_flow,
-                               thread_ctx.tx_message.data(), FLAGS_tx_msg_size);
+    const int ret = machnet_send(
+        channel_ctx, tx_flow, thread_ctx.tx_message.data(), FLAGS_tx_msg_size);
     if (ret == 0) {
       stats_cur.tx_success++;
       stats_cur.tx_bytes += FLAGS_tx_msg_size;
@@ -220,8 +220,9 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
       reinterpret_cast<msg_hdr_t *>(thread_ctx->tx_message.data());
   msg_hdr->window_slot = window_slot;
 
-  const int ret = machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
-                             thread_ctx->tx_message.data(), FLAGS_tx_msg_size);
+  const int ret =
+      machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
+                   thread_ctx->tx_message.data(), FLAGS_tx_msg_size);
   if (ret == 0) {
     stats_cur.tx_success++;
     stats_cur.tx_bytes += FLAGS_tx_msg_size;
@@ -245,7 +246,7 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
     MachnetFlow_t rx_flow;
     const ssize_t rx_size =
         machnet_recv(channel_ctx, thread_ctx->rx_message.data(),
-                   thread_ctx->rx_message.size(), &rx_flow);
+                     thread_ctx->rx_message.size(), &rx_flow);
     if (rx_size <= 0) continue;
 
     thread_ctx->stats.current.rx_count++;
@@ -330,8 +331,9 @@ int main(int argc, char *argv[]) {
 
   MachnetFlow_t flow;
   if (FLAGS_active_generator) {
-    int ret = machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
-                            FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
+    int ret =
+        machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
+                        FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
     CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
                        "error: "
                     << strerror(ret);
@@ -341,8 +343,9 @@ int main(int argc, char *argv[]) {
   } else {
     int ret =
         machnet_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_remote_port);
-    CHECK(ret == 0) << "Failed to listen on local port. machnet_listen() error: "
-                    << strerror(ret);
+    CHECK(ret == 0)
+        << "Failed to listen on local port. machnet_listen() error: "
+        << strerror(ret);
 
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_remote_port
               << "]";

@@ -45,8 +45,8 @@ TEST(MachnetPrivateTest, NSaasChannelCreateDestroy) {
   EXPECT_NE(channel_ctx, nullptr);
 
   // Destroy the channel (should succeed).
-  __machnet_channel_destroy(channel_ctx, channel_size, &channel_fd, is_posix_shm,
-                          channel_name.c_str());
+  __machnet_channel_destroy(channel_ctx, channel_size, &channel_fd,
+                            is_posix_shm, channel_name.c_str());
   EXPECT_EQ(channel_fd, -1);
 }
 
@@ -67,8 +67,8 @@ TEST(MachnetPrivateTest, NSaasChannelDataplaneInit) {
   EXPECT_EQ(std::string(channel_ctx->name), channel_name);
 
   // Destroy the channel (should succeed).
-  __machnet_channel_destroy(channel_ctx, channel_size, &channel_fd, is_posix_shm,
-                          channel_name.c_str());
+  __machnet_channel_destroy(channel_ctx, channel_size, &channel_fd,
+                            is_posix_shm, channel_name.c_str());
   EXPECT_EQ(channel_fd, -1);
 }
 
@@ -93,11 +93,11 @@ TEST(MachnetPrivateTest, NSaasChannelBufAllocFree) {
   // TEST 0: Allocate a single buffer and free it (should succeed).
   buffer_indices.resize(1);
   uint32_t n = __machnet_channel_buf_alloc_bulk(channel, buffer_indices.size(),
-                                              buffer_indices.data(), nullptr);
+                                                buffer_indices.data(), nullptr);
   EXPECT_EQ(n, buffer_indices.size());
   EXPECT_EQ(buffer_indices[0], 0);
   n = __machnet_channel_buf_free_bulk(channel, buffer_indices.size(),
-                                    buffer_indices.data());
+                                      buffer_indices.data());
   EXPECT_EQ(n, buffer_indices.size());
 
   // TEST 1: Allocate all buffers, shuffle them, release them and check order.
@@ -105,20 +105,20 @@ TEST(MachnetPrivateTest, NSaasChannelBufAllocFree) {
   // - 1.
   buffer_indices.resize(kChannelRingSize - 1);
   n = __machnet_channel_buf_alloc_bulk(channel, buffer_indices.size(),
-                                     buffer_indices.data(), nullptr);
+                                       buffer_indices.data(), nullptr);
   EXPECT_EQ(n, buffer_indices.size());
 
   // Shuffle buffer_indices, and release them.
   std::random_shuffle(buffer_indices.begin(), buffer_indices.end());
   n = __machnet_channel_buf_free_bulk(channel, buffer_indices.size(),
-                                    buffer_indices.data());
+                                      buffer_indices.data());
   EXPECT_EQ(n, buffer_indices.size());
 
   // Check order at allocation.
   auto original_buffer_indices = buffer_indices;
   std::vector<MachnetMsgBuf_t *> buffers;
   n = __machnet_channel_buf_alloc_bulk(channel, buffer_indices.size(),
-                                     buffer_indices.data(), buffers.data());
+                                       buffer_indices.data(), buffers.data());
   EXPECT_EQ(n, buffer_indices.size());
   EXPECT_EQ(original_buffer_indices, buffer_indices);
 
@@ -133,7 +133,7 @@ TEST(MachnetPrivateTest, NSaasChannelBufAllocFree) {
 
   // Destroy the channel (should succeed).
   __machnet_channel_destroy(channel, channel_size, &channel_fd, is_posix_shm,
-                          channel_name.c_str());
+                            channel_name.c_str());
   EXPECT_EQ(channel_fd, -1);
 }
 
@@ -188,7 +188,8 @@ TEST(MachnetBufferPool, Concurrency) {
       int retries = 8;
       uint32_t ret;
       do {
-        ret = __machnet_channel_buf_free_bulk(channel, n, buffer_indices.data());
+        ret =
+            __machnet_channel_buf_free_bulk(channel, n, buffer_indices.data());
       } while (ret == 0 && retries-- > 0);
       EXPECT_EQ(ret, n);
     };
@@ -226,7 +227,7 @@ TEST(MachnetBufferPool, Concurrency) {
   std::vector<MachnetRingSlot_t> buffers(kChannelRingSize - 1);
   // Dequeue all the buffers from the pool.
   auto ret = __machnet_channel_buf_alloc_bulk(channel, buffers.size(),
-                                            buffers.data(), nullptr);
+                                              buffers.data(), nullptr);
   EXPECT_EQ(ret, buffers.size());
   sort(buffers.begin(), buffers.end());
 
@@ -239,7 +240,7 @@ TEST(MachnetBufferPool, Concurrency) {
 
   // Destroy the channel (should succeed).
   __machnet_channel_destroy(channel, channel_size, &channel_fd, is_posix_shm,
-                          channel_name.c_str());
+                            channel_name.c_str());
   EXPECT_EQ(channel_fd, -1);
 }
 

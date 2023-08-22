@@ -100,7 +100,7 @@ bool MachnetController::HandleNewConnection(UDSocket *s) {
 }
 
 void MachnetController::HandleNewMessage(UDSocket *s, const char *data,
-                                       size_t length) {
+                                         size_t length) {
   CHECK_NOTNULL(s);
   if (length != sizeof(machnet_ctrl_msg_t)) {
     LOG(ERROR) << "Invalid message length";
@@ -115,7 +115,8 @@ void MachnetController::HandleNewMessage(UDSocket *s, const char *data,
       resp.msg_id = req->msg_id;
 
       auto ret = RegisterApplication(req->app_uuid, &req->app_info);
-      resp.status = ret ? MACHNET_CTRL_STATUS_SUCCESS : MACHNET_CTRL_STATUS_FAILURE;
+      resp.status =
+          ret ? MACHNET_CTRL_STATUS_SUCCESS : MACHNET_CTRL_STATUS_FAILURE;
       CHECK(s->SendMsg(reinterpret_cast<char *>(&resp), sizeof(resp)));
 
       // Get client context.
@@ -168,8 +169,8 @@ void MachnetController::HandleTimeout(UDSocket *s) {
   LOG(WARNING) << "Not implemented.";
 }
 
-bool MachnetController::RegisterApplication(const uuid_t app_uuid,
-                                          const machnet_app_info_t *app_info) {
+bool MachnetController::RegisterApplication(
+    const uuid_t app_uuid, const machnet_app_info_t *app_info) {
   const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
 
   // Check if the application is already registered.
@@ -215,9 +216,9 @@ void MachnetController::UnregisterApplication(const uuid_t app_uuid) {
   LOG(INFO) << "Application unregistered: " << app_uuid_str;
 }
 
-bool MachnetController::CreateChannel(const uuid_t app_uuid,
-                                    const machnet_channel_info_t *channel_info,
-                                    int *fd) {
+bool MachnetController::CreateChannel(
+    const uuid_t app_uuid, const machnet_channel_info_t *channel_info,
+    int *fd) {
   const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
 
   // Check that this is a registered application.

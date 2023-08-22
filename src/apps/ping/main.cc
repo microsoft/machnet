@@ -9,8 +9,8 @@
 #include <glog/logging.h>
 #include <icmp.h>
 #include <ipv4.h>
-#include <math.h>
 #include <machnet_config.h>
+#include <math.h>
 #include <packet.h>
 #include <pmd.h>
 #include <ttime.h>

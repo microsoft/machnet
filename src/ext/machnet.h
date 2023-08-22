@@ -64,7 +64,7 @@ int machnet_init();
 
 /**
  * @brief NOT part of the public API.
- * 
+ *
  * This is a helper function used to bind to a shared memory segment from
  * the application. The Machnet controller is going to hand over an open file
  * descriptor to the appropriate shared memory segment. Internally, this
@@ -81,7 +81,7 @@ MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size);
 /**
  * @brief Creates a new channel to the Machnet controller and binds to it. A
  * channel is a logical entity between an application and the Machnet service.
- * 
+ *
  * @return A pointer to the channel context on success, NULL otherwise.
  */
 void *machnet_attach();
@@ -107,8 +107,8 @@ int machnet_listen(void *channel_ctx, const char *local_ip, uint16_t port);
  * information on success.
  */
 int machnet_connect(void *channel_ctx, const char *local_ip,
-                  const char *remote_ip, uint16_t remote_port,
-                  MachnetFlow_t *flow);
+                    const char *remote_ip, uint16_t remote_port,
+                    MachnetFlow_t *flow);
 
 /**
  * Enqueue one message for transmission to a remote peer over the network.
@@ -119,7 +119,7 @@ int machnet_connect(void *channel_ctx, const char *local_ip,
  * @param[in] len The length of the data buffer in bytes
  */
 int machnet_send(const void *channel_ctx, MachnetFlow_t flow, const void *buf,
-               size_t len);
+                 size_t len);
 
 /**
  * This function enqueues one message for transmission to a remote peer over
@@ -143,14 +143,14 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr);
  * message's buffers from the application's address space.
  *
  * @param[in] channel_ctx        The Machnet channel context
- * @param[in] msghdr_iovec       An array of `MachnetMsgHdr' descriptors, each one
- *                               describing a standalone TX message.
+ * @param[in] msghdr_iovec       An array of `MachnetMsgHdr' descriptors, each
+ * one describing a standalone TX message.
  * @param[in] vlen               Length of the `msghdr_iovec' array (number of
  *                               messages to be sent).
  * @return                       # of messages sent.
  */
-int machnet_sendmmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr_iovec,
-                   int vlen);
+int machnet_sendmmsg(const void *channel_ctx,
+                     const MachnetMsgHdr_t *msghdr_iovec, int vlen);
 
 /**
  * Receive a pending message from some remote peer over the network.
@@ -164,7 +164,7 @@ int machnet_sendmmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr_iove
  * bytes received.
  */
 ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
-                   MachnetFlow_t *flow);
+                     MachnetFlow_t *flow);
 
 /**
  * This function receives a pending message (destined to the application) from

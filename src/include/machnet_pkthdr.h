@@ -25,7 +25,7 @@ struct __attribute__((packed)) MachnetPktHdr {
     kRst = 0b10000000,  // RST packet.
   };
   MachnetFlags net_flags;  // Network flags.
-  uint8_t msg_flags;        // Field to reflect the `MachnetMsgBuf_t' flags.
+  uint8_t msg_flags;       // Field to reflect the `MachnetMsgBuf_t' flags.
   be32_t seqno;  // Sequence number to denote the packet counter in the flow.
   be32_t ackno;  // Sequence number to denote the packet counter in the flow.
   be64_t sack_bitmap;        // Bitmap of the SACKs received.
@@ -35,19 +35,19 @@ struct __attribute__((packed)) MachnetPktHdr {
 static_assert(sizeof(MachnetPktHdr) == 30, "MachnetPktHdr size mismatch");
 
 inline MachnetPktHdr::MachnetFlags operator|(MachnetPktHdr::MachnetFlags lhs,
-                                            MachnetPktHdr::MachnetFlags rhs) {
+                                             MachnetPktHdr::MachnetFlags rhs) {
   using MachnetFlagsType =
       std::underlying_type<MachnetPktHdr::MachnetFlags>::type;
   return MachnetPktHdr::MachnetFlags(static_cast<MachnetFlagsType>(lhs) |
-                                    static_cast<MachnetFlagsType>(rhs));
+                                     static_cast<MachnetFlagsType>(rhs));
 }
 
 inline MachnetPktHdr::MachnetFlags operator&(MachnetPktHdr::MachnetFlags lhs,
-                                            MachnetPktHdr::MachnetFlags rhs) {
+                                             MachnetPktHdr::MachnetFlags rhs) {
   using MachnetFlagsType =
       std::underlying_type<MachnetPktHdr::MachnetFlags>::type;
   return MachnetPktHdr::MachnetFlags(static_cast<MachnetFlagsType>(lhs) &
-                                    static_cast<MachnetFlagsType>(rhs));
+                                     static_cast<MachnetFlagsType>(rhs));
 }
 
 }  // namespace net

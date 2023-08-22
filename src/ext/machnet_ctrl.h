@@ -23,11 +23,11 @@ typedef struct machnet_app_info machnet_app_info_t;
 /**
  * @struct machnet_channel_info
  * @brief This struct is used to request a new channel from the controller.
- * An application that needs to use Machnet should send a request to create a new
- * channel to the controller.
+ * An application that needs to use Machnet should send a request to create a
+ * new channel to the controller.
  *
- * @var machnet_channel_info::channel_uuid     The UUID of the application that is
- *                                           requesting a new channel.
+ * @var machnet_channel_info::channel_uuid     The UUID of the application that
+ * is requesting a new channel.
  * @var machnet_channel_info::desc_ring_size   The depth of the descriptor rings
  * (Machnet, App).
  * @var machnet_channel_info::buffer_count     The size of the buffer pool.

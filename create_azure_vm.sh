@@ -89,7 +89,7 @@ az network vnet subnet create --resource-group $RESOURCE_GROUP --vnet-name $VNET
 echo "Subnet created successfully."
 
 # Create external network interfaces
-for vm_name in $VM_NAME_1 $VM_NAME_2; do 
+for vm_name in $VM_NAME_1 $VM_NAME_2; do
   public_ip_name=${vm_name}${PUBLIC_IP_NAME_SUFFIX}
   external_nic_name=${vm_name}${EXTERNAL_NIC_NAME_SUFFIX}
   machnet_nic_name=${vm_name}${MACHNET_NIC_NAME_SUFFIX}

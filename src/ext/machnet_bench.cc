@@ -114,7 +114,7 @@ static void BM_machnet_sendmsg(benchmark::State &state) {  // NOLINT
     uint32_t msg_pending = __machnet_channel_app_ring_pending(channel_ctx);
 
     CHECK_EQ(__machnet_channel_app_ring_dequeue(channel_ctx, msg_pending,
-                                              slots.data()),
+                                                slots.data()),
              msg_pending);
 
     // Next reset the buffer pool.
@@ -123,7 +123,7 @@ static void BM_machnet_sendmsg(benchmark::State &state) {  // NOLINT
     // operation we use this quick hack.
     uint32_t nbuffers_free = __machnet_channel_buffers_avail(channel_ctx);
     CHECK_EQ(__machnet_channel_buf_alloc_bulk(channel_ctx, nbuffers_free,
-                                            slots.data(), nullptr),
+                                              slots.data(), nullptr),
              nbuffers_free);
 
     std::iota(slots.begin(), slots.end(), 0);
@@ -145,8 +145,8 @@ static void BM_machnet_sendmsg(benchmark::State &state) {  // NOLINT
   }
 
   // Destroy the channel.
-  __machnet_channel_destroy(channel_ctx, channel_size, &channel_fd, is_posix_shm,
-                          channel_name);
+  __machnet_channel_destroy(channel_ctx, channel_size, &channel_fd,
+                            is_posix_shm, channel_name);
 
   auto msg_cnt = state.iterations() * state.range(1);
   auto bytes_cnt = msg_cnt * state.range(0);

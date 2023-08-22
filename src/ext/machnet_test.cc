@@ -89,7 +89,8 @@ void prepare_segments(uint32_t msg_size, uint32_t segments_nr,
  * @param msg_size           Total message size.
  */
 void prepare_tx_msg(MachnetFlow_t *flow_info,
-                    std::vector<MachnetIovec_t> *tx_iov, MachnetMsgHdr_t *tx_msghdr,
+                    std::vector<MachnetIovec_t> *tx_iov,
+                    MachnetMsgHdr_t *tx_msghdr,
                     std::vector<std::vector<uint8_t>> *tx_segments,
                     uint32_t msg_size) {
   size_t counter = 0;
@@ -124,7 +125,8 @@ void prepare_tx_msg(MachnetFlow_t *flow_info,
  * @param msg_size           Maximum message size that can be accommodated in
  *                           `rx_segments'.
  */
-void prepare_rx_msg(std::vector<MachnetIovec_t> *rx_iov, MachnetMsgHdr_t *rx_msghdr,
+void prepare_rx_msg(std::vector<MachnetIovec_t> *rx_iov,
+                    MachnetMsgHdr_t *rx_msghdr,
                     std::vector<std::vector<uint8_t>> *rx_segments,
                     uint32_t msg_size) {
   rx_iov->resize(rx_segments->size());
@@ -172,7 +174,7 @@ bool check_buffer_pool(const MachnetChannelCtx_t *ctx) {
 
   // Dequeue all the buffers from the pool.
   if (__machnet_channel_buf_alloc_bulk(ctx, buffers.size(), buffers.data(),
-                                     nullptr) != buffers.size())
+                                       nullptr) != buffers.size())
     return false;
 
   // Release all the buffers back to the pool.
@@ -215,13 +217,13 @@ TEST(MachnetTest, Bind) {
       FLAGS_machnet_slots_nr, FLAGS_app_slots_nr, FLAGS_buffers_nr,
       FLAGS_buffer_size, 1);
   ctx = __machnet_channel_posix_create(channel_name, expected_channel_size,
-                                     &shm_fd);
+                                       &shm_fd);
   EXPECT_NE(ctx, nullptr);
   EXPECT_GT(shm_fd, 0);
 
   int is_posix_shm = 1;
   __machnet_channel_destroy(ctx, expected_channel_size, &shm_fd, is_posix_shm,
-                          channel_name);
+                            channel_name);
 }
 
 TEST(MachnetTest, SimpleSendRecvMsg) {
@@ -430,16 +432,17 @@ int main(int argc, char **argv) {
   size_t channel_size;
   int is_posix_shm;
   int channel_fd;
-  g_channel_ctx = __machnet_channel_create(
-      channel_name, FLAGS_machnet_slots_nr, FLAGS_app_slots_nr, FLAGS_buffers_nr,
-      FLAGS_buffer_size, &channel_size, &is_posix_shm, &channel_fd);
+  g_channel_ctx = __machnet_channel_create(channel_name, FLAGS_machnet_slots_nr,
+                                           FLAGS_app_slots_nr, FLAGS_buffers_nr,
+                                           FLAGS_buffer_size, &channel_size,
+                                           &is_posix_shm, &channel_fd);
   if (g_channel_ctx == nullptr) return -1;
 
   int ret = RUN_ALL_TESTS();
 
   // Destroy the channel.
   __machnet_channel_destroy(g_channel_ctx, channel_size, &channel_fd,
-                          is_posix_shm, channel_name);
+                            is_posix_shm, channel_name);
 
   return ret;
 }

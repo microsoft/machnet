@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
     MachnetFlow flow;
     std::string msg = "Hello World!";
     ret = machnet_connect(channel, FLAGS_local.c_str(), FLAGS_remote.c_str(),
-                        kPort, &flow);
+                          kPort, &flow);
     assert_with_msg(ret == 0, "machnet_connect() failed");
 
     const int ret = machnet_send(channel, flow, msg.data(), msg.size());

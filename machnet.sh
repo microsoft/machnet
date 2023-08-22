@@ -64,7 +64,7 @@ fi
 for n in /sys/devices/system/node/node[1-9]; do
     if [ -d "$n" ]; then
         sudo bash -c "echo 1024 > $n/hugepages/hugepages-2048kB/nr_hugepages"
-        if ! cat $n/meminfo | grep HugePages_Total | grep -q 1024 
+        if ! cat $n/meminfo | grep HugePages_Total | grep -q 1024
         then
             echo "Failed to allocate hugepages on NUMA `echo $n | cut -d / -f 6`"
             exit 1
