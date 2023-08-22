@@ -1,6 +1,3 @@
-include_directories(${USOCKETS_SDK}/src)
-include_directories(${UV_SDK}/include)
-
 # Declare the library target.
 set(MACHNET_SHIM_LIB_NAME machnet_shim)
 
