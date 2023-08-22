@@ -208,18 +208,18 @@ void application_loop(thread_conf *conf) {
 void print_results(const thread_conf &stack_conf, const thread_conf &app_conf) {
   // Print the results.
   auto channel = stack_conf.channel;
-  std::cout
-      << juggler::utils::Format(
-             "[Channel:%s/HugePageBacked:%s/Size:%uKiB/BufferNr:%u/BufSize:%u]",
-             channel_name, channel->IsPosixShm() ? "0" : "1",
-             channel->GetSize() / 1024, channel->GetTotalBufCount(),
-             channel->GetUsableBufSize())
-      << std::endl;
+  std::cout << juggler::utils::Format(
+                   "[Channel:%s/HugePageBacked:%s/Size:%luKiB/BufferNr:%u/"
+                   "BufSize:%u]",
+                   channel_name, channel->IsPosixShm() ? "0" : "1",
+                   channel->GetSize() / 1024, channel->GetTotalBufCount(),
+                   channel->GetUsableBufSize())
+            << std::endl;
   // Print whether the stack and app are sending or not.
   std::cout << juggler::utils::Format("[StackTX:%s/AppTX:%s]",
                                       stack_conf.messages_to_send ? "1" : "0",
                                       app_conf.messages_to_send ? "1" : "0");
-  std::cout << juggler::utils::Format("[TX message size:%u]",
+  std::cout << juggler::utils::Format("[TX message size:%lu]",
                                       stack_conf.tx_message_size)
             << std::endl;
   std::cout << "[Stack]" << std::endl;
