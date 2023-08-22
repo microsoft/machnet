@@ -704,7 +704,7 @@ __machnet_channel_machnet_ring_enqueue(const MachnetChannelCtx_t *ctx, unsigned 
   jring_t *machnet_ring = __machnet_channel_machnet_ring(ctx);
 
   // Multiple application threads might be enqueuing concurrently.
-  return jring_mp_enqueue_bulk(machnet_ring, bufs, n, NULL);
+  return jring_sp_enqueue_bulk(machnet_ring, bufs, n, NULL);
 }
 
 /**
@@ -725,7 +725,7 @@ __machnet_channel_machnet_ring_dequeue(const MachnetChannelCtx_t *ctx, unsigned 
 
   // Multiple application threads might be enqueuing concurrently.
   // Burst deque elements.
-  return jring_mc_dequeue_burst(machnet_ring, bufs, n, NULL);
+  return jring_sc_dequeue_burst(machnet_ring, bufs, n, NULL);
 }
 
 #ifdef __cplusplus

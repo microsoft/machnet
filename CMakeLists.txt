@@ -23,6 +23,7 @@ include_directories(SYSTEM third_party/googletest/googlemock/include)
 set(BENCHMARK_ENABLE_INSTALL OFF)
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Suppressing benchmark's tests" FORCE)
 add_subdirectory(third_party/googlebench)
+include_directories(SYSTEM third_party/googlebench/include)
 
 # Common sub-projects: HdrHistogram
 set(HDR_HISTOGRAM_BUILD_PROGRAMS OFF CACHE BOOL "Minimize HDR histogram build")
