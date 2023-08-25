@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 static constexpr size_t kProducerCore = 2;
-static constexpr size_t kConsumerCore = 3;
+static constexpr size_t kConsumerCore = 7;
 
 static constexpr size_t kQueueSz = 1024;
 static constexpr size_t kWindowSize = 1;
@@ -70,7 +70,7 @@ void ProducerThread() {
       Msg resp_msg{};
       while (true) {
         int result = jring2_dequeue(g_c2p_ring, &resp_msg);
-        if (result == 0) break;
+        if (result == 1) break;
       }
 
       const size_t msg_lat_cycles =
@@ -132,7 +132,7 @@ void ConsumerThread() {
     Msg req_msg{};
     while (true) {
       int result = jring2_dequeue(g_p2c_ring, &req_msg);
-      if (result == 0) break;
+      if (result == 1) break;
     }
 
     // Send a response
@@ -142,7 +142,7 @@ void ConsumerThread() {
     }
 
     auto ret = jring2_enqueue(g_c2p_ring, &resp_msg);
-    if (ret != 0) {
+    if (ret != 1) {
       std::cerr << "Consumer error: enqueue failed" << std::endl;
       exit(1);
     }
@@ -170,13 +170,15 @@ int main() {
     std::cerr << "ERROR: jring2_get_buf_ring_size failed" << std::endl;
     exit(1);
   }
-  g_p2c_ring = static_cast<jring2_t *>(aligned_alloc(CACHELINE_SIZE, kRingMemSz));
+  g_p2c_ring =
+      static_cast<jring2_t *>(aligned_alloc(CACHELINE_SIZE, kRingMemSz));
   if (g_p2c_ring == nullptr) {
     std::cerr << "ERROR: aligned_alloc failed (g_p2c_ring)" << std::endl;
     exit(1);
   }
 
-  g_c2p_ring = static_cast<jring2_t *>(aligned_alloc(CACHELINE_SIZE, kRingMemSz));
+  g_c2p_ring =
+      static_cast<jring2_t *>(aligned_alloc(CACHELINE_SIZE, kRingMemSz));
   if (g_c2p_ring == nullptr) {
     std::cerr << "ERROR: aligned_alloc failed (g_c2p_ring)" << std::endl;
     exit(1);
