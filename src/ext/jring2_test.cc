@@ -7,11 +7,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "jring.h"
+
 static constexpr size_t kProducerCore = 2;
 static constexpr size_t kConsumerCore = 7;
 
 static constexpr size_t kQueueSz = 1024;
-static constexpr size_t kWindowSize = 1;
+static constexpr size_t kWindowSize = 16;
 
 static constexpr size_t kMsgPayloadSize8B = 7;
 
@@ -69,7 +71,7 @@ void ProducerThread() {
     if (inflight_requests == kWindowSize) {
       Msg resp_msg{};
       while (true) {
-        int result = jring2_dequeue(g_c2p_ring, &resp_msg);
+        int result = jring2_dequeue_burst(g_c2p_ring, &resp_msg, 1);
         if (result == 1) break;
       }
 
@@ -118,7 +120,7 @@ void ProducerThread() {
     }
 
     timestamps[(seq_num + inflight_requests) % kWindowSize] = req_rdtsc;
-    jring2_enqueue(g_p2c_ring, &req_msg);
+    jring2_enqueue_bulk(g_p2c_ring, &req_msg, 1);
     inflight_requests++;
   }
   std::cout << "Producer exiting" << std::endl;
@@ -131,7 +133,7 @@ void ConsumerThread() {
   while (!g_stop.load()) {
     Msg req_msg{};
     while (true) {
-      int result = jring2_dequeue(g_p2c_ring, &req_msg);
+      int result = jring2_dequeue_burst(g_p2c_ring, &req_msg, 1);
       if (result == 1) break;
     }
 
@@ -141,7 +143,7 @@ void ConsumerThread() {
       resp_msg.val[i] = req_msg.val[i];
     }
 
-    auto ret = jring2_enqueue(g_c2p_ring, &resp_msg);
+    auto ret = jring2_enqueue_bulk(g_c2p_ring, &resp_msg, 1);
     if (ret != 1) {
       std::cerr << "Consumer error: enqueue failed" << std::endl;
       exit(1);
