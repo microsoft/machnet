@@ -55,7 +55,6 @@ RUN git clone --depth 1 --branch 'v21.11' https://github.com/DPDK/dpdk.git ${RTE
     DESTDIR=${RTE_SDK}/build/install ninja install && \
     rm -rf ${RTE_SDK}/app ${RTE_SDK}/drivers ${RTE_SDK}/.git ${RTE_SDK}/build/app
 
-
 # Stage 2: Build Machnet
 FROM machnet_build_base as machnet
 
@@ -65,7 +64,8 @@ WORKDIR /root/machnet
 COPY . .
 
 # Build Machnet
-RUN mkdir build && \
+RUN ldconfig && \
+    mkdir build && \
     cd build && \
     cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../ && \
     ninja
