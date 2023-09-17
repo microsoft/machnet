@@ -86,9 +86,9 @@ if ! groups | grep -q docker; then
 fi
 
 echo "Checking if the Machnet Docker image is available"
-if ! docker pull ghcr.io/msr-machnet/machnet:latest
+if ! docker pull ghcr.io/microsoft/machnet/machnet:latest
 then
-    echo "Please make sure you have access to the Machnet Docker image at ghcr.io/msr-machnet/machnet"
+    echo "Please make sure you have access to the Machnet Docker image at ghcr.io/microsoft/machnet/"
     echo "See Machnet README for instructions on how to get access"
 fi
 
@@ -118,7 +118,7 @@ else
     sudo docker run --privileged --net=host \
         -v /dev/hugepages:/dev/hugepages \
         -v /var/run/machnet:/var/run/machnet \
-        ghcr.io/msr-machnet/machnet:latest \
+        ghcr.io/microsoft/machnet/machnet:latest \
         /root/machnet/build/src/apps/machnet/machnet \
         --config_json /var/run/machnet/local_config.json \
         --logtostderr=1
