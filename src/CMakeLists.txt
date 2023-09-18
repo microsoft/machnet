@@ -34,8 +34,7 @@ endif()
 
 # DPDK.
 if(NOT DEFINED ENV{RTE_SDK})
-  set(RTE_SDK "$ENV{HOME}/dpdk")
-  message(STATUS "RTE_SDK is not defined; setting to: ${RTE_SDK}")
+  message(FATAL_ERROR "RTE_SDK is not defined;")
 else()
   set(RTE_SDK $ENV{RTE_SDK})
 endif()
