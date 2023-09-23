@@ -12,6 +12,8 @@
 #include <numeric>
 #include <thread>
 
+DEFINE_uint32(msg_size, 64, "Size of the message");
+
 static constexpr uint8_t kStackCpuCoreId = 3;
 static constexpr uint8_t kAppCpuCoreId = 5;
 
@@ -287,8 +289,9 @@ void print_results(const thread_conf &stack_conf, const thread_conf &app_conf) {
   std::cout << std::endl;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   google::InitGoogleLogging("channel_bench");
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
   signal(SIGINT, [](int) { g_should_stop.store(true); });
   // Create a new channel using the channel manager.
   ChannelManager channel_manager;
@@ -296,7 +299,7 @@ int main() {
                                    kRingSlotEntries, kBuffersNr, kBufferSize));
 
   const uint64_t kMessagesToSend = 2 * 1e7;
-  const uint64_t kTxMessageSize = 64;
+  const uint64_t kTxMessageSize = FLAGS_msg_size;
   std::vector<std::pair<uint64_t, uint64_t>> tx_conf;
 
   tx_conf.emplace_back(kMessagesToSend,
