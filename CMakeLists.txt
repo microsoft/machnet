@@ -31,5 +31,7 @@ set(HDR_LOG_REQUIRED OFF CACHE BOOL "Disable HDR histogram's log to avoid zlib d
 add_subdirectory(third_party/HdrHistogram_c)
 include_directories(SYSTEM third_party/HdrHistogram_c/include/)
 
+include_directories(SYSTEM third_party/xxHash)
+
 set(BUILD_TESTING ON)
 add_subdirectory(src)

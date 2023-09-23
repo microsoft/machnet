@@ -2,7 +2,6 @@
 #define SRC_INCLUDE_IPV4_H_
 
 #include <arpa/inet.h>
-#include <city.h>
 #include <types.h>
 #include <utils.h>
 

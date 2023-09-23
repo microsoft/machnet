@@ -11,3 +11,6 @@
 	path = third_party/googlebench
 	url = https://github.com/google/benchmark.git
 	branch = v1.8.2
+[submodule "third_party/xxHash"]
+	path = third_party/xxHash
+	url = https://github.com/Cyan4973/xxHash

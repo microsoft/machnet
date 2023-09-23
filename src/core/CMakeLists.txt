@@ -14,7 +14,7 @@ set_target_properties(core PROPERTIES
 target_include_directories(core SYSTEM PUBLIC $ENV{RTE_SDK}/build/install/usr/local/include)
 target_include_directories(core PUBLIC ../include)
 target_include_directories(core PRIVATE .)
-target_link_libraries(core PRIVATE cityhash)
+target_link_libraries(core PRIVATE)
 
 # link_directories($ENV{RTE_SDK}/$ENV{RTE_TARGET}/lib/)
 # find_library(DPDK_LIB NAMES libdpdk.a dpdk)

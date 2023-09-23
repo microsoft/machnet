@@ -6,7 +6,6 @@
 #ifndef SRC_INCLUDE_UTILS_H_
 #define SRC_INCLUDE_UTILS_H_
 
-#include <city.h>
 #include <glog/logging.h>
 #include <sched.h>
 #include <sys/stat.h>
@@ -23,6 +22,10 @@
 #include <vector>
 
 #include "ttime.h"
+
+#define XXH_STATIC_LINKING_ONLY
+#define XXH_INLINE_ALL
+#include "xxhash.h"
 
 namespace juggler {
 namespace utils {
@@ -248,10 +251,11 @@ requires std::integral<T> static constexpr inline T align_size(T requested_size,
 
 template <typename T>
 static constexpr inline T hash(const char *str, size_t len) {
+  constexpr size_t kXXHashSeed = 0xdeadbeef;
   if constexpr (std::is_same_v<T, uint32_t>) {
-    return CityHash32(str, len);
+    return XXH32(str, len, kXXHashSeed);
   } else if constexpr (std::is_same_v<T, uint64_t>) {
-    return CityHash64(str, len);
+    return XXH64(str, len, kXXHashSeed);
   } else {
     []<bool flag = false>() { static_assert(flag, "Unsupported hash type"); }
     ();

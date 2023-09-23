@@ -1,7 +1,6 @@
 #ifndef SRC_INCLUDE_UDP_H_
 #define SRC_INCLUDE_UDP_H_
 
-#include <city.h>
 #include <types.h>
 #include <utils.h>
 

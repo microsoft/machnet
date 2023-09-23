@@ -8,7 +8,6 @@ variables:
   timezone: 'America/Los_Angeles'
   rdma_core: '$(Pipeline.Workspace)/rdma-core'
   rte_sdk: '$(Pipeline.Workspace)/dpdk'
-  cityhash_sdk: '$(Pipeline.Workspace)/cityhash'
 
 steps:
 - script: |
@@ -21,14 +20,6 @@ steps:
     sudo apt-get --purge -y remove rdma-core librdmacm1 ibverbs-providers libibverbs-dev libibverbs1
     sudo rm -rf /var/lib/apt/lists/*
   displayName: 'Set timezone and Install dependencies'
-
-- script: |
-    cd $(Pipeline.Workspace)
-    git clone --depth=1 --recurse-submodules https://github.com/google/cityhash.git
-    cd $(cityhash_sdk)
-    ./configure --enable-sse4.2
-    make all check CXXFLAGS="-O3 -msse4.2"
-  displayName: 'Build cityhash from source'
 
 - script: |
     cd $(Pipeline.Workspace)
@@ -58,6 +49,6 @@ steps:
     cd $(Pipeline.Workspace)/machnet
     mkdir build
     cd build
-    CITYHASH_SDK=$(cityhash_sdk) RTE_SDK=$(rte_sdk) cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
+    RTE_SDK=$(rte_sdk) cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
     ninja
   displayName: 'Build Machnet'
