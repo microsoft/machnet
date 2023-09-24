@@ -3,7 +3,13 @@ users of the Machnet service. For users, see the [README](README.md).
 
 ## Compiling Machnet
 
-- Required packages: latest `cmake`, `gflags`, `pkg-config`, `nlohmann-json-dev`, `ninja`, `gcc>=10`, `g++>=10`, `doxygen`, `graphviz`.
+
+```bash
+# On Ubuntu:
+sudo apt -y install cmake libgflags-dev pkg-config nlohmann-json3-dev ninja-build gcc-10 g++-10 doxygen graphviz python3-pip meson libhugetlbfs-dev
+pip3 install pyelftools
+```
+
 
   For Ubuntu 20.04 we need `gcc-10`, `g++-10`, `cpp-10`.
   ```bash

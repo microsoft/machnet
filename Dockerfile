@@ -27,12 +27,6 @@ RUN rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root
 
-# Build cityhash from source
-RUN git clone --depth=1 --recurse-submodules https://github.com/google/cityhash.git && \
-    cd cityhash && \
-    ./configure --enable-sse4.2 && \
-    make all check CXXFLAGS="-O3 -msse4.2"
-
 # Set env variable for rdma-core
 ENV RDMA_CORE /root/rdma-core
 

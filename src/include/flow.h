@@ -9,7 +9,6 @@
 #include <cc.h>
 #include <channel.h>
 #include <channel_msgbuf.h>
-#include <city.h>
 #include <common.h>
 #include <dpdk.h>
 #include <ether.h>

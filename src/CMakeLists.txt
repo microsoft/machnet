@@ -21,17 +21,6 @@ set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointe
 # Include 'libdpdk'.
 find_package(PkgConfig REQUIRED)
 
-# cityhash.
-if(NOT DEFINED ENV{CITYHASH_SDK})
-  set(CITYHASH_SDK "$ENV{HOME}/cityhash")
-  message("CITYHASH_SDK is not defined; setting to: ${CITYHASH_SDK}")
-else()
-  set(CITYHASH_SDK $ENV{CITYHASH_SDK})
-endif()
-if (NOT EXISTS ${CITYHASH_SDK})
-  message(FATAL_ERROR "cityhash SDK not found at ${CITYHASH_SDK}")
-endif()
-
 # DPDK.
 if(NOT DEFINED ENV{RTE_SDK})
   set(RTE_SDK "$ENV{HOME}/dpdk")
@@ -65,8 +54,8 @@ string(STRIP ${DPDK_PKGCONFIG_OUT} DPDK_PKGCONFIG_OUT) # Remove newline from pkg
 set(LIBDPDK_LIBRARIES
   "-Wl,--whole-archive -Wl,--as-needed -L${DPDK_LIB_DIR} ${DPDK_PKGCONFIG_OUT} -lpthread -Wl,--no-whole-archive")
 
-link_directories(${DPDK_LIB_DIR} ${USOCKETS_SDK} ${CITYHASH_SDK}/src/.libs)
-include_directories(SYSTEM ${DPDK_INSTALL_DIR}/include ${CITYHASH_SDK}/src)
+link_directories(${DPDK_LIB_DIR} ${USOCKETS_SDK})
+include_directories(SYSTEM ${DPDK_INSTALL_DIR}/include)
 
 include_directories(include)
 include_directories(ext)

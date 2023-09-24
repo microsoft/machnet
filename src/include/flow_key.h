@@ -4,7 +4,6 @@
 #ifndef SRC_INCLUDE_FLOW_KEY_H_
 #define SRC_INCLUDE_FLOW_KEY_H_
 
-#include <city.h>
 #include <ipv4.h>
 #include <udp.h>
 
