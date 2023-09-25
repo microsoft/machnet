@@ -62,7 +62,7 @@ Applications use the following steps to interact with the Machnet service:
 - Connect to remote processes using `machnet_connect()`.
 - Send and receive messages using `machnet_send()` and `machnet_recv()`.
 
-See `src/ext/machnet.h` for the full API documentation.
+See [machnet.h](src/ext/machnet.h) for the full API documentation.
 
 ## Developing Machnet
 
