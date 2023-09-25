@@ -66,4 +66,4 @@ See `src/ext/machnet.h` for the full API documentation.
 
 ## Developing Machnet
 
-See `INTERNAL.md` for instructions on how to build and test Machnet.
+See [INTERNAL.md](INTERNAL.md) for instructions on how to build and test Machnet.
