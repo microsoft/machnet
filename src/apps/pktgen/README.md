@@ -12,7 +12,7 @@ Successful build of the `Machnet` project (see main [README](../../../README.md)
 
 ### Configuration
 
-The configuration is done by editing the [servers.json](../../../servers.json) file. In particular, a new entry needed for each server that runs the `pktgen` application (follow existing examples):
+The configuration is done by editing the [servers.json](servers.json) file. In particular, a new entry needed for each server that runs the `pktgen` application (follow existing examples):
 
 ```json
 {
