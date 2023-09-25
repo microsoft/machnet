@@ -33,7 +33,7 @@ jobs:
         run: |
           mkdir -p ${GITHUB_WORKSPACE}/build
           cd ${GITHUB_WORKSPACE}/build
-          CITYHASH_SDK=/root/cityhash RTE_SDK=/root/dpdk cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
+          RTE_SDK=/root/dpdk cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
           ninja
 
       - name: Perform CodeQL Analysis
