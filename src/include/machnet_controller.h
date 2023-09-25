@@ -91,7 +91,6 @@ class MachnetController {
    * @brief Callback to handle new messages to the controller.
    * This function is responsible for executing the core logic of the
    * controller.
-   * Signature is defined by libusockets.
    * @param s The socket that is being connected.
    * @param data The data received.
    * @param length The length of the data received.
@@ -100,14 +99,12 @@ class MachnetController {
 
   /**
    * @brief Callback to handle passive close of the socket.
-   * Signature is defined by libusockets.
    * @param s The socket that is being closed.
    */
   void HandlePassiveClose(UDSocket *s);
 
   /**
    * @brief Callback to handle connection timeout.
-   * Signature is defined by libusockets.
    * @param s The socket that timed out.
    * @attention This function is not implemented yet.
    */
@@ -115,7 +112,6 @@ class MachnetController {
 
   /**
    * @brief Callback to handle shutdown of a client.
-   * Signature is defined by libusockets.
    * @param s The socket that is being closed.
    * @param code The code of the shutdown.
    * @param reason The reason for the shutdown.

@@ -54,7 +54,7 @@ string(STRIP ${DPDK_PKGCONFIG_OUT} DPDK_PKGCONFIG_OUT) # Remove newline from pkg
 set(LIBDPDK_LIBRARIES
   "-Wl,--whole-archive -Wl,--as-needed -L${DPDK_LIB_DIR} ${DPDK_PKGCONFIG_OUT} -lpthread -Wl,--no-whole-archive")
 
-link_directories(${DPDK_LIB_DIR} ${USOCKETS_SDK})
+link_directories(${DPDK_LIB_DIR})
 include_directories(SYSTEM ${DPDK_INSTALL_DIR}/include)
 
 include_directories(include)
