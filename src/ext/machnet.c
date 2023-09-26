@@ -19,6 +19,13 @@
 
 #include "machnet_ctrl.h"
 
+#define MIN(a, b)           \
+  ({                        \
+    __typeof__(a) _a = (a); \
+    __typeof__(b) _b = (b); \
+    _a < _b ? _a : _b;      \
+  })
+
 // Main socket/connection to the Machnet controller.
 int g_ctrl_socket = -1;
 

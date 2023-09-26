@@ -18,13 +18,6 @@ extern "C" {
 
 #include "machnet_common.h"
 
-#define MIN(a, b)           \
-  ({                        \
-    __typeof__(a) _a = (a); \
-    __typeof__(b) _b = (b); \
-    _a < _b ? _a : _b;      \
-  })
-
 /**
  * @brief Descriptor for SG data that constitute a message.
  *
