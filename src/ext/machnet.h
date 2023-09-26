@@ -21,7 +21,7 @@ extern "C" {
 /**
  * @brief Descriptor for SG data that constitute a message.
  *
- * This structure resembles `struct iovec`.
+ * This structure resembles `struct iovec` (check writev(2)).
  */
 struct MachnetIovec {
   void *base;  ///< Pointer to the beginning of the SG data.
