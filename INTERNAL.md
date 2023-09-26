@@ -3,9 +3,13 @@ users of the Machnet service. For users, see the [README](README.md).
 
 ## Compiling Machnet
 
+[Dockerfile](Dockerfile) is the reference for the required dependencies and the
+overall build process. The following instructions follow the same steps as the
+Dockerfile.
+
 
 ```bash
-# On Ubuntu:
+# On latest Ubuntu:
 sudo apt -y install cmake libgflags-dev pkg-config nlohmann-json3-dev ninja-build gcc-10 g++-10 doxygen graphviz python3-pip meson libhugetlbfs-dev
 pip3 install pyelftools
 ```
@@ -16,6 +20,24 @@ pip3 install pyelftools
   # Set gcc-10 and g++-10 as the default compiler.
   update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 --slave /usr/bin/g++ g++ /usr/bin/g++-10 --slave /usr/bin/gcov gcov /usr/bin/gcov-10
   ```
+
+### Build and install rdma-core
+
+```bash
+# Remove conflicting packages
+RUN apt-get --purge -y remove rdma-core librdmacm1 ibverbs-providers libibverbs-dev libibverbs1
+```
+
+Now we install rdma-core from source:
+```bash
+export RDMA_CORE=/path/to/rdma-core
+git clone -b 'stable-v40' --single-branch --depth 1 https://github.com/linux-rdma/rdma-core.git ${RDMA_CORE}
+cd ${RDMA_CORE}
+mkdir -p build && cd build
+cmake -GNinja -DNO_PYVERBS=1 ..
+ninja install # as root
+ldconfig
+```
 
 ### Build DPDK
 
@@ -54,8 +76,8 @@ sudo ctest # sudo is required for DPDK-related tests.
 
 ## Docker
 ```bash
-cd docker
-./dockerbuild.sh
+# Build the docker image (from the root of the repository):
+docker build --no-cache -f Dockerfile --target  machnet .
 ```
 
 
