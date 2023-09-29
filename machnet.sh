@@ -38,7 +38,11 @@ if [ -z "$LOCAL_MAC" ] || [ -z "$LOCAL_IP" ]; then
     exit 1
 fi
 
-# Allocate memory for the first NUMA node
+#
+# Hugepage allocation
+#
+
+#Allocate memory for the first NUMA node
 if ! cat /sys/devices/system/node/*/meminfo | grep HugePages_Total | grep -q 1024
 then
     echo "Insufficient or no hugepages available"
@@ -60,7 +64,7 @@ then
     fi
 fi
 
-# Allocate memory for the rest of the NUMA nodes if existed
+# Allocate memory for the rest of the NUMA nodes, if any
 for n in /sys/devices/system/node/node[1-9]; do
     if [ -d "$n" ]; then
         sudo bash -c "echo 1024 > $n/hugepages/hugepages-2048kB/nr_hugepages"
@@ -74,23 +78,6 @@ for n in /sys/devices/system/node/node[1-9]; do
     fi
 done
 
-if ! command -v docker &> /dev/null
-then
-    echo "Please install docker"
-    exit
-fi
-
-if ! groups | grep -q docker; then
-    echo "Please add the current user to the docker group"
-    exit
-fi
-
-echo "Checking if the Machnet Docker image is available"
-if ! docker pull ghcr.io/microsoft/machnet/machnet:latest
-then
-    echo "Please make sure you have access to the Machnet Docker image at ghcr.io/microsoft/machnet/"
-    echo "See Machnet README for instructions on how to get access"
-fi
 
 echo "Starting Machnet with local MAC $LOCAL_MAC and IP $LOCAL_IP"
 
@@ -115,6 +102,24 @@ if [ $BARE_METAL -eq 1 ]; then
 
     sudo ${machnet_bin} --config_json /var/run/machnet/local_config.json --logtostderr=1
 else
+    if ! command -v docker &> /dev/null
+    then
+        echo "Please install docker"
+        exit
+    fi
+
+    if ! groups | grep -q docker; then
+        echo "Please add the current user to the docker group"
+        exit
+    fi
+
+    echo "Checking if the Machnet Docker image is available"
+    if ! docker pull ghcr.io/microsoft/machnet/machnet:latest
+    then
+        echo "Please make sure you have access to the Machnet Docker image at ghcr.io/microsoft/machnet/"
+        echo "See Machnet README for instructions on how to get access"
+    fi
+
     sudo docker run --privileged --net=host \
         -v /dev/hugepages:/dev/hugepages \
         -v /var/run/machnet:/var/run/machnet \
