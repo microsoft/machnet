@@ -36,7 +36,13 @@ void MachnetController::Run() {
   // Initialize DPDK.
   dpdk_.InitDpdk(config_processor_.GetEalOpts());
   if (dpdk_.GetNumPmdPortsAvailable() == 0) {
-    LOG(ERROR) << "No PMD ports available. Exiting.";
+    LOG(ERROR) << "Error: No DPDK-capable ports found. This can be due to "
+                  "several reasons.";
+    LOG(ERROR) << "1. On Azure, the accelerated NIC must first be unbound from "
+                  "the kernel driver with driverctl";
+    LOG(ERROR) << "2. The user libraries for the NIC are not installed, e.g., "
+                  "libmlx5 for Mellanox NICs";
+    LOG(ERROR) << "3. The NIC is not supported by DPDK";
     return;
   }
 
