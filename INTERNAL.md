@@ -15,7 +15,7 @@ pip3 install pyelftools
 ```
 
 
-  For Ubuntu 20.04 we need `gcc-10`, `g++-10`, `cpp-10`.
+  For Ubuntu 20.04 we need at least versions `gcc-10`, `g++-10`, `cpp-10`. This step is not required for newer versions of Ubuntu.
   ```bash
   # Set gcc-10 and g++-10 as the default compiler.
   update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 --slave /usr/bin/g++ g++ /usr/bin/g++-10 --slave /usr/bin/gcov gcov /usr/bin/gcov-10
