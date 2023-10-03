@@ -14,15 +14,28 @@
 namespace juggler {
 namespace dpdk {
 
+/**
+ * @brief Represents a packet.
+ *
+ * This class wraps around DPDK's mbuf structure for packet management.
+ */
 class alignas(juggler::hardware_constructive_interference_size) Packet {
  public:
-  // Packet can only be allocated from a PacketPool.
+  /** @brief Default constructor is deleted to ensure allocation only from a
+   * PacketPool. */
   Packet() = delete;
 
-  // Free the packet: return the corresponding rte_mbuf back in the mempool.
-  // pkt may be nullptr.
+  /**
+   * @brief Frees the packet by returning the corresponding rte_mbuf back to the
+   * mempool.
+   * @param pkt Packet to be freed. May be nullptr.
+   */
   static void Free(Packet *pkt) { rte_pktmbuf_free(&pkt->mbuf_); }
 
+  /**
+   * @brief Resets the packet to its initial state.
+   * @param pkt Packet to be reset.
+   */
   static void Reset(Packet *pkt) {
     auto &mbuf_ = pkt->mbuf_;
     struct rte_mempool *mp = mbuf_.pool;
@@ -46,18 +59,37 @@ class alignas(juggler::hardware_constructive_interference_size) Packet {
     mbuf_.nb_segs = 1;
   }
 
+  /**
+   * @brief Retrieves the head data of the packet with a given offset.
+   * @param offset Offset from the start of the data. Default is 0.
+   * @return `const` Pointer to the head data of the packet.
+   */
   template <typename T = void *>
   const T head_data(uint16_t offset = 0) const {
     return reinterpret_cast<T>(rte_pktmbuf_mtod(&mbuf_, uint8_t *) + offset);
   }
 
+  /**
+   * @brief Retrieves the head data of the packet with a given offset (non-const
+   * version).
+   * @param offset Offset from the start of the data. Default is 0.
+   * @return Pointer to the head data of the packet.
+   */
   template <typename T = void *>
   T head_data(uint16_t offset = 0) {
     return const_cast<T>(
         static_cast<const Packet &>(*this).head_data<T>(offset));
   }
 
+  /**
+   * @return Length of the packet.
+   */
   uint16_t length() const { return rte_pktmbuf_pkt_len(&mbuf_); }
+
+  /**
+   * @return RSS hash value associated with the packet.
+   * @note This is valid only if the DPDK PMD was initialized with RSS enabled.
+   */
   uint32_t rss_hash() const { return mbuf_.hash.rss; }
 
   // Setters.
@@ -114,6 +146,9 @@ class alignas(juggler::hardware_constructive_interference_size) Packet {
     return reinterpret_cast<T>(rte_pktmbuf_prepend(&mbuf_, len));
   }
 
+  /**
+   * @return String representation of L2 and L3 headers.
+   */
   std::string L2L3HeaderString() const {
     auto *eh = head_data<net::Ethernet *>();
     auto *ipv4h = reinterpret_cast<net::Ipv4 *>(eh + 1);
@@ -121,59 +156,115 @@ class alignas(juggler::hardware_constructive_interference_size) Packet {
   }
 
  private:
-  struct rte_mbuf mbuf_;
+  struct rte_mbuf mbuf_;  //!< Underlying DPDK mbuf structure.
 
   friend class PacketPool;
   friend class PacketBatch;
 };
 
+/**
+ * @brief Represents a batch of packets. Efficient data structure for batch
+ * packet handling; suitable for stack allocation.
+ */
 class PacketBatch {
  public:
   static const uint16_t kMaxBurst = 32;
+
+  /**
+   * @brief Constructs an empty PacketBatch.
+   */
   PacketBatch() : cnt_(0), pkts_() {}
 
+  /**
+   * @return Constant pointer to the underlying packet array.
+   */
   Packet *const *pkts() const { return pkts_; }
+
+  /**
+   * @return Pointer to the underlying packet array.
+   */
   Packet **pkts() { return pkts_; }
 
+  /**
+   * @return Packet at the given index.
+   */
   Packet *operator[](uint16_t index) {
     DCHECK(index < cnt_);
     return pkts_[index];
   }
 
+  /**
+   * @return Number of packets in the batch.
+   */
   uint16_t GetSize() const { return cnt_; }
+
+  /**
+   * @return Number of available (i.e., unused) slots in the batch.
+   */
   uint16_t GetRoom() const { return kMaxBurst - cnt_; }
+
   bool IsEmpty() { return cnt_ == 0; }
   bool IsFull() { return cnt_ == kMaxBurst; }
+
+  /**
+   * @brief Increases the number of packets in the batch.
+   * @param incr Number of packets to increase.
+   */
   void IncrCount(uint16_t incr) {
     DCHECK(incr <= GetRoom());
     cnt_ += incr;
   }
 
-  // XXX (ilias): Caller is responsible to check there is enough space.
+  /**
+   * @brief Appends a packet to the batch.
+   * @param pkt Packet to be appended.
+   * @attention This method does not check if the batch is full.
+   */
   void Append(Packet *pkt) {
     DCHECK(!IsFull());
     pkts_[cnt_++] = pkt;
   }
+
+  /**
+   * @brief Appends a batch of packets to the batch.
+   * @param pkts Array of packets to be appended.
+   * @param npkts Number of packets to be appended.
+   * @attention This method does not check if the batch is full.
+   */
   void Append(Packet **pkts, uint16_t npkts) {
     DCHECK(npkts <= GetRoom());
     juggler::utils::Copy(&pkts_[cnt_], pkts, npkts * sizeof(Packet *));
     cnt_ += npkts;
   }
+
+  /**
+   * @brief Appends a batch of packets to the batch.
+   * @param batch Batch of packets to be appended.
+   * @attention This method does not check if the batch is full.
+   */
   void Append(PacketBatch *batch) { Append(batch->pkts(), batch->GetSize()); }
 
+  /**
+   * @brief Clear all packets in the batch.
+   */
   void Clear() { cnt_ = 0; }
 
-  /// Return the packets in this batch to their mempools
+  /**
+   * @brief Releases the packets in this batch back to their mempools and clears
+   * the batch.
+   */
   void Release() {
-    if (cnt_ == 0) [[unlikely]] return;
+    if (cnt_ == 0) [[unlikely]]
+      return;
     rte_pktmbuf_free_bulk(reinterpret_cast<rte_mbuf **>(pkts_), cnt_);
     Clear();
   }
 
  private:
-  uint16_t cnt_;
-  Packet *pkts_[kMaxBurst];
+  uint16_t cnt_;             //!< Number of packets in the batch.
+  Packet *pkts_[kMaxBurst];  //!< Underlying packet array.
 };
+
 }  // namespace dpdk
 }  // namespace juggler
 
