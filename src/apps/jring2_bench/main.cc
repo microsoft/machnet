@@ -1,13 +1,11 @@
 
-#include "jring2.h"
-
 #include <bits/stdc++.h>
 #include <pthread.h>
 #include <sched.h>
 #include <time.h>
 #include <unistd.h>
 
-#include "jring.h"
+#include "jring2.h"
 
 static constexpr size_t kProducerCore = 2;
 static constexpr size_t kConsumerCore = 7;
