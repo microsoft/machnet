@@ -60,7 +60,7 @@ struct thread_conf {
 };
 
 void stack_loop(thread_conf *conf) {
-  juggler::utils::BindThreadToCore(conf->cpu_core);
+  juggler::utils::BindThisThreadToCore(conf->cpu_core);
   LOG(INFO) << "Starting the stack thread on core " << sched_getcpu();
   const uint32_t kDummyIp = 0x0100007f;
   const uint16_t kDummyPort = 1234;
@@ -148,7 +148,7 @@ void stack_loop(thread_conf *conf) {
 }
 
 void application_loop(thread_conf *conf) {
-  juggler::utils::BindThreadToCore(conf->cpu_core);
+  juggler::utils::BindThisThreadToCore(conf->cpu_core);
   LOG(INFO) << "Starting the app thread on core " << sched_getcpu();
   std::vector<uint8_t> rx_buffer(conf->tx_message_size);
   std::vector<uint8_t> tx_buffer(conf->tx_message_size);
