@@ -208,31 +208,31 @@ class ArpHandler {
    *
    * @param arph The ARP header.
    */
-  void ProcessArpPacket(dpdk::TxRing *txring, Arp *arph) {
+  void ProcessArpPacket(dpdk::TxRing *txring, const Arp *arph) {
     DCHECK(arph != nullptr);
 
     // We do not need to do any L2 processing; already took place.
     // Sanity checks.
     if (arph->htype.value() != Arp::ArpHwType::kEthernet)  // NOLINT
-      [[unlikely]] {                                       // NOLINT
-        LOG(WARNING) << "Received ARP packet with invalid hardware type: "
-                     << arph->htype.value();
-        return;
-      }
+        [[unlikely]] {                                     // NOLINT
+      LOG(WARNING) << "Received ARP packet with invalid hardware type: "
+                   << arph->htype.value();
+      return;
+    }
 
     if (arph->ptype.value() != Ethernet::EthType::kIpv4)  // NOLINT
-      [[unlikely]] {                                      // NOLINT
-        LOG(WARNING) << "Received a non-ipv4 ARP packet.";
-        return;
-      }
+        [[unlikely]] {                                    // NOLINT
+      LOG(WARNING) << "Received a non-ipv4 ARP packet.";
+      return;
+    }
 
     if (arph->hlen != Arp::ArpHlen::kEthernetLen ||  // NOLINT
         arph->plen != Arp::ArpPlen::kIpv4Len)        // NOLINT
-      [[unlikely]] {                                 // NOLINT
-        LOG(WARNING) << "Received ARP packet with invalid hardware or protocol "
-                     << "address length.";
-        return;
-      }
+        [[unlikely]] {                               // NOLINT
+      LOG(WARNING) << "Received ARP packet with invalid hardware or protocol "
+                   << "address length.";
+      return;
+    }
 
     static const Ipv4::Address zero_addr(0u);
     auto target_ip = arph->ipv4_data.tpa;

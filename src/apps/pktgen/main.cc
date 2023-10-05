@@ -106,6 +106,7 @@ struct task_context {
         rx_ring(CHECK_NOTNULL(rxring)),
         tx_ring(CHECK_NOTNULL(txring)),
         packet_payloads(payloads),
+        arp_handler(local_mac, {local_ip}),
         statistics(),
         rtt_log() {}
   const juggler::net::Ethernet::Address local_mac_addr;
@@ -119,6 +120,7 @@ struct task_context {
   juggler::dpdk::TxRing *tx_ring;
 
   std::vector<std::vector<uint8_t>> packet_payloads;
+  juggler::ArpHandler arp_handler;
 
   stats statistics;
   juggler::utils::TimeLog rtt_log;
@@ -498,10 +500,17 @@ void bounce(void *context) {
   for (uint16_t i = 0; i < batch.GetSize(); i++) {
     auto *packet = batch[i];
     CHECK_LE(sizeof(juggler::net::Ethernet), packet->length());
-    // TODO(ilias): Need to drop packet if it doesn't come from active
-    // generator.
 
     auto *eh = packet->head_data<juggler::net::Ethernet *>();
+
+    // Check if the packet is an ARP request and process it.
+    if (eh->eth_type.value() == juggler::net::Ethernet::kArp) {
+      const auto *arph = packet->head_data<juggler::net::Arp *>(
+          sizeof(juggler::net::Ethernet));
+      ctx->arp_handler.ProcessArpPacket(tx, arph);
+      continue;
+    }
+
     juggler::net::Ethernet::Address tmp;
     juggler::utils::Copy(&tmp, &eh->dst_addr, sizeof(tmp));
     juggler::utils::Copy(&eh->dst_addr, &eh->src_addr, sizeof(eh->dst_addr));
