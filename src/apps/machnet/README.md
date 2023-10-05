@@ -36,6 +36,14 @@ the interface, and the value is a dictionary with the following fields:
 The configuration is shared with other applications (for example,
 [msg_gen](../msg_gen/), [pktgen](../pktgen)).
 
+**Attention:** When running in Microsoft Azure, the recommended DPDK driver for the accelerated NIC is [`hn_netvsc`](https://doc.dpdk.org/guides/nics/netvsc.html). To use `NETVSC PMD` all relevant `VMBUS` devices, need to be bound to the userspace I/O driver (`uio_hv_generic`). To do this once, run the following command:
+```bash
+# Assuming `eth1` is the interface to be used by Machnet:
+DEV_UUID=$(basename $(readlink /sys/class/net/eth1/device))
+driverctl -b vmbus set-override $DEV_UUID uio_hv_generic
+```
+
+
 ### Running
 
 The Machnet stack is run by the `machnet` binary. You could see the available options by running `machnet --help`.
@@ -47,7 +55,7 @@ cd ${REPOROOT}/build/
 sudo GLOG_logtostderr=1 ./src/apps/machnet/machnet
 
 # If ran from a different directory, you may need to specify the path to the config file:
-sudo GLOG_logtostderr=1 machnet --config_file ${REPOROOT}/src/apps/machnet/config.json
+sudo GLOG_logtostderr=1 ./some/path/machnet --config_file ${REPOROOT}/src/apps/machnet/config.json
 ```
 
 You should be able to `ping` Machnet from a remote machine in the same subnet.
