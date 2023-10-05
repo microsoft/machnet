@@ -494,11 +494,12 @@ void bounce(void *context) {
   auto tx = ctx->tx_ring;
   auto *st = &ctx->statistics;
 
-  juggler::dpdk::PacketBatch batch;
-  auto packets_received = rx->RecvPackets(&batch);
+  juggler::dpdk::PacketBatch rx_batch;
+  auto packets_received = rx->RecvPackets(&rx_batch);
   std::array<size_t, juggler::dpdk::PacketBatch::kMaxBurst> tx_bytes;
-  for (uint16_t i = 0; i < batch.GetSize(); i++) {
-    auto *packet = batch[i];
+  juggler::dpdk::PacketBatch tx_batch;
+  for (uint16_t i = 0; i < rx_batch.GetSize(); i++) {
+    auto *packet = rx_batch[i];
     CHECK_LE(sizeof(juggler::net::Ethernet), packet->length());
 
     auto *eh = packet->head_data<juggler::net::Ethernet *>();
@@ -508,6 +509,9 @@ void bounce(void *context) {
       const auto *arph = packet->head_data<juggler::net::Arp *>(
           sizeof(juggler::net::Ethernet));
       ctx->arp_handler.ProcessArpPacket(tx, arph);
+      // We are going to drop this packet, so we need to explicitly reclaim the
+      // mbuf now.
+      juggler::dpdk::Packet::Free(packet);
       continue;
     }
 
@@ -520,12 +524,18 @@ void bounce(void *context) {
     ipv4h->dst_addr.address = ipv4h->src_addr.address;
     ipv4h->src_addr.address = juggler::be32_t(ctx->local_ipv4_addr.address);
 
-    st->rx_bytes += packet->length();
-    tx_bytes[i] = packet->length();
-    if (i != 0) tx_bytes[i] += tx_bytes[i - 1];
-  }
+    // Add the packet to the TX batch.
+    tx_batch.Append(packet);
 
-  auto packets_sent = tx->TrySendPackets(&batch);
+    const auto tx_bytes_index = tx_batch.GetSize() - 1;
+    st->rx_bytes += packet->length();
+    tx_bytes[tx_bytes_index] = packet->length();
+    if (tx_bytes_index != 0)
+      tx_bytes[tx_bytes_index] += tx_bytes[tx_bytes_index - 1];
+  }
+  rx_batch.Clear();
+
+  auto packets_sent = tx->TrySendPackets(&tx_batch);
   st->err_tx_drops += packets_received - packets_sent;
   st->tx_success += packets_sent;
   if (packets_sent) st->tx_bytes += tx_bytes[packets_sent - 1];
