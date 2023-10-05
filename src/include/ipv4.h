@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace juggler {
@@ -25,7 +26,7 @@ struct __attribute__((packed)) Ipv4 {
     static bool IsValid(const std::string &addr);
 
     /// If addr is not a valid IPv4 address, return a zero-valued IP address
-    static Address MakeAddress(const std::string &addr);
+    static std::optional<Address> MakeAddress(const std::string &addr);
 
     Address &operator=(const Address &rhs) {
       address = rhs.address;

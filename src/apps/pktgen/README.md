@@ -25,23 +25,23 @@ uses a single thread for both sending and receiving packets.
 
 When running in this mode the application is actively generating packets. It also receives packets and prints the achieved PPS rate.
 
-From `${REPOROOT}/build/src/apps/pktgen`:
 
 ```bash
 # Send packets to a remote host.
-cd ${REPOROOT}/build/
 REMOTE_IP="10.0.0.254"
+cd ${REPOROOT}/build/
 sudo GLOG_logtostderr=1 ./src/apps/pktgen/pktgen --remote_ip $REMOTE_IP --active-generator
 
 # If ran from a different directory, you may need to specify the path to the config file:
-sudo GLOG_logtostderr=1 ./some/path/pktgen --config_file ${REPOROOT}/src/apps/machnet/config.json --remote_ip $REMOTE_IP --active-generator
+sudo GLOG_logtostderr=1 ./pktgen --config_file ${REPOROOT}/src/apps/machnet/config.json --remote_ip $REMOTE_IP --active-generator
 
 ```
 
 The above command will run the `pktgen` application to a remote machine with IP `10.0.0.254` in the same subnet. The default packet size is 64 bytes; to adjust this append the `--pkt_size` option. For example, to send 1500-byte (max size) packets:
 
 ```bash
-sudo GLOG_logtostderr=1 ./pktgen --remote_ip $REMOTE_IP --active-generator --pkt_size 1500
+# From ${REPOROOT}/build/
+sudo GLOG_logtostderr=1 ./src/apps/pktgen/pktgen --remote_ip $REMOTE_IP --active-generator --pkt_size 1500
 ```
 
 ### Running in ping mode (RTT measurement)
@@ -50,10 +50,10 @@ When running in this mode the application is actively sending packets to the rem
 
 The `pktgen` is collecting roundtrip time measurements. When stopping the appplication (with Ctrl+C), it will print RTT statistics.
 
-From `${REPOROOT}/build/src/apps/pktgen`:
 ```bash
 REMOTE_IP="10.0.0.254"
-sudo GLOG_logtostderr=1 ./pktgen --remote_ip $REMOTE_IP --ping
+# From ${REPOROOT}/build/
+sudo GLOG_logtostderr=1 ./src/apps/pktgen/pktgen --remote_ip $REMOTE_IP --ping
 ```
 
 If you want RTT measurements printed every 1 second, add option `--v=1` to the previous invocation.
@@ -70,7 +70,8 @@ From `${REPOROOT}/build/src/apps/pktgen`:
 
 ```bash
 REMOTE_IP="10.0.0.254"
-sudo GLOG_logtostderr=1 ./pktgen --remote_ip $REMOTE_IP
+# From ${REPOROOT}/build/
+sudo GLOG_logtostderr=1 ./src/apps/pktgen/pktgen
 ```
 
-The above command will run the `pktgen` application on local machine. It will send all received packets to the remote server specified.
+The above command will run the `pktgen` application in **passive** mode on local machine. It will send all received packets to the originating remote server.

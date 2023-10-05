@@ -79,10 +79,11 @@ struct task_context {
    * `juggler::net::Ethernet::Address` format.
    * @param local_ip Local IP address to be used by the applicaton in
    * `juggler::net::Ipv4::Address` format.
-   * @param remote_mac Remote host's MAC address in
-   * `juggler::net::Ethernet::Address` format.
-   * @param remote_ip Remote host's IP address to be used by the applicaton in
-   * `juggler::net::Ipv4::Address` format.
+   * @param remote_mac (std::optional) Remote host's MAC address in
+   * `juggler::net::Ethernet::Address` format. `std::nullopt` in passive mode.
+   * @param remote_ip (std::optional) Remote host's IP address to be used by the
+   * applicaton in `juggler::net::Ipv4::Address` format. `std::nullopt` in
+   * passive mode.
    * @param packet_size Size of the packets to be generated.
    * @param pp  Opaque pointer to the PacketPool that should be used for
    * allocating packets in TX routines. server.
@@ -91,10 +92,10 @@ struct task_context {
    */
   task_context(juggler::net::Ethernet::Address local_mac,
                juggler::net::Ipv4::Address local_ip,
-               juggler::net::Ethernet::Address remote_mac,
-               juggler::net::Ipv4::Address remote_ip, uint16_t packet_size,
-               juggler::dpdk::PacketPool *pp, juggler::dpdk::RxRing *rxring,
-               juggler::dpdk::TxRing *txring,
+               std::optional<juggler::net::Ethernet::Address> remote_mac,
+               std::optional<juggler::net::Ipv4::Address> remote_ip,
+               uint16_t packet_size, juggler::dpdk::PacketPool *pp,
+               juggler::dpdk::RxRing *rxring, juggler::dpdk::TxRing *txring,
                std::vector<std::vector<uint8_t>> payloads)
       : local_mac_addr(local_mac),
         local_ipv4_addr(local_ip),
@@ -109,8 +110,8 @@ struct task_context {
         rtt_log() {}
   const juggler::net::Ethernet::Address local_mac_addr;
   const juggler::net::Ipv4::Address local_ipv4_addr;
-  const juggler::net::Ethernet::Address remote_mac_addr;
-  const juggler::net::Ipv4::Address remote_ipv4_addr;
+  const std::optional<juggler::net::Ethernet::Address> remote_mac_addr;
+  const std::optional<juggler::net::Ipv4::Address> remote_ipv4_addr;
   const uint16_t packet_size;
 
   juggler::dpdk::PacketPool *packet_pool;
@@ -209,7 +210,7 @@ void prepare_packet(void *context, juggler::dpdk::Packet *packet,
   // Prepare the L2 header.
   auto *eh = packet->head_data<juggler::net::Ethernet *>();
   eh->src_addr = ctx->local_mac_addr;
-  eh->dst_addr = ctx->remote_mac_addr;
+  eh->dst_addr = ctx->remote_mac_addr.value();
   eh->eth_type = juggler::be16_t(RTE_ETHER_TYPE_IPV4);
 
   // Prepare the L3 header.
@@ -222,7 +223,8 @@ void prepare_packet(void *context, juggler::dpdk::Packet *packet,
   ipv4h->next_proto_id = juggler::net::Ipv4::Proto::kUdp;
   ipv4h->total_length = juggler::be16_t(len - sizeof(*eh));
   ipv4h->src_addr.address = juggler::be32_t(ctx->local_ipv4_addr.address);
-  ipv4h->dst_addr.address = juggler::be32_t(ctx->remote_ipv4_addr.address);
+  ipv4h->dst_addr.address =
+      juggler::be32_t(ctx->remote_ipv4_addr.value().address);
   ipv4h->hdr_checksum = 0;
 
   // Prepare the L4 header.
@@ -302,7 +304,8 @@ void ping(uint64_t now, void *context) {
 
     auto *eh = packet->head_data<juggler::net::Ethernet *>();
     auto *ipv4h = reinterpret_cast<juggler::net::Ipv4 *>(eh + 1);
-    if (ipv4h->src_addr.address != ctx->remote_ipv4_addr.address) continue;
+    if (ipv4h->src_addr.address != ctx->remote_ipv4_addr.value().address)
+      continue;
 
     // This is a valid `ping` response.
     auto *udph = reinterpret_cast<juggler::net::Udp *>(ipv4h + 1);
@@ -505,8 +508,8 @@ void bounce(void *context) {
     juggler::utils::Copy(&eh->src_addr, &tmp, sizeof(eh->src_addr));
 
     auto *ipv4h = packet->head_data<juggler::net::Ipv4 *>(sizeof(*eh));
+    ipv4h->dst_addr.address = ipv4h->src_addr.address;
     ipv4h->src_addr.address = juggler::be32_t(ctx->local_ipv4_addr.address);
-    ipv4h->dst_addr.address = juggler::be32_t(ctx->remote_ipv4_addr.address);
 
     st->rx_bytes += packet->length();
     tx_bytes[i] = packet->length();
@@ -528,8 +531,19 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, int_handler);
 
   // Parse the remote IP address.
-  juggler::net::Ipv4::Address remote_ip;
-  CHECK(remote_ip.FromString(FLAGS_remote_ip));
+  std::optional<juggler::net::Ipv4::Address> remote_ip;
+  if (!FLAGS_active_generator) {
+    // In passive mode, we don't need the remote IP address.
+    remote_ip = std::nullopt;
+  } else {
+    if (FLAGS_remote_ip.empty()) {
+      LOG(ERROR) << "Remote IP address is required in active mode.";
+      exit(1);
+    }
+    remote_ip = juggler::net::Ipv4::Address::MakeAddress(FLAGS_remote_ip);
+    CHECK(remote_ip.has_value())
+        << "Invalid remote IP address: " << FLAGS_remote_ip;
+  }
 
   // Load the configuration file.
   juggler::MachnetConfigProcessor machnet_config(FLAGS_config_json);
@@ -559,12 +573,16 @@ int main(int argc, char *argv[]) {
   auto *txring = pmd_obj.GetRing<juggler::dpdk::TxRing>(0);
   CHECK_NOTNULL(txring);
 
-  // Resolve the remote host's MAC address.
-  auto remote_l2_addr = ArpResolveBusyWait(
-      interface.l2_addr(), interface.ip_addr(), txring, rxring, remote_ip, 5);
-  if (!remote_l2_addr.has_value()) {
-    LOG(ERROR) << "Failed to resolve remote host's MAC address.";
-    exit(1);
+  // Resolve the remote host's MAC address if we are in active mode.
+  std::optional<juggler::net::Ethernet::Address> remote_l2_addr = std::nullopt;
+  if (FLAGS_active_generator) {
+    remote_l2_addr =
+        ArpResolveBusyWait(interface.l2_addr(), interface.ip_addr(), txring,
+                           rxring, remote_ip.value(), 5);
+    if (!remote_l2_addr.has_value()) {
+      LOG(ERROR) << "Failed to resolve remote host's MAC address.";
+      exit(1);
+    }
   }
 
   const uint16_t packet_len =
@@ -591,10 +609,9 @@ int main(int argc, char *argv[]) {
   // auto tx_packet_pool = std::make_unique<juggler::dpdk::PacketPool>(4096);
   // We share the packet pool attached to the RX ring. Since we plan to handle a
   // queue pair from a single core this is safe.
-  task_context task_ctx(interface.l2_addr(), interface.ip_addr(),
-                        remote_l2_addr.value(), remote_ip, packet_len,
-                        rxring->GetPacketPool(), rxring, txring,
-                        packet_payloads);
+  task_context task_ctx(
+      interface.l2_addr(), interface.ip_addr(), remote_l2_addr, remote_ip,
+      packet_len, rxring->GetPacketPool(), rxring, txring, packet_payloads);
 
   auto packet_generator = [](uint64_t now, void *context) {
     tx(context);
