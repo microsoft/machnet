@@ -1,7 +1,5 @@
 include_directories(../modules)
 
-add_subdirectory(echo)
-add_subdirectory(l2fwd)
 add_subdirectory(pktgen)
 add_subdirectory(machnet)
 add_subdirectory(msg_gen)
