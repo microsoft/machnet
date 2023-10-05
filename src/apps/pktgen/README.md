@@ -20,7 +20,7 @@ The `pktgen` application shares the same configuration file as the Machnet stack
 The `pktgen` application ignores the `engine_threads` directive in the configuration. Instead, it
 uses a single thread for both sending and receiving packets.
 
-
+**Attention:** When running in Microsoft Azure, the recommended DPDK driver for the accelerated NIC is [`hn_netvsc`](https://doc.dpdk.org/guides/nics/netvsc.html). Check [here](../machnet/README.md#configuration) for instructions on how to bind the NIC to the `uio_hv_generic` driver.
 ### Running in active mode (packet generator)
 
 When running in this mode the application is actively generating packets. It also receives packets and prints the achieved PPS rate.
