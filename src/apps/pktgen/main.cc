@@ -2,11 +2,13 @@
  * @file main.cc
  * @brief Simple pkt generator application using core library.
  */
+#include <arp.h>
 #include <dpdk.h>
 #include <ether.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <ipv4.h>
+#include <machnet_config.h>
 #include <math.h>
 #include <packet.h>
 #include <pmd.h>
@@ -19,7 +21,6 @@
 #include <optional>
 #include <vector>
 
-#include "config_json_reader.h"
 #include "ttime.h"
 
 // The packets we send carry an ethernet, IPv4 and UDP header.
@@ -34,10 +35,9 @@ constexpr uint16_t kMinPacketLength =
 DEFINE_uint32(pkt_size, kMinPacketLength, "Packet size.");
 DEFINE_uint64(tx_batch_size, 32, "DPDK TX packet batch size");
 DEFINE_string(
-    config_json, "../../../../servers.json",
-    "JSON file with Juggler-related params for different hosts and binaries");
-DEFINE_string(local_hostname, "", "Local hostname in the hosts JSON file.");
-DEFINE_string(remote_hostname, "", "Remote hostname in the hosts JSON file.");
+    config_json, "../src/apps/machnet/config.json",
+    "Machnet JSON configuration file (shared with the pktgen application).");
+DEFINE_string(remote_ip, "", "IPv4 address of the remote server.");
 DEFINE_bool(ping, false, "Ping-pong remote host for RTT measurements.");
 DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
@@ -123,6 +123,82 @@ struct task_context {
   juggler::utils::TimeLog rtt_log;
 };
 
+/**
+ * @brief Resolves the MAC address of a remote IP using ARP, with busy-waiting.
+ *
+ * This function sends an ARP request to resolve the MAC address of a given
+ * remote IP address and waits for a response for the provided timeout duration.
+ * If the MAC address is successfully resolved within the timeout, it is
+ * returned; otherwise, a nullopt is returned.
+ *
+ * @param local_mac Local Ethernet MAC address.
+ * @param local_ip Local IPv4 address.
+ * @param tx_ring Pointer to the DPDK transmit ring.
+ * @param rx_ring Pointer to the DPDK receive ring.
+ * @param remote_ip Remote IPv4 address whose MAC address needs to be resolved.
+ * @param timeout_in_sec Maximum time in seconds to wait for the ARP response.
+ *
+ * @return MAC address of the remote IP if successfully resolved, otherwise
+ * returns nullopt.
+ */
+std::optional<juggler::net::Ethernet::Address> ArpResolveBusyWait(
+    const juggler::net::Ethernet::Address &local_mac,
+    const juggler::net::Ipv4::Address &local_ip, juggler::dpdk::TxRing *tx_ring,
+    juggler::dpdk::RxRing *rx_ring,
+    const juggler::net::Ipv4::Address &remote_ip, int timeout_in_sec) {
+  juggler::ArpHandler arp_handler(local_mac, {local_ip});
+
+  arp_handler.GetL2Addr(tx_ring, local_ip, remote_ip);
+  auto start = std::chrono::steady_clock::now();
+  while (true) {
+    auto now = std::chrono::steady_clock::now();
+    if (now - start > std::chrono::seconds(timeout_in_sec)) {
+      LOG(ERROR) << "ARP resolution timed out.";
+      return std::nullopt;
+    }
+
+    juggler::dpdk::PacketBatch batch;
+    auto nr_rx = rx_ring->RecvPackets(&batch);
+    for (uint16_t i = 0; i < nr_rx; i++) {
+      const auto *packet = batch[i];
+      if (packet->length() <
+          sizeof(juggler::net::Ethernet) + sizeof(juggler::net::Arp)) {
+        continue;
+      }
+      auto *eh = packet->head_data<juggler::net::Ethernet *>();
+      if (eh->eth_type.value() != juggler::net::Ethernet::kArp) {
+        continue;
+      }
+
+      auto *arph = packet->head_data<juggler::net::Arp *>(
+          sizeof(juggler::net::Ethernet));
+      arp_handler.ProcessArpPacket(tx_ring, arph);
+      auto remote_mac = arp_handler.GetL2Addr(tx_ring, local_ip, remote_ip);
+      if (remote_mac.has_value()) {
+        return remote_mac;
+      }
+    }
+  }
+}
+
+/**
+ * @brief Prepares a packet with L2, L3, and L4 headers and sets the provided
+ * sequence number and timestamp.
+ *
+ * This function populates the Ethernet, IPv4, and UDP headers of the provided
+ * packet. It then sets the sequence number and timestamp provided as arguments.
+ * Optionally, it also sets the payload for the packet.
+ *
+ * @param context A pointer to the context containing the necessary packet
+ * information.
+ * @param packet A pointer to the packet to be prepared.
+ * @param seqno The sequence number to set in the packet.
+ * @param timestamp The timestamp to set in the packet.
+ *
+ * @note This function assumes the packet is large enough to contain all the
+ * headers, the sequence number, the timestamp, and the optional payload;
+ * otherwise, it will result in abort execution.
+ */
 void prepare_packet(void *context, juggler::dpdk::Packet *packet,
                     uint64_t seqno, uint64_t timestamp) {
   auto *ctx = static_cast<task_context *>(context);
@@ -450,27 +526,32 @@ int main(int argc, char *argv[]) {
   gflags::SetUsageMessage("Simple packet generator.");
 
   signal(SIGINT, int_handler);
-  JugglerConfigJsonReader config_json(FLAGS_config_json);
 
-  auto d = juggler::dpdk::Dpdk();
+  // Parse the remote IP address.
+  juggler::net::Ipv4::Address remote_ip;
+  CHECK(remote_ip.FromString(FLAGS_remote_ip));
 
-  // Construct `CmdLineOpts` from user-provided EAL arguments, if any.
-  auto eal_opts = juggler::utils::CmdLineOpts(
-      config_json.GetEalArgsForHost(FLAGS_local_hostname));
-
-  if (eal_opts.IsEmpty()) {
-    LOG(WARNING) << "Using default EAL options.";
-    eal_opts = juggler::dpdk::kDefaultEalOpts;
+  // Load the configuration file.
+  juggler::MachnetConfigProcessor machnet_config(FLAGS_config_json);
+  if (machnet_config.interfaces_config().size() != 1) {
+    // For machnet config, we expect only one interface to be configured.
+    LOG(ERROR) << "Only one interface should be configured.";
+    exit(1);
   }
 
-  // A PCIe-allow address is required.
-  eal_opts.Append(
-      {"-a", config_json.GetPcieAllowlistForHost(FLAGS_local_hostname)});
+  const auto &interface = *machnet_config.interfaces_config().begin();
 
-  d.InitDpdk(eal_opts);
+  juggler::dpdk::Dpdk dpdk_obj;
+  dpdk_obj.InitDpdk(machnet_config.GetEalOpts());
 
-  juggler::dpdk::PmdPort pmd_obj(
-      config_json.GetPmdPortIdForHost(FLAGS_local_hostname));
+  const auto pmd_port_id = dpdk_obj.GetPmdPortIdByMac(interface.l2_addr());
+  if (!pmd_port_id.has_value()) {
+    LOG(ERROR) << "Failed to find DPDK port ID for MAC address: "
+               << interface.l2_addr().ToString();
+    exit(1);
+  }
+
+  juggler::dpdk::PmdPort pmd_obj(pmd_port_id.value());
   pmd_obj.InitDriver();
 
   auto *rxring = pmd_obj.GetRing<juggler::dpdk::RxRing>(0);
@@ -478,14 +559,14 @@ int main(int argc, char *argv[]) {
   auto *txring = pmd_obj.GetRing<juggler::dpdk::TxRing>(0);
   CHECK_NOTNULL(txring);
 
-  const auto local_mac = juggler::net::Ethernet::Address(
-      config_json.GetMACAddressForHost(FLAGS_local_hostname));
-  const auto local_ip = juggler::net::Ipv4::Address::MakeAddress(
-      config_json.GetIPv4AddressForHost(FLAGS_local_hostname));
-  const auto remote_mac = juggler::net::Ethernet::Address(
-      config_json.GetMACAddressForHost(FLAGS_remote_hostname));
-  const auto remote_ip = juggler::net::Ipv4::Address::MakeAddress(
-      config_json.GetIPv4AddressForHost(FLAGS_remote_hostname));
+  // Resolve the remote host's MAC address.
+  auto remote_l2_addr = ArpResolveBusyWait(
+      interface.l2_addr(), interface.ip_addr(), txring, rxring, remote_ip, 5);
+  if (!remote_l2_addr.has_value()) {
+    LOG(ERROR) << "Failed to resolve remote host's MAC address.";
+    exit(1);
+  }
+
   const uint16_t packet_len =
       std::max(std::min(static_cast<uint16_t>(FLAGS_pkt_size),
                         juggler::dpdk::PmdRing::kDefaultFrameSize),
@@ -510,7 +591,8 @@ int main(int argc, char *argv[]) {
   // auto tx_packet_pool = std::make_unique<juggler::dpdk::PacketPool>(4096);
   // We share the packet pool attached to the RX ring. Since we plan to handle a
   // queue pair from a single core this is safe.
-  task_context task_ctx(local_mac, local_ip, remote_mac, remote_ip, packet_len,
+  task_context task_ctx(interface.l2_addr(), interface.ip_addr(),
+                        remote_l2_addr.value(), remote_ip, packet_len,
                         rxring->GetPacketPool(), rxring, txring,
                         packet_payloads);
 
@@ -541,8 +623,7 @@ int main(int argc, char *argv[]) {
   else
     LOG(INFO) << "Starting in passive message bouncing mode.";
 
-  std::vector<uint8_t> cpu_cores = {4};
-  juggler::WorkerPool<juggler::Task> WPool({task}, {cpu_cores});
+  juggler::WorkerPool<juggler::Task> WPool({task}, {interface.cpu_mask()});
   WPool.Init();
 
   // Set worker to running.

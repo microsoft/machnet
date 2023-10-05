@@ -47,7 +47,7 @@ cd ${REPOROOT}/build/
 sudo GLOG_logtostderr=1 ./src/apps/machnet/machnet
 
 # If ran from a different directory, you may need to specify the path to the config file:
-sudo GLOG_logtostderr=1 ./src/apps/machnet/machnet --config_file ${REPOROOT}/src/apps/machnet/config.json
+sudo GLOG_logtostderr=1 machnet --config_file ${REPOROOT}/src/apps/machnet/config.json
 ```
 
 You should be able to `ping` Machnet from a remote machine in the same subnet.
