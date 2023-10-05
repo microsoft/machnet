@@ -63,6 +63,6 @@ include_directories(ext)
 add_subdirectory(core)
 add_subdirectory(ext)
 add_subdirectory(apps)
-
+add_subdirectory(benchmark)
 enable_testing()
 add_subdirectory (tests)
