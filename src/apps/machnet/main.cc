@@ -6,7 +6,7 @@
 #include <glog/logging.h>
 #include <machnet_controller.h>
 
-DEFINE_string(config_json, "../../../config.json",
+DEFINE_string(config_json, "../src/apps/machnet/config.json",
               "JSON file with Machnet-related parameters.");
 
 int main(int argc, char *argv[]) {

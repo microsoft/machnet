@@ -1,4 +1,4 @@
-# Network-Stack-as-a-Service (Machnet)
+# Machnet: A high-performance network stack as a sidecar
 
 This README is a work in progress.
 
@@ -13,20 +13,45 @@ Successful build of the `Machnet` project (see main [README](../../../README.md)
 
 ### Configuration
 
-As this is still work in progress, a significant part of the network configuration is done by editing the [config.json](./config.json) file (shared with [msg_gen](../msg_gen) applications). In particular, a new entry needed for each server that runs Machnet (follow existing examples).
+Machnet controller loads the configuration from a `JSON` file. The configuration
+is straightforward. Each entry in the `machnet_config` dictionary corresponds to
+a network interface that is managed by Machnet. The key is the MAC address of
+the interface, and the value is a dictionary with the following fields:
+   * `ip`: the IP address of the interface.
+   * `engine_threads`: The number of threads (and NIC HW queues) to use for this interface.
+   * `cpu_mask`: The CPU mask to use to affine all engine threads. If not specified, the default is to use all available cores.
 
+**Example [config.json](config.json):**
+```json
+{
+  "machnet_config": {
+    "60:45:bd:0f:d7:6e": {
+      "ip": "10.0.255.10",
+      "engine_threads": 1
+    }
+  }
+}
+```
+
+The configuration is shared with other applications (for example,
+[msg_gen](../msg_gen/), [pktgen](../pktgen)).
 
 ### Running
 
 The Machnet stack is run by the `machnet` binary. You could see the available options by running `machnet --help`.
 
-The folowing command will run the Machnet stack on machine `poseidon`. The stack doesn't initialize any channels or listeners by default. Using the `machnet_shim` library API  an application will communicate with the controller and create the required channels and listeners on demand.
+The folowing command will run the Machnet stack. The stack doesn't initialize any channels or listeners by default. Those are created and destroyed on demand by the applications that use Machnet. The `machnet` binary will run in the foreground, and will print logs to `stderr` if the `GLOG_logtostderr` option is set.
 
 ```bash
 cd ${REPOROOT}/build/
-sudo GLOG_logtostderr=1 ./src/apps/machnet/machnet --local_hostname poseidon
+sudo GLOG_logtostderr=1 ./src/apps/machnet/machnet
+
+# If ran from a different directory, you may need to specify the path to the config file:
+sudo GLOG_logtostderr=1 ./src/apps/machnet/machnet --config_file ${REPOROOT}/src/apps/machnet/config.json
 ```
 
-To redirect log output to `/tmp`, omit the `GLOG_logtostderr` option.
+You should be able to `ping` Machnet from a remote machine in the same subnet.
 
-The applications that use Machnet would need to communicate over the relevant shared memory channel. You can find an example of such an application in [msg_gen](../msg_gen/).
+To redirect log output to a file in `/tmp`, omit the `GLOG_logtostderr` option.
+
+You can find an example of an application that uses the Machnet stack in [msg_gen](../msg_gen/).
