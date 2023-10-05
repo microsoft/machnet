@@ -634,11 +634,11 @@ int main(int argc, char *argv[]) {
       std::make_shared<juggler::Task>(routine, static_cast<void *>(&task_ctx));
 
   if (FLAGS_ping)
-    std::cout << "Starting in ping mode; press Ctrl-C to stop.";
+    std::cout << "Starting in ping mode; press Ctrl-C to stop." << std::endl;
   else if (FLAGS_active_generator)
-    std::cout << "Starting in active message generator mode.";
+    std::cout << "Starting in active message generator mode." << std::endl;
   else
-    std::cout << "Starting in passive message bouncing mode.";
+    std::cout << "Starting in passive message bouncing mode." << std::endl;
 
   juggler::WorkerPool<juggler::Task> WPool({task}, {interface.cpu_mask()});
   WPool.Init();
