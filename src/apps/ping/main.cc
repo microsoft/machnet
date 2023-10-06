@@ -298,7 +298,6 @@ void icmp_rx(void *context) {
   auto packets_received = rx->RecvPackets(&batch);
   for (uint16_t i = 0; i < packets_received; i++) {
     auto *packet = batch[i];
-    if (packet->length() < kMinPacketLength) continue;
 
     // Get the Ethernet header.
     auto *eh = packet->head_data<juggler::net::Ethernet *>();
@@ -346,14 +345,13 @@ void icmp_rx(void *context) {
     if (icmph->seq.value() != expected_icmp_seq) {
       LOG(WARNING) << "ICMP sequence number mismatch. Expected: "
                    << expected_icmp_seq << ", got: " << icmph->seq.value();
+      // Update the expected ICMP sequence number.
+      if (icmph->seq.value() > expected_icmp_seq) {
+        expected_icmp_seq = icmph->seq.value();
+      }
       continue;
     } else {
       expected_icmp_seq++;
-    }
-
-    // Update the expected ICMP sequence number.
-    if (icmph->seq.value() > expected_icmp_seq) {
-      expected_icmp_seq = icmph->seq.value();
     }
 
     st->rx_bytes += packet->length();
