@@ -397,9 +397,11 @@ std::optional<juggler::net::Ethernet::Address> ArpResolveBusyWait(
       arp_handler.ProcessArpPacket(tx_ring, arph);
       auto remote_mac = arp_handler.GetL2Addr(tx_ring, local_ip, remote_ip);
       if (remote_mac.has_value()) {
+        batch.Release();
         return remote_mac;
       }
     }
+    batch.Release();
   }
 }
 

@@ -85,8 +85,6 @@ struct task_context {
    * applicaton in `juggler::net::Ipv4::Address` format. `std::nullopt` in
    * passive mode.
    * @param packet_size Size of the packets to be generated.
-   * @param pp  Opaque pointer to the PacketPool that should be used for
-   * allocating packets in TX routines. server.
    * @param rxring Pointer to the RX ring previously initialized.
    * @param txring Pointer to the TX ring previously initialized.
    */
@@ -94,15 +92,14 @@ struct task_context {
                juggler::net::Ipv4::Address local_ip,
                std::optional<juggler::net::Ethernet::Address> remote_mac,
                std::optional<juggler::net::Ipv4::Address> remote_ip,
-               uint16_t packet_size, juggler::dpdk::PacketPool *pp,
-               juggler::dpdk::RxRing *rxring, juggler::dpdk::TxRing *txring,
+               uint16_t packet_size, juggler::dpdk::RxRing *rxring,
+               juggler::dpdk::TxRing *txring,
                std::vector<std::vector<uint8_t>> payloads)
       : local_mac_addr(local_mac),
         local_ipv4_addr(local_ip),
         remote_mac_addr(remote_mac),
         remote_ipv4_addr(remote_ip),
         packet_size(packet_size),
-        packet_pool(CHECK_NOTNULL(pp)),
         rx_ring(CHECK_NOTNULL(rxring)),
         tx_ring(CHECK_NOTNULL(txring)),
         packet_payloads(payloads),
@@ -178,9 +175,11 @@ std::optional<juggler::net::Ethernet::Address> ArpResolveBusyWait(
       arp_handler.ProcessArpPacket(tx_ring, arph);
       auto remote_mac = arp_handler.GetL2Addr(tx_ring, local_ip, remote_ip);
       if (remote_mac.has_value()) {
+        batch.Release();
         return remote_mac;
       }
     }
+    batch.Release();
   }
 }
 
@@ -274,12 +273,11 @@ void ping(uint64_t now, void *context) {
   auto *ctx = static_cast<task_context *>(context);
   auto *tx = ctx->tx_ring;
   auto *rx = ctx->rx_ring;
-  auto *pp = ctx->packet_pool;
   auto *st = &ctx->statistics;
 
   if (now - last_ping_time >= juggler::time::ms_to_cycles(1)) {
     // Allocate a packet from the packet pool.
-    auto *packet = pp->PacketAlloc();
+    auto *packet = tx->GetPacketPool()->PacketAlloc();
     if (packet == nullptr) {
       st->err_no_mbufs++;
       return;
@@ -445,7 +443,7 @@ void report_final_stats(void *context) {
 void tx(void *context) {
   auto *ctx = static_cast<task_context *>(context);
   auto *tx = ctx->tx_ring;
-  auto *pp = ctx->packet_pool;
+  auto *pp = tx->GetPacketPool();
   auto *st = &ctx->statistics;
 
   thread_local uint64_t seqno;
@@ -493,6 +491,11 @@ void bounce(void *context) {
   auto rx = ctx->rx_ring;
   auto tx = ctx->tx_ring;
   auto *st = &ctx->statistics;
+
+  // NOTE: In bouncing mode we use only one packet pool for both RX and TX. In
+  // particular, we use the pool that is associated with the RX ring. We only
+  // need to touch the ethernet and IP headers. Since we don't use packets from
+  // both pools this approach is also safe with `FAST_FREE' enabled.
 
   juggler::dpdk::PacketBatch rx_batch;
   auto packets_received = rx->RecvPackets(&rx_batch);
@@ -628,9 +631,9 @@ int main(int argc, char *argv[]) {
   // auto tx_packet_pool = std::make_unique<juggler::dpdk::PacketPool>(4096);
   // We share the packet pool attached to the RX ring. Since we plan to handle a
   // queue pair from a single core this is safe.
-  task_context task_ctx(
-      interface.l2_addr(), interface.ip_addr(), remote_l2_addr, remote_ip,
-      packet_len, rxring->GetPacketPool(), rxring, txring, packet_payloads);
+  task_context task_ctx(interface.l2_addr(), interface.ip_addr(),
+                        remote_l2_addr, remote_ip, packet_len, rxring, txring,
+                        packet_payloads);
 
   auto packet_generator = [](uint64_t now, void *context) {
     tx(context);
