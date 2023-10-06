@@ -1,51 +1,35 @@
-name: Build and Register Machnet Container
+name: Build and Register Machnet as Latest
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-    tags:
-      - '*'
 
 jobs:
-  build-and-push:
+  build_and_push_machnet:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/${{ github.repository }}/machnet_build_base:latest
-      credentials:
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    strategy:
-      fail-fast: false
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
         with:
-          submodules: recursive
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build machnet
-        run: |
-          mkdir -p ${GITHUB_WORKSPACE}/build
-          cd ${GITHUB_WORKSPACE}/build
-          RTE_SDK=/root/dpdk cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
-          ninja
-
-      - name: Set Docker tag
-        id: prepare
-        run: |
-          DOCKER_TAG=latest
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            DOCKER_TAG=${GITHUB_REF#refs/tags/}
-          fi
-          echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_OUTPUT
-
-      - name: Build and push container
+      - name: Build and push Machnet Docker image
         uses: docker/build-push-action@v2
-        env:
-          DOCKER_TAG: ${{ steps.prepare.outputs.DOCKER_TAG}}
         with:
           context: .
           push: true
-          target: machnet
-          tags: ghcr.io/${{ github.repository }}/machnet:${{ steps.prepare.outputs.docker_tag }}
+          tags: ghcr.io/${{ github.repository }}/machnet:latest
+          file: ./Dockerfile
+          cache-from: type=gha,ref=ghcr.io/${{ github.repository }}/machnet_build_base:latest
+          cache-to: type=gha,mode=max
