@@ -542,9 +542,6 @@ class MachnetEngine {
       status.set_value(true);
     }
 
-    // TODO(ilias): Destroying channels is a more elaborate process. It requires
-    // destroying all the flows attached to this engine before.
-
     // Remove channels pending for removal.
     for (auto &channel : channels_to_dequeue_) {
       const auto &it =
@@ -811,7 +808,8 @@ class MachnetEngine {
    */
   void process_rx_pkt(const juggler::dpdk::Packet *pkt, uint64_t now) {
     // Sanity ethernet header check.
-    if (pkt->length() < sizeof(Ethernet)) [[unlikely]] return;
+    if (pkt->length() < sizeof(Ethernet)) [[unlikely]]
+      return;
 
     auto *eh = pkt->head_data<Ethernet *>();
     switch (eh->eth_type.value()) {
@@ -838,9 +836,8 @@ class MachnetEngine {
 
   void process_rx_ipv4(const juggler::dpdk::Packet *pkt, uint64_t now) {
     // Sanity ipv4 header check.
-    if (pkt->length() < sizeof(Ethernet) + sizeof(Ipv4)) [[unlikely]] return;
-
-    // TODO(ilias): We should do RX csum check, unless it can be offloaded.
+    if (pkt->length() < sizeof(Ethernet) + sizeof(Ipv4)) [[unlikely]]
+      return;
 
     const auto *eh = pkt->head_data<Ethernet *>();
     const auto *ipv4h = pkt->head_data<Ipv4 *>(sizeof(Ethernet));
@@ -851,12 +848,12 @@ class MachnetEngine {
     // Check ivp4 header length.
     // clang-format off
     if (pkt->length() != sizeof(Ethernet) + ipv4h->total_length.value()) [[unlikely]] { // NOLINT
-        // clang-format on
-        LOG(WARNING) << "IPv4 packet length mismatch (expected: "
-                     << ipv4h->total_length.value()
-                     << ", actual: " << pkt->length() << ")";
-        return;
-      }
+      // clang-format on
+      LOG(WARNING) << "IPv4 packet length mismatch (expected: "
+                   << ipv4h->total_length.value()
+                   << ", actual: " << pkt->length() << ")";
+      return;
+    }
 
     switch (ipv4h->next_proto_id) {
       // clang-format off
