@@ -57,6 +57,9 @@ WORKDIR /root/machnet
 # Copy Machnet files
 COPY . .
 
+# Submodule update
+RUN git submodule update --init --recursive
+
 # Build Machnet
 RUN ldconfig && \
     mkdir build && \
