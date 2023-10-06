@@ -71,7 +71,7 @@ cd machnet
 curl -s -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=2021-02-01" | jq '.network.interface[1]'
 ```
 
-## 4. Run the hello_world JavaScript or C# example:
+## 4. Run the hello world example
 
 At this point, the Machnet container/process is running on both VMs. We can now
 test things end-to-end with a client-server application.
