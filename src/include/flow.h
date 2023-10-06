@@ -519,6 +519,11 @@ class Flow {
           SendSynAck(pcb_.snd_una);
         }
         break;
+
+      case MachnetPktHdr::MachnetFlags::kRtry:
+        LOG(WARNING) << "another src port!";
+        return;
+        break;
       case MachnetPktHdr::MachnetFlags::kSynAck:
         // SYN-ACK packet received. For this to be valid it has to be an already
         // established flow with this SYN-ACK being a retransmission.

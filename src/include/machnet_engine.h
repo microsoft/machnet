@@ -241,6 +241,22 @@ class MachnetEngineSharedState {
     return true;
   }
 
+   int GetQueueId(const net::Ipv4::Address &ipv4_addr,
+                        const net::Udp::Port &port) {
+    auto it = listeners_to_rxq.find({ipv4_addr, port});
+    if (it == listeners_to_rxq.end()) {
+      return -1;
+    }
+
+    int res = it->second;
+    LOG(WARNING) << "found the value ########### " << res;
+
+    return res;
+  }
+
+
+
+
   /**
    * @brief Unregisters a listener on a specific IPv4 address and UDP port,
    * releasing the associated port.
@@ -877,23 +893,76 @@ class MachnetEngine {
         if (listeners_.find(local_ipv4_addr) != listeners_.end()) {
           // We have a listener on this port.
           const auto &listeners_on_ip = listeners_[local_ipv4_addr];
+          auto qid = shared_state_->GetQueueId(local_ipv4_addr, local_udp_port);
           if (listeners_on_ip.find(local_udp_port) == listeners_on_ip.end()) {
+
+            if (qid > -1) {
+
+              // It needs a bit of work
+
+              LOG(WARNING) << "we should send a retry";
+              // we have a receiver for the other engine.
+              // let's return the packet back with kRtry one.
+              auto *response = CHECK_NOTNULL(packet_pool_->PacketAlloc());
+              auto *response_eh = response->append<Ethernet *>(pkt->length());
+              const size_t hdr_length = (sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) + sizeof(net::MachnetPktHdr));
+              const uint32_t pkt_len = hdr_length + sizeof(qid) + pmd_port_->GetRSSKey().size()*sizeof(uint8_t); // I need to add rss key too.
+              // Size is different that just packet->length;
+              response_eh->dst_addr = eh->src_addr;
+              response_eh->src_addr = pmd_port_->GetL2Addr();
+              response_eh->eth_type = be16_t(Ethernet::kIpv4);
+              response->set_l2_len(sizeof(*response_eh));
+              auto *response_ipv4h = reinterpret_cast<Ipv4 *>(response_eh + 1);
+              response_ipv4h->version_ihl = 0x45;
+              response_ipv4h->type_of_service = 0;
+              response_ipv4h->packet_id = be16_t(0x1513);
+              response_ipv4h->fragment_offset = be16_t(0);
+              response_ipv4h->next_proto_id = Ipv4::Proto::kUdp;
+              response_ipv4h->time_to_live = 64;
+              response_ipv4h->total_length = be16_t(pkt->length() - sizeof(Ethernet));
+              response_ipv4h->src_addr = ipv4h->dst_addr;
+              response_ipv4h->dst_addr = ipv4h->src_addr;
+              response_ipv4h->hdr_checksum = 0;
+              response->set_l3_len(sizeof(*response_ipv4h));
+              response->offload_ipv4_csum(); // I should calculate the checksum
+              auto *response_udp = reinterpret_cast<Udp *>(response_ipv4h + 1);
+              response_udp->dst_port = udph->src_port;
+              response_udp->src_port = udph->dst_port;
+              response_udp->len = be16_t(pkt->length() - sizeof(Ethernet) - sizeof(Ipv4));
+              response_udp->cksum = be16_t(0);
+              // calculate checksum for udp;
+              auto *response_mach = reinterpret_cast<net::MachnetPktHdr *>(response_udp + 1);
+              response_mach->magic = be16_t(net::MachnetPktHdr::kMagic);
+              response_mach->net_flags = net::MachnetPktHdr::MachnetFlags::kRtry;
+              response_mach->msg_flags = 0;
+              response_mach->seqno = be32_t(0);
+              response_mach->ackno = be32_t(0);
+              response_mach->sack_bitmap = be64_t(0);
+              response_mach->sack_bitmap_count = be16_t(0);
+              response_mach->timestamp1 = be64_t(0);
+              // copy data
+              auto* payload = reinterpret_cast<uint8_t*>(response_mach + 1);
+              utils::Copy(payload, &qid, sizeof(qid));
+              utils::Copy(payload+1, pmd_port_->GetRSSKey().data(), pmd_port_->GetRSSKey().size() * sizeof(uint8_t));
+              auto nsent = txring_->TrySendPackets(&response, 1);
+              LOG_IF(WARNING, nsent != 1) << "Failed to send kRtry";
+            }
             LOG(INFO) << "Dropping packet with RSS hash: " << pkt->rss_hash()
-                      << " (be: " << __builtin_bswap32(pkt->rss_hash()) << ")"
-                      << " because there is no listener on port "
-                      << local_udp_port.port.value()
-                      << " (engine @rx_q_id: " << rxring_->GetRingId() << ")";
+              << " (be: " << __builtin_bswap32(pkt->rss_hash()) << ")"
+              << " because there is no listener on port "
+              << local_udp_port.port.value()
+              << " (engine @rx_q_id: " << rxring_->GetRingId() << ")";       
             return;
           }
 
-          // Create a new flow.
           const auto &channel = listeners_on_ip.at(local_udp_port);
           const auto &remote_ipv4_addr = ipv4h->src_addr;
           const auto &remote_udp_port = udph->src_port;
-
-          // Check if it is a SYN packet.
           const auto *machneth = pkt->head_data<net::MachnetPktHdr *>(
               sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
+
+          // Create a new flow.
+          // Check if it is a SYN packet.
           if (machneth->net_flags != net::MachnetPktHdr::MachnetFlags::kSyn) {
             LOG(WARNING) << "Received a non-SYN packet on a listening port";
             break;
