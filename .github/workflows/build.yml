@@ -30,6 +30,7 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository }}/machnet:latest
+          target: machnet
           file: ./Dockerfile
           cache-from: type=gha,ref=ghcr.io/${{ github.repository }}/machnet_build_base:latest
           cache-to: type=gha,mode=max
