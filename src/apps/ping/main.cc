@@ -31,9 +31,9 @@ constexpr uint16_t kMinPacketLength =
              64ul);
 
 DEFINE_string(
-    config_json, "../../../config.json",
+    config_json, "../src/apps/machnet/config.json",
     "JSON file with Juggler-related params for different hosts and binaries");
-DEFINE_string(remote_hostname, "", "Remote hostname in the hosts JSON file.");
+DEFINE_string(remote_ip, "", "Remote hostname in the hosts JSON file.");
 DEFINE_uint32(icmp_id, 777, "ICMP ID to use in the packets.");
 DEFINE_string(rtt_log, "", "Log file for RTT measurements.");
 
@@ -87,6 +87,7 @@ struct task_context {
         remote_ipv4_addr(remote_ip),
         rx_ring(CHECK_NOTNULL(rxring)),
         tx_ring(CHECK_NOTNULL(txring)),
+        arp_handler(local_mac, {local_ip}),
         statistics(),
         rtt_log() {}
   const juggler::net::Ethernet::Address local_mac_addr;
@@ -95,6 +96,7 @@ struct task_context {
   const juggler::net::Ipv4::Address remote_ipv4_addr;
   juggler::dpdk::RxRing *rx_ring;
   juggler::dpdk::TxRing *tx_ring;
+  juggler::ArpHandler arp_handler;
   stats statistics;
   juggler::utils::TimeLog rtt_log;
 };
@@ -443,8 +445,13 @@ int main(int argc, char *argv[]) {
   auto *txring = pmd_port.GetRing<juggler::dpdk::TxRing>(0);
   CHECK_NOTNULL(txring);
 
+  if (FLAGS_remote_ip == "") {
+    std::cerr << "Remote IP address not specified.";
+    return -1;
+  }
+
   juggler::net::Ipv4::Address remote_ip;
-  remote_ip.FromString(FLAGS_remote_hostname);
+  CHECK(remote_ip.FromString(FLAGS_remote_ip)) << "Invalid remote IP address.";
 
   const auto remote_mac = ArpResolveBusyWait(interface_config->l2_addr(),
                                              interface_config->ip_addr(),
@@ -458,23 +465,21 @@ int main(int argc, char *argv[]) {
                         interface_config->ip_addr(), remote_mac.value(),
                         remote_ip, rxring, txring);
 
-  auto tx = [](uint64_t now, void *context) { ping(now, context); };
+  auto pingpong = [](uint64_t now, void *context) {
+    ping(now, context);
+    icmp_rx(context);
+  };
 
-  auto rx = [](uint64_t now, void *context) { icmp_rx(context); };
+  auto pingpong_task =
+      std::make_shared<juggler::Task>(pingpong, static_cast<void *>(&task_ctx));
 
-  auto tx_task =
-      std::make_shared<juggler::Task>(tx, static_cast<void *>(&task_ctx));
-  auto rx_task =
-      std::make_shared<juggler::Task>(rx, static_cast<void *>(&task_ctx));
-
-  std::vector<std::shared_ptr<juggler::Task>> tasks = {tx_task, rx_task};
-  std::vector<cpu_set_t> cpu_masks = {interface_config->cpu_mask(),
-                                      interface_config->cpu_mask()};
+  std::vector<std::shared_ptr<juggler::Task>> tasks = {pingpong_task};
+  std::vector<cpu_set_t> cpu_masks = {interface_config->cpu_mask()};
   juggler::WorkerPool<juggler::Task> WPool(tasks, cpu_masks);
 
   WPool.Init();
 
-  std::cout << "PING " << FLAGS_remote_hostname << " (" << remote_ip.ToString()
+  std::cout << "PING " << FLAGS_remote_ip << " (" << remote_ip.ToString()
             << ") 56(84) bytes of data." << std::endl;
   // Launch the worker pool.
   WPool.Launch();
