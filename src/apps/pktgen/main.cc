@@ -554,7 +554,7 @@ int main(int argc, char *argv[]) {
 
   // Parse the remote IP address.
   std::optional<juggler::net::Ipv4::Address> remote_ip;
-  if (!FLAGS_active_generator) {
+  if (!FLAGS_active_generator && !FLAGS_ping) {
     // In passive mode, we don't need the remote IP address.
     remote_ip = std::nullopt;
   } else {
@@ -597,7 +597,7 @@ int main(int argc, char *argv[]) {
 
   // Resolve the remote host's MAC address if we are in active mode.
   std::optional<juggler::net::Ethernet::Address> remote_l2_addr = std::nullopt;
-  if (FLAGS_active_generator) {
+  if (FLAGS_active_generator || FLAGS_ping) {
     remote_l2_addr =
         ArpResolveBusyWait(interface.l2_addr(), interface.ip_addr(), txring,
                            rxring, remote_ip.value(), 5);
