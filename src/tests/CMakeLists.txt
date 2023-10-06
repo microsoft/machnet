@@ -11,5 +11,3 @@ foreach(test_name IN LISTS TEST_FILES)
     core machnet_shim glog gtest gmock ${LIBDPDK_LIBRARIES} hugetlbfs rt)
   add_test(NAME ${test_bin} COMMAND ${test_bin})
 endforeach()
-
-add_subdirectory(benchmark)

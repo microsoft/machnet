@@ -10,13 +10,15 @@ extern "C" {
  * a shared memory region that is going to be used for the communicaton between
  * the stack and one (or more in the case of a control channel) applications.
  *
- *     An Machnet shared memory channel is being used as the dataplane for
- *     high-performance message communication between an application and the
- *     stack. The memory layout is as follows:
+ *     A Machnet shared memory channel is being used as both the control and
+ *     data plane for high-performance message communication between an
+ *     application and the stack. The memory layout is as follows:
  *
  *
  *     [MachnetChannelHeader]
  *     [MachnetChannelStats]
+ *     [ControlRing: SubmissionQueue]
+ *     [ControlRing: CompletionQueue]
  *     [Ring0: Stack->Application]
  *     [Ring1: Application->Stack]
  *     [Ring2: FreeBuffers]
@@ -25,6 +27,11 @@ extern "C" {
  *     [Buf#1]
  *     [...]
  *     [Buf#N]
+ *
+ *     ControlRing(SQ) is used for communicating control messages from the
+ *     application to the stack; completions are emitted by the stack in the
+ *     CompletionQueue. This includes requests for creation/destruction,
+ *     listening, etc.
  *
  *     Ring0 is used for communicating received messages from the stack to the
  *     application, and Ring1 for the opposite direction.

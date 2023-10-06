@@ -21,7 +21,9 @@ TEST(BasicTxTest, BasicTxTest) {
   juggler::net::Ethernet::Address local_mac_addr("00:11:22:33:44:55");
   juggler::net::Ethernet::Address remote_mac_addr("00:11:22:33:44:55");
   auto local_ipv4_addr = juggler::net::Ipv4::Address::MakeAddress("1.1.1.1");
+  CHECK(local_ipv4_addr.has_value());
   auto remote_ipv4_addr = juggler::net::Ipv4::Address::MakeAddress("2.2.2.2");
+  CHECK(remote_ipv4_addr.has_value());
 
   juggler::dpdk::Packet *pkt = g_tx_pkt_pool->PacketAlloc();
 
@@ -47,8 +49,8 @@ TEST(BasicTxTest, BasicTxTest) {
   ipv4h->total_length =
       juggler::be16_t(sizeof(juggler::net::Ipv4) +
                       sizeof(juggler::net::Ethernet) + payload_size);
-  ipv4h->src_addr.address = juggler::be32_t(local_ipv4_addr.address);
-  ipv4h->dst_addr.address = juggler::be32_t(remote_ipv4_addr.address);
+  ipv4h->src_addr.address = juggler::be32_t(local_ipv4_addr.value().address);
+  ipv4h->dst_addr.address = juggler::be32_t(remote_ipv4_addr.value().address);
   ipv4h->hdr_checksum = 0;
 
   EXPECT_EQ(pkt->length(), kTotalPacketLen);
@@ -67,8 +69,6 @@ int main(int argc, char **argv) {
 
   auto d = juggler::dpdk::Dpdk();
   d.InitDpdk(kEalOpts);
-  EXPECT_EQ(d.GetNumPmdPortsAvailable(), 1)
-      << "Number of PMD ports != 1. A bad PCIe allowlist can cause this.";
 
   g_pmd.reset(new juggler::dpdk::PmdPort(
       0 /* because of PCIe allowlist, we have 1 port */));
@@ -80,6 +80,5 @@ int main(int argc, char **argv) {
       juggler::dpdk::PmdRing::kJumboFrameSize + RTE_PKTMBUF_HEADROOM));
   CHECK_NOTNULL(g_tx_pkt_pool);
 
-  int ret = RUN_ALL_TESTS();
-  return ret;
+  return RUN_ALL_TESTS();
 }

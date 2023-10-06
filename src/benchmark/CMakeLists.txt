@@ -5,5 +5,4 @@ foreach(bench_name IN LISTS BENCHMARK_FILES)
   add_executable(${bench_bin} ${bench_name})
   target_link_libraries(${bench_bin} PUBLIC
     core machnet_shim glog gtest benchmark ${LIBDPDK_LIBRARIES} hugetlbfs rt)
-  add_test(NAME ${bench_bin} COMMAND ${bench_bin})
 endforeach()

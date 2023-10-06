@@ -1,13 +1,12 @@
 
-#include "jring2.h"
-
 #include <bits/stdc++.h>
 #include <pthread.h>
 #include <sched.h>
 #include <time.h>
 #include <unistd.h>
+#include <utils.h>
 
-#include "jring.h"
+#include "jring2.h"
 
 static constexpr size_t kProducerCore = 2;
 static constexpr size_t kConsumerCore = 7;
@@ -29,13 +28,6 @@ jring2_t *g_p2c_ring;  // Producer to consumer ring
 jring2_t *g_c2p_ring;  // Consumer to producer ring
 double g_rdtsc_freq_ghz = 0.0;
 
-void BindThisThreadToCore(size_t core) {
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  CPU_SET(core, &cpuset);
-  pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-}
-
 uint64_t rdtsc() {
   uint32_t lo, hi;
   asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
@@ -56,7 +48,7 @@ double MeasureRdtscFreqGHz() {
 }
 
 void ProducerThread() {
-  BindThisThreadToCore(kProducerCore);
+  juggler::utils::BindThisThreadToCore(kProducerCore);
 
   size_t seq_num = 0;
   size_t sum_lat_cycles = 0;
@@ -128,7 +120,7 @@ void ProducerThread() {
 }
 
 void ConsumerThread() {
-  BindThisThreadToCore(kConsumerCore);
+  juggler::utils::BindThisThreadToCore(kConsumerCore);
 
   while (!g_stop.load()) {
     Msg req_msg{};

@@ -193,13 +193,17 @@ namespace utils {
   return std::string(uuid_str);
 }
 
-// Bind all threads of this process to run on this zero-indexed CPU core
-[[maybe_unused]] static void BindThreadToCore(uint8_t core) {
-  cpu_set_t mask;
-  CPU_ZERO(&mask);
-  CPU_SET(core, &mask);
-  int result = sched_setaffinity(0, sizeof(mask), &mask);
-  CHECK_EQ(result, 0) << "Failed to set CPU affinity.";
+[[maybe_unused]] static bool BindThisThreadToCore(uint8_t core) {
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);       // Clear all CPUs
+  CPU_SET(core, &cpuset);  // Set the requested core
+
+  pthread_t current_thread = pthread_self();
+  if (pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset) != 0) {
+    perror("Could not set thread to specified core");
+    return false;
+  }
+  return true;
 }
 
 [[maybe_unused]] static void SetHighPriorityAndSchedFifoForProcess() {
@@ -237,14 +241,15 @@ namespace utils {
 }
 
 template <typename T>
-requires std::integral<T> static constexpr inline bool is_power_of_two(T x) {
+requires std::integral<T>
+static constexpr inline bool is_power_of_two(T x) {
   return x && ((x & T(x - 1)) == 0);
 }
 
 // Align a size to a particular alignment boundary.
 template <typename T>
-requires std::integral<T> static constexpr inline T align_size(T requested_size,
-                                                               T boundary) {
+requires std::integral<T>
+static constexpr inline T align_size(T requested_size, T boundary) {
   T nchunks = (requested_size + boundary - 1) / boundary;
   return nchunks * boundary;
 }

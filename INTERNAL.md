@@ -15,7 +15,7 @@ pip3 install pyelftools
 ```
 
 
-  For Ubuntu 20.04 we need `gcc-10`, `g++-10`, `cpp-10`.
+  For Ubuntu 20.04 we need at least versions `gcc-10`, `g++-10`, `cpp-10`. This step is not required for newer versions of Ubuntu.
   ```bash
   # Set gcc-10 and g++-10 as the default compiler.
   update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 --slave /usr/bin/g++ g++ /usr/bin/g++-10 --slave /usr/bin/gcov gcov /usr/bin/gcov-10
@@ -65,6 +65,12 @@ The `machnet` binary will be available in `${REPOROOT}/build/src/apps/`.  You ma
 see more details about the `Machnet` program in this
 [README](src/apps/machnet/README.md).
 
+## Docker
+```bash
+# Build the docker image (from the root of the repository):
+docker build --no-cache -f Dockerfile --target  machnet .
+```
+
 ## Tests
 
 To run all tests, from ${REPOROOT}:
@@ -72,24 +78,4 @@ To run all tests, from ${REPOROOT}:
 # If the Ansible automation was not used, enable hugepages first
 echo 1024 | sudo tee /sys/devices/system/node/node*/hugepages/hugepages-2048kB/nr_hugepages
 sudo ctest # sudo is required for DPDK-related tests.
-```
-
-## Docker
-```bash
-# Build the docker image (from the root of the repository):
-docker build --no-cache -f Dockerfile --target  machnet .
-```
-
-
-## Development
-
-The codebase follows [Google's C++
-standard](https://google.github.io/styleguide/cppguide.html). Some tools are
-required for linting, checking, code formatting:
-
-```bash
-sudo apt install clang-format cppcheck # Or equivalent for your OS
-pip install pre-commit
-cd ${REPOROOT}
-pre-commit install
 ```

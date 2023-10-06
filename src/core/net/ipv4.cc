@@ -1,5 +1,7 @@
 #include <ipv4.h>
 
+#include <optional>
+
 namespace juggler {
 namespace net {
 
@@ -9,13 +11,10 @@ bool Ipv4::Address::IsValid(const std::string &addr) {
   return result != 0;
 }
 
-Ipv4::Address Ipv4::Address::MakeAddress(const std::string &addr) {
-  if (!IsValid(addr)) {
-    LOG(WARNING) << addr << " is not a valid IPv4 address";
-    return Address(0u);
-  }
+std::optional<Ipv4::Address> Ipv4::Address::MakeAddress(
+    const std::string &addr) {
   Address ret;
-  ret.FromString(addr);
+  if (!ret.FromString(addr)) return std::nullopt;
   return ret;
 }
 

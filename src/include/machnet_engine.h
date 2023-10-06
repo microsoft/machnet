@@ -542,9 +542,6 @@ class MachnetEngine {
       status.set_value(true);
     }
 
-    // TODO(ilias): Destroying channels is a more elaborate process. It requires
-    // destroying all the flows attached to this engine before.
-
     // Remove channels pending for removal.
     for (auto &channel : channels_to_dequeue_) {
       const auto &it =
@@ -604,8 +601,8 @@ class MachnetEngine {
   }
 
   /**
-   * @brief This method peeks for all control plane requests over all channels
-   * and processes them.
+   * @brief This method polls active channels for all control plane requests and
+   * processes them.
    * It is called periodically.
    */
   void ProcessControlRequests() {
@@ -811,7 +808,8 @@ class MachnetEngine {
    */
   void process_rx_pkt(const juggler::dpdk::Packet *pkt, uint64_t now) {
     // Sanity ethernet header check.
-    if (pkt->length() < sizeof(Ethernet)) [[unlikely]] return;
+    if (pkt->length() < sizeof(Ethernet)) [[unlikely]]
+      return;
 
     auto *eh = pkt->head_data<Ethernet *>();
     switch (eh->eth_type.value()) {
@@ -838,9 +836,8 @@ class MachnetEngine {
 
   void process_rx_ipv4(const juggler::dpdk::Packet *pkt, uint64_t now) {
     // Sanity ipv4 header check.
-    if (pkt->length() < sizeof(Ethernet) + sizeof(Ipv4)) [[unlikely]] return;
-
-    // TODO(ilias): We should do RX csum check, unless it can be offloaded.
+    if (pkt->length() < sizeof(Ethernet) + sizeof(Ipv4)) [[unlikely]]
+      return;
 
     const auto *eh = pkt->head_data<Ethernet *>();
     const auto *ipv4h = pkt->head_data<Ipv4 *>(sizeof(Ethernet));
@@ -851,12 +848,12 @@ class MachnetEngine {
     // Check ivp4 header length.
     // clang-format off
     if (pkt->length() != sizeof(Ethernet) + ipv4h->total_length.value()) [[unlikely]] { // NOLINT
-        // clang-format on
-        LOG(WARNING) << "IPv4 packet length mismatch (expected: "
-                     << ipv4h->total_length.value()
-                     << ", actual: " << pkt->length() << ")";
-        return;
-      }
+      // clang-format on
+      LOG(WARNING) << "IPv4 packet length mismatch (expected: "
+                   << ipv4h->total_length.value()
+                   << ", actual: " << pkt->length() << ")";
+      return;
+    }
 
     switch (ipv4h->next_proto_id) {
       // clang-format off
@@ -924,9 +921,10 @@ class MachnetEngine {
         // Only process ICMP echo requests.
         if (icmph->type != Icmp::kEchoRequest) [[unlikely]] return;
 
-        // Allocate a new packet for the response (we do that defensively
-        // instead of in-place modifying the received packet in case TX and RX
-        // ring use FAST_FREE).
+        // Allocate and construct a new packet for the response, instead of
+        // in-place modification.
+        // If `FAST_FREE' is enabled it's unsafe to use packets from different
+        // pools (the driver may put them in the wrong pool on reclaim).
         auto *response = CHECK_NOTNULL(packet_pool_->PacketAlloc());
         auto *response_eh = response->append<Ethernet *>(pkt->length());
         response_eh->dst_addr = eh->src_addr;
@@ -1034,8 +1032,6 @@ class MachnetEngine {
   uint64_t last_periodic_timestamp_{0};
   // Clock ticks for the slow timer.
   uint64_t periodic_ticks_{0};
-  // Bitmap used for source port allocations.
-  std::vector<uint64_t> src_port_bitmap_;
   // Listeners for incoming packets.
   std::unordered_map<
       Ipv4::Address,

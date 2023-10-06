@@ -44,7 +44,6 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
     rss_hf &= devinfo->flow_type_rss_offloads;
   }
 
-  // TODO(ilias): Disable loopback mode; this creates strage effects in Azure.
   port_conf.lpbk_mode = 1;
   port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
 
@@ -119,6 +118,18 @@ void PmdPort::InitDriver(uint16_t mtu) {
         std::string vf_pci_info_;
         FetchDpdkPortInfo(vf_port_id.value(), &vf_devinfo_, &vf_l2_addr_,
                           &vf_pci_info_);
+
+        // If the VF is using an 'mlx4*' driver, we need extra checks.
+        if (std::string(vf_devinfo_.driver_name).find("mlx4") !=
+            std::string::npos) {
+          // Mellanox CX3 and CX3-Pro NICs do not support non-power-of-two RSS
+          // queues. Furthermore, RETA table cannot be configured.
+          if (!utils::is_power_of_two(rx_rings_nr_)) {
+            LOG(FATAL) << "Mellanox CX3 and CX3-Pro NICs do not support "
+                          "non-power-of-two RSS queues. Please use a power of "
+                          "two number of engines in the configuration.";
+          }
+        }
         device_ = vf_devinfo_.device;
       }
     }
@@ -159,6 +170,30 @@ void PmdPort::InitDriver(uint16_t mtu) {
 
     rss_reta_conf_.resize(devinfo_.reta_size / RTE_ETH_RETA_GROUP_SIZE,
                           {-1ull, {0}});
+
+    for (auto i = 0u; i < devinfo_.reta_size; i++) {
+      // Initialize the RETA table in a round-robin fashion.
+      auto index = i / RTE_ETH_RETA_GROUP_SIZE;
+      auto shift = i % RTE_ETH_RETA_GROUP_SIZE;
+      rss_reta_conf_[index].reta[shift] = i % rx_rings_nr_;
+      rss_reta_conf_[index].mask |= (1 << shift);
+    }
+
+    ret = rte_eth_dev_rss_reta_update(port_id_, rss_reta_conf_.data(),
+                                      devinfo_.reta_size);
+    if (ret != 0) {
+      // By default the RSS RETA table is configured and it works when the
+      // number of RX queues is a power of two. In case of non-power-of-two it
+      // seems that RSS is not behaving as expected, although it should be
+      // supported by 'mlx5' drivers according to the documentation.
+      //
+      // Explicitly updating the RSS RETA table with the default configuration
+      // seems to fix the issue.
+      LOG(WARNING) << "Failed to update RSS RETA configuration for port "
+                   << static_cast<int>(port_id_) << ". Error "
+                   << rte_strerror(ret);
+    }
+
     ret = rte_eth_dev_rss_reta_query(port_id_, rss_reta_conf_.data(),
                                      devinfo_.reta_size);
     if (ret != 0) {
