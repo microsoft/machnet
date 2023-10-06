@@ -91,7 +91,7 @@ echo "Created config for local Machnet, in /var/run/machnet/local_config.json. C
 sudo cat /var/run/machnet/local_config.json
 
 if [ $BARE_METAL -eq 1 ]; then
-    echo "Starting Machnet in bare metal mode"
+    echo "Starting Machnet in bare-metal mode"
     THIS_SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
     machnet_bin="$THIS_SCRIPT_DIR/build/src/apps/machnet/machnet"
 

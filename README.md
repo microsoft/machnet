@@ -1,15 +1,15 @@
 # Machnet
 
-Machnet is a research prototype, which provides an easy way for applications to
-access low-latency userspace networking. Machnet runs as a separate process on
-all machines where the application is deployed. Applications interact with
-Machnet over shared memory with a familiar socket-like API, and Machnet
-processes in the cluster communicate with each other using userspace networking
-(DPDK).
+Machnet is an ongoing project to provide an easy way for applications to access
+low-latency userspace networking like DPDK. Machnet runs as a separate process
+on all machines where the application is deployed and manages networking.
+Applications interact with Machnet over shared memory with a familiar
+socket-like API. Machnet processes in the cluster communicate with each other
+using userspace networking.
 
 Machnet provides the following benefits, in addition to the low latency:
 
-- Works for running on Azure VMs and other cloud environments.
+- Designed specifically for cloud VM environments like Azure.
 - Multiple applications can simultaneously use the same network interface.
 - No need for DPDK expertise, or compiling the application with DPDK.
 
@@ -22,19 +22,20 @@ used by multiple applications that use Machnet.
 
 We recommend the following steps:
 
-  * Creating two VMs on Azure, each with accelerated networking enabled. The VMs will start up with one NIC each, named `eth0`. This NIC is *never* used by Machnet.
-  * Shutdown the VMs.
-  * Create two new accelerated NICs from the portal, with no public IPs, and add one to each VM. Then restart the VMs. Each VM should now have another NIC named `eth1`, which will be used by Machnet.
+  1. Creating two VMs on Azure, each with accelerated networking enabled. The VMs will start up with one NIC each, named `eth0`. This NIC is *never* used by Machnet.
+  2. Shutdown the VMs.
+  3. Create two new accelerated NICs from the portal, with no public IPs, and add one to each VM. Then restart the VMs. Each VM should now have another NIC named `eth1`, which will be used by Machnet.
 
 
 ## 2. Get the Machnet Docker image
 
-The Machnet binary is provided in the form of a Docker image. Pulling images
-from Github container registry requires a few extra steps.
+The Machnet binary is provided in the form of a Docker image on Github container
+registry.
 
+Pulling public images from Github container registry requires a few extra steps.
 First, generate a Github personal access token for yourself
-(https://github.com/settings/tokens) with the read:packages scope. Store it in
-the `GITHUB_PAT` environment variable. Then:
+(https://github.com/settings/tokens) with the read:packages scope. and store it
+in the `GITHUB_PAT` environment variable. Then:
 
 ```bash
 # Reboot like below to allow non-root users to run Docker
@@ -45,11 +46,12 @@ echo ${GITHUB_PAT} | docker login ghcr.io -u <github_username> --password-stdin
 docker pull ghcr.io/microsoft/machnet:latest
 ```
 
-## 3. Start Machnet on both VMs
+## 3. Start the Machnet service on both VMs
 
 Using DPDK on Azure requires unbinding the second NIC (`eth1` here ) from the
-OS, which will cause this NIC to disappear. **Before this step, note down the IP
-and MAC address of the NIC, since we will need them later.** 
+OS, which will cause this NIC to disappear from tools like `ifconfig`. **Before
+this step, note down the IP and MAC address of the NIC, since we will need them
+later.** 
 
 ```bash
 MACHNET_IP_ADDR=`ifconfig eth1 | grep -w inet | tr -s " " | cut -d' ' -f 3`
