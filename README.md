@@ -43,7 +43,7 @@ sudo groupadd docker && sudo usermod -aG docker $USER && sudo reboot
 
 # We assume that the Github token is stored as GITHUB_PAT
 echo ${GITHUB_PAT} | docker login ghcr.io -u <github_username> --password-stdin
-docker pull ghcr.io/microsoft/machnet:latest
+docker pull ghcr.io/microsoft/machnet/machnet:latest
 ```
 
 ## 3. Start the Machnet service on both VMs
@@ -51,7 +51,7 @@ docker pull ghcr.io/microsoft/machnet:latest
 Using DPDK on Azure requires unbinding the second NIC (`eth1` here ) from the
 OS, which will cause this NIC to disappear from tools like `ifconfig`. **Before
 this step, note down the IP and MAC address of the NIC, since we will need them
-later.** 
+later.**
 
 ```bash
 MACHNET_IP_ADDR=`ifconfig eth1 | grep -w inet | tr -s " " | cut -d' ' -f 3`
