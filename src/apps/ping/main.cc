@@ -302,6 +302,14 @@ void icmp_rx(void *context) {
 
     // Get the Ethernet header.
     auto *eh = packet->head_data<juggler::net::Ethernet *>();
+    if (eh->eth_type.value() == juggler::net::Ethernet::EthType::kArp) {
+      // Process ARP packets.
+      const auto *arph = packet->head_data<juggler::net::Arp *>(
+          sizeof(juggler::net::Ethernet));
+      ctx->arp_handler.ProcessArpPacket(ctx->tx_ring, arph);
+      continue;
+    }
+
     if (eh->dst_addr != local_mac) {
       // This packet is not for us.
       continue;
