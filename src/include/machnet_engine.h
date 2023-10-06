@@ -601,8 +601,8 @@ class MachnetEngine {
   }
 
   /**
-   * @brief This method peeks for all control plane requests over all channels
-   * and processes them.
+   * @brief This method polls active channels for all control plane requests and
+   * processes them.
    * It is called periodically.
    */
   void ProcessControlRequests() {
@@ -921,9 +921,10 @@ class MachnetEngine {
         // Only process ICMP echo requests.
         if (icmph->type != Icmp::kEchoRequest) [[unlikely]] return;
 
-        // Allocate a new packet for the response (we do that defensively
-        // instead of in-place modifying the received packet in case TX and RX
-        // ring use FAST_FREE).
+        // Allocate and construct a new packet for the response, instead of
+        // in-place modification.
+        // If `FAST_FREE' is enabled it's unsafe to use packets from different
+        // pools (the driver may put them in the wrong pool on reclaim).
         auto *response = CHECK_NOTNULL(packet_pool_->PacketAlloc());
         auto *response_eh = response->append<Ethernet *>(pkt->length());
         response_eh->dst_addr = eh->src_addr;
@@ -1031,8 +1032,6 @@ class MachnetEngine {
   uint64_t last_periodic_timestamp_{0};
   // Clock ticks for the slow timer.
   uint64_t periodic_ticks_{0};
-  // Bitmap used for source port allocations.
-  std::vector<uint64_t> src_port_bitmap_;
   // Listeners for incoming packets.
   std::unordered_map<
       Ipv4::Address,
