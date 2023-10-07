@@ -22,20 +22,19 @@ used by multiple applications that use Machnet.
 
 We recommend the following steps:
 
-  1. Creating two VMs on Azure, each with accelerated networking enabled. The VMs will start up with one NIC each, named `eth0`. This NIC is *never* used by Machnet.
-  2. Shutdown the VMs.
+  1. Create two VMs on Azure, each with accelerated networking enabled. The VMs will start up with one NIC each, named `eth0`. This NIC is *never* used by Machnet.
+  2. Shut-down the VMs.
   3. Create two new accelerated NICs from the portal, with no public IPs, and add one to each VM. Then restart the VMs. Each VM should now have another NIC named `eth1`, which will be used by Machnet.
 
 
 ## 2. Get the Machnet Docker image
 
 The Machnet binary is provided in the form of a Docker image on Github container
-registry.
+registry. Pulling public images from Github container registry requires a few
+mandatory steps.
 
-Pulling public images from Github container registry requires a few extra steps.
-First, generate a Github personal access token for yourself
-(https://github.com/settings/tokens) with the read:packages scope. and store it
-in the `GITHUB_PAT` environment variable. Then:
+ 1. Generate a Github personal access token for yourself (https://github.com/settings/tokens) with the read:packages scope. and store it in the `GITHUB_PAT` environment variable.
+ 2. At `https://github.com/settings/tokens`, follow the steps to "Configure SSO" for this token.
 
 ```bash
 # Reboot like below to allow non-root users to run Docker
@@ -64,7 +63,7 @@ sudo driverctl -b vmbus set-override $DEV_UUID uio_hv_generic
 
 # Start Machnet
 echo "Machnet IP address: $MACHNET_IP_ADDR, MAC address: $MACHNET_MAC_ADDR"
-git clone git@github.com:microsoft/machnet.git
+git clone https://github.com/microsoft/machnet.git
 cd machnet
 ./machnet.sh --mac $MACHNET_MAC_ADDR --ip $MACHNET_IP_ADDR
 
@@ -72,25 +71,24 @@ cd machnet
 curl -s -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=2021-02-01" | jq '.network.interface[1]'
 ```
 
-## 4. Run the hello_world JavaScript or C# example:
+## 4. Run the hello world example
 
 At this point, the Machnet container/process is running on both VMs. We can now
 test things end-to-end with a client-server application.
 
 ```bash
-# Build the Machnet helper library, on both VMs
-cd machnet; ./build_shim.sh; cp libmachnet_shim.so js/; cp libmachnet_shim.so csharp/HelloWorld
+# Build the Machnet helper library and hello_world example, on both VMs
+./build_shim.sh
+cd hello_world; make
 
-# On VM A, run JS hello server (requires node)
-cd js;
-node hello_world.js --local <eth1 IP address of server A>
+# On VM #1, run hello_world server
+./hello_world --local <eth1 IP address of VM 1>
 
-# On VM B, run C# hello client (requires dotnet-sdk)
-cd csharp/HelloWorld
-dotnet run --local <eth1 IP address of server B> --remote <eth1 IP address of server A>
+# On VM #2, run hello_world client
+./hello_world --local <eth1 IP address of VM 1> --remote <eth1 IP address of VM 2>
 ```
 
-If everything goes well, VM A should print "Hello World!"
+If everything goes well, VM 1 should print "Hello World!"
 
 ## Application Programming Interface
 Applications use the following steps to interact with the Machnet service:
