@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# Create Azure VMs for testing Machnet
+# Usage: ./azure_vm.py --resource_group machnet_test --location westus2 --nickname tutorial --num_vms 2
+#
+# Requirements:
+#  - pip3 install -r requirements.txt
+#  - az login
+#  - export AZURE_SUBSCRIPTION_ID=<your subscription id>
+#
+# To delete the resources, we delete the resource group from the Azure portal.
+
 import os
 import argparse
 from termcolor import cprint
@@ -17,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument("--resource_group", type=str, required=True, help="Resource group name to create/use")
     parser.add_argument("--location", type=str, required=True, help="Azure location to use")
     parser.add_argument("--nickname", type=str, required=True, help="Nickname to use as a prefix for Machnet resources")
-    parser.add_argument("--num_vms", type=int, default=1, help="Number of VMs to create")
+    parser.add_argument("--num_vms", type=int, default=1, help="Number of VMs to provision")
     args = parser.parse_args()
 
     if not args.nickname.isalnum():
@@ -41,11 +51,13 @@ if __name__ == "__main__":
     # Resources will be named .nickname}-{location}-XXX
     c_vnet_name = f"{args.nickname}-{args.location}-vnet"
     c_subnet_name = f"{args.nickname}-{args.location}-subnet"
-    c_ip_name = f"{args.nickname}-{args.location}-ip"
     c_ip_config_name = f"{args.nickname}-{args.location}-ip-config"
-    c_public_nic_name = f"{args.nickname}-{args.location}-public-nic"
-    c_machnet_nic_name = f"{args.nickname}-{args.location}-machnet-nic"
-    c_vm_names = [f"{args.nickname}-{args.location}-vm-{i}" for i in range(args.num_vms)]
+    c_public_nsg_name = f"{args.nickname}-{args.location}-public-nsg"
+
+    c_public_ip_base_name = f"{args.nickname}-{args.location}-ip"
+    c_public_nic_base_name = f"{args.nickname}-{args.location}-public-nic"
+    c_machnet_nic_base_name = f"{args.nickname}-{args.location}-machnet-nic"
+    c_vm_base_name = f"{args.nickname}-{args.location}-vm"
 
     ## Vnet
     network_client = NetworkManagementClient(credential, c_subscription_id)
@@ -95,10 +107,10 @@ if __name__ == "__main__":
 
 
     ## Network security group for the public NIC
-    print(f"Provisioning network security group for the public NIC {c_public_nic_name} to allow SSH")
+    print(f"Provisioning network security group to allow SSH")
     poller = network_client.network_security_groups.begin_create_or_update(
         args.resource_group,
-        c_public_nic_name,
+        c_public_nsg_name,
         {
             "location": args.location,
             "security_rules": [
@@ -119,71 +131,75 @@ if __name__ == "__main__":
     nsg_result = poller.result()
     cprint(f"  Provisioned network security group {nsg_result.name} with rules", "green")
 
+    for vm_i in range(args.num_vms):
+        cprint(f"Provisioning VM {vm_i+1} of {args.num_vms}", "magenta")
 
-    ## IP address for the public NIC
-    print(f"Provisioning public IP address {c_ip_name}")
-    poller = network_client.public_ip_addresses.begin_create_or_update(
-        args.resource_group,
-        c_ip_name,
-        {
-            "location": args.location,
-            "sku": {"name": "Standard"},
-            "public_ip_allocation_method": "Static",
-            "public_ip_address_version": "IPV4",
-        },
-    )
-    ip_address_result = poller.result()
-    cprint(f"  Provisioned public IP address {ip_address_result.name} with address {ip_address_result.ip_address}", "green")
+        ## IP address for the public NIC
+        ip_name_vm_i = f"{c_public_ip_base_name}-{vm_i}"
+        print(f"Provisioning public IP address {ip_name_vm_i}")
+        poller = network_client.public_ip_addresses.begin_create_or_update(
+            args.resource_group,
+            ip_name_vm_i,
+            {
+                "location": args.location,
+                "sku": {"name": "Standard"},
+                "public_ip_allocation_method": "Static",
+                "public_ip_address_version": "IPV4",
+            },
+        )
+        ip_address_result_vm_i = poller.result()
+        cprint(f"  Provisioned public IP address {ip_address_result_vm_i.name} with address {ip_address_result_vm_i.ip_address}", "green")
 
-
-    ## Public NIC
-    print(f"Provisioning network interface {c_public_nic_name} with IP {c_ip_name} and subnet {c_subnet_name}")
-    poller = network_client.network_interfaces.begin_create_or_update(
-        args.resource_group,
-        c_public_nic_name,
-        {
-            "location": args.location,
-            "ip_configurations": [
-                {
-                    "name": c_ip_config_name,
-                    "subnet": {"id": subnet_id},
-                    "public_ip_address": {"id": ip_address_result.id},
-                }
-            ],
-            "network_security_group": {"id": nsg_result.id},
-        },
-    )
-    public_nic_result = poller.result()
-    cprint(f"  Provisioned public NIC {public_nic_result.name}", "green")
-
-
-    ## Machnet NIC
-    print(f"Provisioning network interface {c_machnet_nic_name} with subnet {c_subnet_name}")
-    poller = network_client.network_interfaces.begin_create_or_update(
-        args.resource_group,
-        c_machnet_nic_name,
-        {
-            "location": args.location,
-            "ip_configurations": [
-                {
-                    "name": c_ip_config_name,
-                    "subnet": {"id": subnet_id},
-                }
-            ],
-            "enable_accelerated_networking": True,
-        },
-    )
-    machnet_nic_result = poller.result()
-    cprint(f"  Provisioned Machnet NIC {machnet_nic_result.name}", "green")
+        ## Public NIC
+        public_nic_name_vm_i = f"{c_public_nic_base_name}-{vm_i}"
+        print(f"Provisioning NIC {public_nic_name_vm_i} with IP {ip_name_vm_i} and subnet {c_subnet_name}")
+        poller = network_client.network_interfaces.begin_create_or_update(
+            args.resource_group,
+            public_nic_name_vm_i,
+            {
+                "location": args.location,
+                "ip_configurations": [
+                    {
+                        "name": c_ip_config_name,
+                        "subnet": {"id": subnet_id},
+                        "public_ip_address": {"id": ip_address_result_vm_i.id},
+                    }
+                ],
+                "network_security_group": {"id": nsg_result.id},
+            },
+        )
+        public_nic_result_vm_i = poller.result()
+        cprint(f"  Provisioned public NIC {public_nic_result_vm_i.name}", "green")
 
 
-    # Provision the VMs
-    compute_client = ComputeManagementClient(credential, c_subscription_id)
-    for vm_name_i in c_vm_names:
-        username = os.environ.get("USER")
-        password = ""
+        ## Machnet NIC
+        machnet_nic_name_vm_i = f"{c_machnet_nic_base_name}-{vm_i}"
+        print(f"Provisioning network interface {machnet_nic_name_vm_i} with subnet {c_subnet_name}")
+        poller = network_client.network_interfaces.begin_create_or_update(
+            args.resource_group,
+            machnet_nic_name_vm_i,
+            {
+                "location": args.location,
+                "ip_configurations": [
+                    {
+                        "name": c_ip_config_name,
+                        "subnet": {"id": subnet_id},
+                    }
+                ],
+                "enable_accelerated_networking": True,
+            },
+        )
+        machnet_nic_result_vm_i = poller.result()
+        cprint(f"  Provisioned Machnet NIC {machnet_nic_result_vm_i.name}", "green")
+
+
+        ## Provision the VMs
+        compute_client = ComputeManagementClient(credential, c_subscription_id)
+        vm_name_i = f"{c_vm_base_name}-{vm_i}"
+        username = os.environ["USER"]
+
         print(f"Provisioning virtual machine {vm_name_i} with username {username} and password. ",
-               "This operation might take a few minutes.")
+            "This operation might take a few minutes.")
 
         poller = compute_client.virtual_machines.begin_create_or_update(
             args.resource_group,
@@ -202,17 +218,17 @@ if __name__ == "__main__":
                 "os_profile": {
                     "computer_name": vm_name_i,
                     "admin_username": username,
-                    "admin_password": password,
+                    "admin_password": ""  # XXX
                 },
                 "network_profile": {
                     "network_interfaces": [
-                        { "id": public_nic_result.id, "primary": True },
-                        { "id": machnet_nic_result.id, "primary": False }
+                        { "id": public_nic_result_vm_i.id, "primary": True },
+                        { "id": machnet_nic_result_vm_i.id, "primary": False }
                     ]
                 },
             },
         )
 
         vm_result = poller.result()
-        cprint(f"Provisioned virtual machine {vm_result.name}", "green")
-        cprint(f"  Log-in using ssh {username}@{ip_address_result.ip_address}", "green")
+        cprint(f"  Provisioned virtual machine {vm_result.name}", "green")
+        cprint(f"  Log-in using ssh {username}@{ip_address_result_vm_i.ip_address}", "green")
