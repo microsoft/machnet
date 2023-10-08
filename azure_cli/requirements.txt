@@ -1,0 +1,5 @@
+azure-mgmt-resource
+azure-mgmt-compute
+azure-mgmt-network
+azure-identity
+termcolor
