@@ -37,8 +37,12 @@ mandatory steps.
  2. At `https://github.com/settings/tokens`, follow the steps to "Configure SSO" for this token.
 
 ```bash
+# Install packages required to try out Machnet
+sudo apt-get update
+sudo apt-get install -y docker.io make gcc g++ uuid-dev libgflags-dev driverctl 
+
 # Reboot like below to allow non-root users to run Docker
-sudo groupadd docker && sudo usermod -aG docker $USER && sudo reboot
+sudo usermod -aG docker $USER && sudo reboot
 
 # We assume that the Github token is stored as GITHUB_PAT
 echo ${GITHUB_PAT} | docker login ghcr.io -u <github_username> --password-stdin
