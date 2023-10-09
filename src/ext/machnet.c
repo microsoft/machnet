@@ -10,6 +10,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <glog/logging.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -439,14 +440,18 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   MachnetRingSlot_t *buffer_indices =
       (MachnetRingSlot_t *)malloc(buffers_nr * sizeof(MachnetRingSlot_t));
   if (buffer_indices == NULL) return -1;
+  // allocate buffers and init
+  MachnetMsgBuf_t *buffers =
+      (MachnetMsgBuf_t *)malloc(buffers_nr * sizeof(MachnetMsgBuf_t));
 
-  if (__machnet_channel_buf_alloc_bulk(ctx, buffers_nr, buffer_indices, NULL) !=
-      buffers_nr) {
-    // Failed to allocate the buffers.
-    free(buffer_indices);
-    return -1;
+  for (size_t i = 0; i < buffers_nr; i++) {
+    __machnet_channel_buf_init(&buffers[i]);
+    *__DECONST(uint32_t *, &buffers[i].magic) = MACHNET_MSGBUF_MAGIC;
+    *__DECONST(uint32_t *, &buffers[i].index) = i;
+    *__DECONST(uint32_t *, &buffers[i].size) = MTU;
   }
 
+  // enqueue buffers
   // Gather all message segments.
   uint32_t buffer_cur_index = 0;
   uint32_t total_bytes_copied = 0;
@@ -458,27 +463,27 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     uint32_t seg_bytes = segment_desc->len;
     while (seg_bytes) {
       // Get the destination offset at buffer.
-      MachnetMsgBuf_t *buffer =
-          __machnet_channel_buf(ctx, buffer_indices[buffer_cur_index]);
-      if (unlikely(buffer->magic != MACHNET_MSGBUF_MAGIC)) abort();
+      MachnetMsgBuf_t buffer = buffers[buffer_cur_index];
+      if (unlikely(buffer.magic != MACHNET_MSGBUF_MAGIC)) abort();
 
       // Copy the data.
-      uint32_t nbytes_to_copy =
-          MIN(seg_bytes, __machnet_channel_buf_tailroom(buffer));
-      uchar_t *buf_data = __machnet_channel_buf_append(buffer, nbytes_to_copy);
-      memcpy(buf_data, seg_data, nbytes_to_copy);
-      buffer->flags |= MACHNET_MSGBUF_FLAGS_SG;
+      uint32_t nbytes_to_copy = MIN(seg_bytes, MTU);
+      //      uchar_t *buf_data = __machnet_channel_buf_append(buffer,
+      //      nbytes_to_copy);
+      memcpy(buffer.data, seg_data, nbytes_to_copy);
+      buffer.flags |= MACHNET_MSGBUF_FLAGS_SG;
 
       seg_data += nbytes_to_copy;
       seg_bytes -= nbytes_to_copy;
       total_bytes_copied += nbytes_to_copy;
 
-      if ((__machnet_channel_buf_tailroom(buffer) == 0) && seg_bytes) {
+      if (seg_bytes) {
         // The buffer is full, and we still have data to copy.
         buffer_cur_index++;  // Get the next buffer index.
         assert(buffer_cur_index < buffers_nr);
-        buffer->next =
-            buffer_indices[buffer_cur_index];  // Link to the next buffer.
+        //        buffer->next =
+        //            buffer_indices[buffer_cur_index];  // Link to the next
+        //            buffer.
       }
     }
   }
@@ -487,31 +492,32 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   if (unlikely(total_bytes_copied != msghdr->msg_size)) abort();
 
   // For the last buffer, we need to mark it as the tail of the message.
-  MachnetMsgBuf_t *last =
-      __machnet_channel_buf(ctx, buffer_indices[buffers_nr - 1]);
-  last->flags |= MACHNET_MSGBUF_FLAGS_FIN;
-  last->flags &= ~(MACHNET_MSGBUF_FLAGS_SG);
+  MachnetMsgBuf_t last = buffers[buffers_nr - 1];
+  last.flags |= MACHNET_MSGBUF_FLAGS_FIN;
+  last.flags &= ~(MACHNET_MSGBUF_FLAGS_SG);
 
   // We have finished copying over the message. Now we need to update the
   // message metadata.
   // Mark the first buffer of the message as the head of the message, and also
   // piggyback any flags requested by the application (e.g., delivery
   // notification).
-  MachnetMsgBuf_t *first = __machnet_channel_buf(ctx, buffer_indices[0]);
-  first->flags |= MACHNET_MSGBUF_FLAGS_SYN;
-  first->flags |= (msghdr->flags & MACHNET_MSGBUF_NOTIFY_DELIVERY);
-  first->flow = msghdr->flow_info;
-  first->msg_len = msghdr->msg_size;
-  first->last = buffer_indices[buffers_nr - 1];  // Link to the last buffer.
+  MachnetMsgBuf_t first = buffers[0];
+  first.flags |= MACHNET_MSGBUF_FLAGS_SYN;
+  first.flags |= (msghdr->flags & MACHNET_MSGBUF_NOTIFY_DELIVERY);
+  first.flow = msghdr->flow_info;
+  first.msg_len = msghdr->msg_size;
+  //  first.last = buffer_indices[buffers_nr - 1];  // Link to the last buffer.
 
   // Finally, send the message.
   // TODO(ilias): Add retries if the ring is full, and add statistics.
-  if (__machnet_channel_app_ring_enqueue(ctx, 1, buffer_indices) != 1) {
-    free(buffer_indices);
+  // TODO(vjabrayilov): Add logging and back off here
+  if (__machnet_channel_app_ring_enqueue(ctx, 1, buffers) != 1) {
+    LOG(INFO) << "Cannot enqueue";
+    free(buffers);
     return -1;
   }
 
-  free(buffer_indices);
+  free(buffers);
 
   return 0;
 }
