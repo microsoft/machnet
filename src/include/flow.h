@@ -347,6 +347,7 @@ class Flow {
     kSynSent,
     kSynReceived,
     kEstablished,
+    kRtry
   };
 
   static constexpr char const* StateToString(State state) {
@@ -359,6 +360,8 @@ class Flow {
         return "SYN_RECEIVED";
       case State::kEstablished:
         return "ESTABLISHED";
+      case State::kRtry:
+        return "RETRY";
       default:
         LOG(FATAL) << "Unknown state";
         return "UNKNOWN";
@@ -396,6 +399,7 @@ class Flow {
                   CHECK_NOTNULL(channel)) {
     CHECK_NOTNULL(txring_->GetPacketPool());
   }
+
   ~Flow() {}
   /**
    * @brief Operator to compare if two flows are equal.
@@ -467,6 +471,8 @@ class Flow {
         SendRst();
         state_ = State::kClosed;
         break;
+      case State::kRtry:
+        [[fallthrough]];
       default:
         LOG(FATAL) << "Unknown state";
     }
@@ -486,6 +492,7 @@ class Flow {
   void InputPacket(const dpdk::Packet* packet) {
     // Parse the Machnet header of the packet.
     const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
+
     auto* machneth = packet->head_data<MachnetPktHdr*>(net_hdr_len);
 
     // Sanity check on the Machnet header.
@@ -522,6 +529,11 @@ class Flow {
 
       case MachnetPktHdr::MachnetFlags::kRtry:
         LOG(WARNING) << "another src port!";
+        // Maybe I return a value here! and then just terminate the connection.
+        // Then I create a new connection given the information in the packet.
+        // store requested queue id and requested RSS
+        process_krtry(packet);
+        state_ = State::kRtry;
         return;
         break;
       case MachnetPktHdr::MachnetFlags::kSynAck:
@@ -601,6 +613,15 @@ class Flow {
     TransmitPackets();
   }
 
+  // will explain later TODO alireza: doc
+  bool is_state_retry() {
+    if (state_ == State::kRtry) {
+      LOG(WARNING) << "####" << remote_rss_hash_key_.size();
+      return true;
+    }
+    return false;
+  }
+
   /**
    * @brief Periodically checks the state of the flow and performs necessary
    * actions.
@@ -615,6 +636,8 @@ class Flow {
   bool PeriodicCheck() {
     // CLOSED state is terminal; the engine might remove the flow.
     if (state_ == State::kClosed) return false;
+
+    if (state_ == State::kRtry) return true;
 
     if (pcb_.rto_disabled()) return true;
 
@@ -637,6 +660,18 @@ class Flow {
     }
 
     return true;
+  }
+
+  ApplicationCallback getAppCallback() {
+      return callback_;
+  }
+
+  size_t getDesiredRemoteQueue() {
+    return remote_desired_rx_queue_;
+  }
+
+  std::vector<uint8_t> getRemoteRSS() {
+    return remote_rss_hash_key_;
   }
 
  private:
@@ -861,6 +896,23 @@ class Flow {
     if (pcb_.rto_disabled()) pcb_.rto_enable();
   }
 
+  void process_krtry(const dpdk::Packet* packet) {
+    const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
+    auto* payload =
+        packet->head_data<uint8_t*>(net_hdr_len + sizeof(MachnetPktHdr));
+
+
+    int *qid = reinterpret_cast<int*>(payload);
+    uint16_t* sizeofrss = reinterpret_cast<uint16_t *>(qid + 1);
+    uint8_t* rss = reinterpret_cast<uint8_t *>(sizeofrss + 1);
+
+    remote_desired_rx_queue_ = *qid;
+
+    remote_rss_hash_key_.resize(*sizeofrss);
+    for (int i = 0; i < *sizeofrss; i++)
+      remote_rss_hash_key_.push_back(rss[i]);
+  }
+
   void process_ack(const MachnetPktHdr* machneth) {
     auto ackno = machneth->ackno.value();
     if (swift::seqno_lt(ackno, pcb_.snd_una)) {
@@ -960,6 +1012,12 @@ class Flow {
   TXQueue tx_queue_;
   // RX queue for the flow.
   RXQueue rx_queue_;
+  // desired rx queue for this flow at the receiver machine.
+  size_t remote_desired_rx_queue_;
+  // remote RSS key
+  std::vector<uint8_t> remote_rss_hash_key_;
+
+
 };
 
 }  // namespace flow
