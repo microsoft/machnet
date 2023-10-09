@@ -19,11 +19,11 @@ struct __attribute__((packed)) MachnetPktHdr {
   be16_t magic;  // Magic value tagged after initialization for the flow.
   enum class MachnetFlags : uint8_t {
     kData = 0b0,
-    kSyn = 0b1,         // SYN packet.
-    kAck = 0b10,        // ACK packet.
-    kSynAck = 0b11,     // SYN-ACK packet.
-    kRst = 0b10000000,  // RST packet.
-    kRtry = 0b100,      // Retry packet.
+    kSyn = 0b1,            // SYN packet.
+    kAck = 0b10,           // ACK packet.
+    kSynAck = 0b11,        // SYN-ACK packet.
+    kRst = 0b10000000,     // RST packet.
+    kRetryForRss = 0b100,  // Retry packet.
   };
   MachnetFlags net_flags;  // Network flags.
   uint8_t msg_flags;       // Field to reflect the `MachnetMsgBuf_t' flags.

@@ -201,28 +201,28 @@ class RXQueue {
     const auto expected_seqno = pcb->rcv_nxt;
 
     if (swift::seqno_lt(seqno, expected_seqno)) [[unlikely]] {  // NOLINT
-        // Packet is a duplicate.
-        // LOG(INFO) << "Received old packet: " << seqno << " < " <<
-        // expected_seqno;
-        return;
-      }  // NOLINT
+      // Packet is a duplicate.
+      // LOG(INFO) << "Received old packet: " << seqno << " < " <<
+      // expected_seqno;
+      return;
+    }  // NOLINT
 
     auto distance = seqno - expected_seqno;
     if (distance >= ReassemblyQueueCapacity()) [[unlikely]] {  // NOLINT
-        // Packet is too far ahead; a packet train was dropped?
-        // We cannot buffer this packet's data.
-        LOG(ERROR) << "Packet too far ahead, seqno: " << seqno
-                   << ", expected: " << expected_seqno;
-        return;
-      }  // NOLINT
+      // Packet is too far ahead; a packet train was dropped?
+      // We cannot buffer this packet's data.
+      LOG(ERROR) << "Packet too far ahead, seqno: " << seqno
+                 << ", expected: " << expected_seqno;
+      return;
+    }  // NOLINT
 
     // Check if we need to expand the reassembly queue window.
     auto reass_q_window =
         (reass_q_head_ - reass_q_tail_) & kReassemblyQueueDefaultSizeMask;
     if (distance >= reass_q_window) [[unlikely]] {  // NOLINT
-        reass_q_head_ =
-            (reass_q_tail_ + distance + 1) & kReassemblyQueueDefaultSizeMask;
-      }  // NOLINT
+      reass_q_head_ =
+          (reass_q_tail_ + distance + 1) & kReassemblyQueueDefaultSizeMask;
+    }  // NOLINT
 
     // Packet is in-order or ahead of the next expected sequence number.
     auto pos = (reass_q_tail_ + distance) & kReassemblyQueueDefaultSizeMask;
@@ -347,7 +347,7 @@ class Flow {
     kSynSent,
     kSynReceived,
     kEstablished,
-    kRtry
+    kRetryForRss
   };
 
   static constexpr char const* StateToString(State state) {
@@ -360,7 +360,7 @@ class Flow {
         return "SYN_RECEIVED";
       case State::kEstablished:
         return "ESTABLISHED";
-      case State::kRtry:
+      case State::kRetryForRss:
         return "RETRY";
       default:
         LOG(FATAL) << "Unknown state";
@@ -471,7 +471,7 @@ class Flow {
         SendRst();
         state_ = State::kClosed;
         break;
-      case State::kRtry:
+      case State::kRetryForRss:
         [[fallthrough]];
       default:
         LOG(FATAL) << "Unknown state";
@@ -527,9 +527,9 @@ class Flow {
         }
         break;
 
-      case MachnetPktHdr::MachnetFlags::kRtry:
+      case MachnetPktHdr::MachnetFlags::kRetryForRss:
         process_krtry(packet);
-        state_ = State::kRtry;
+        state_ = State::kRetryForRss;
         return;
         break;
       case MachnetPktHdr::MachnetFlags::kSynAck:
@@ -542,11 +542,11 @@ class Flow {
         }
 
         if (machneth->ackno.value() != pcb_.snd_nxt) [[unlikely]] {  // NOLINT
-            LOG(ERROR) << "SYN-ACK packet received with invalid ackno: "
-                       << machneth->ackno << " snd_una: " << pcb_.snd_una
-                       << " snd_nxt: " << pcb_.snd_nxt;
-            return;
-          }
+          LOG(ERROR) << "SYN-ACK packet received with invalid ackno: "
+                     << machneth->ackno << " snd_una: " << pcb_.snd_una
+                     << " snd_nxt: " << pcb_.snd_nxt;
+          return;
+        }
 
         if (state_ == State::kSynSent) {
           pcb_.snd_una++;
@@ -577,11 +577,11 @@ class Flow {
       case MachnetPktHdr::MachnetFlags::kData:
         // clang-format off
         if (state_ != State::kEstablished) [[unlikely]] { // NOLINT
-            // clang-format on
-            LOG(ERROR) << "Data packet received for flow in state: "
-                       << static_cast<int>(state_);
-            return;
-          }
+          // clang-format on
+          LOG(ERROR) << "Data packet received for flow in state: "
+                     << static_cast<int>(state_);
+          return;
+        }
         // Data packet, process the payload.
         rx_queue_.Push(&pcb_, packet);
         SendAck();
@@ -611,8 +611,7 @@ class Flow {
 
   // will explain later TODO alireza: doc
   bool is_state_retry() {
-    if (state_ == State::kRtry) {
-      LOG(WARNING) << "####" << remote_rss_hash_key_.size();
+    if (state_ == State::kRetryForRss) {
       return true;
     }
     return false;
@@ -633,7 +632,7 @@ class Flow {
     // CLOSED state is terminal; the engine might remove the flow.
     if (state_ == State::kClosed) return false;
 
-    if (state_ == State::kRtry) return true;
+    if (state_ == State::kRetryForRss) return true;
 
     if (pcb_.rto_disabled()) return true;
 
@@ -658,17 +657,11 @@ class Flow {
     return true;
   }
 
-  ApplicationCallback getAppCallback() {
-      return callback_;
-  }
+  ApplicationCallback getAppCallback() { return callback_; }
 
-  size_t getDesiredRemoteQueue() {
-    return remote_desired_rx_queue_;
-  }
+  size_t getDesiredRemoteQueue() { return remote_desired_rx_queue_; }
 
-  std::vector<uint8_t> getRemoteRSS() {
-    return remote_rss_hash_key_;
-  }
+  std::vector<uint8_t> getRemoteRSS() { return remote_rss_hash_key_; }
 
  private:
   void PrepareL2Header(dpdk::Packet* packet) {
@@ -894,19 +887,17 @@ class Flow {
 
   void process_krtry(const dpdk::Packet* packet) {
     const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
-    auto* payload =
+    uint8_t* payload =
         packet->head_data<uint8_t*>(net_hdr_len + sizeof(MachnetPktHdr));
 
-
-    int *qid = reinterpret_cast<int*>(payload);
-    uint16_t* sizeofrss = reinterpret_cast<uint16_t *>(qid + 1);
-    uint8_t* rss = reinterpret_cast<uint8_t *>(sizeofrss + 1);
+    int* qid = reinterpret_cast<int*>(payload);
+    uint16_t* sizeofrss = reinterpret_cast<uint16_t*>(qid + 1);
+    uint8_t* rss = reinterpret_cast<uint8_t*>(sizeofrss + 1);
 
     remote_desired_rx_queue_ = *qid;
 
     remote_rss_hash_key_.resize(*sizeofrss);
-    for (int i = 0; i < *sizeofrss; i++)
-      remote_rss_hash_key_.push_back(rss[i]);
+    for (int i = 0; i < *sizeofrss; i++) remote_rss_hash_key_.push_back(rss[i]);
   }
 
   void process_ack(const MachnetPktHdr* machneth) {
@@ -968,24 +959,24 @@ class Flow {
       }
       // clang-format off
     } else if (swift::seqno_gt(ackno, pcb_.snd_nxt)) [[unlikely]] { // NOLINT
-        // clang-format on
-        LOG(ERROR) << "ACK received for untransmitted data.";
-        // clang-format off
+      // clang-format on
+      LOG(ERROR) << "ACK received for untransmitted data.";
+      // clang-format off
     } else [[likely]] { // NOLINT
-        // clang-format on
-        // This is a valid ACK, acknowledging new data.
-        auto acked_packets = ackno - pcb_.snd_una;
-        if (state_ == State::kSynReceived) {
-          state_ = State::kEstablished;
-          acked_packets--;
-        }
-        tx_queue_.AckMsgBufs(acked_packets);
-        pcb_.snd_una = ackno;
-        pcb_.duplicate_acks = 0;
-        pcb_.snd_ooo_acks = 0;
-        pcb_.rto_rexmits = 0;
-        pcb_.rto_maybe_reset();
+      // clang-format on
+      // This is a valid ACK, acknowledging new data.
+      auto acked_packets = ackno - pcb_.snd_una;
+      if (state_ == State::kSynReceived) {
+        state_ = State::kEstablished;
+        acked_packets--;
       }
+      tx_queue_.AckMsgBufs(acked_packets);
+      pcb_.snd_una = ackno;
+      pcb_.duplicate_acks = 0;
+      pcb_.snd_ooo_acks = 0;
+      pcb_.rto_rexmits = 0;
+      pcb_.rto_maybe_reset();
+    }
 
     TransmitPackets();
   }
@@ -1012,8 +1003,6 @@ class Flow {
   size_t remote_desired_rx_queue_;
   // remote RSS key
   std::vector<uint8_t> remote_rss_hash_key_;
-
-
 };
 
 }  // namespace flow

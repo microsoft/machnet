@@ -241,8 +241,8 @@ class MachnetEngineSharedState {
     return true;
   }
 
-   int GetQueueId(const net::Ipv4::Address &ipv4_addr,
-                        const net::Udp::Port &port) {
+  int GetQueueId(const net::Ipv4::Address &ipv4_addr,
+                 const net::Udp::Port &port) {
     auto it = listeners_to_rxq.find({ipv4_addr, port});
     if (it == listeners_to_rxq.end()) {
       return -1;
@@ -253,9 +253,6 @@ class MachnetEngineSharedState {
 
     return res;
   }
-
-
-
 
   /**
    * @brief Unregisters a listener on a specific IPv4 address and UDP port,
@@ -764,7 +761,8 @@ class MachnetEngine {
         return true;
       };
 
-      auto src_port = shared_state_->SrcPortAlloc(src_addr, rss_lambda);
+      std::optional<net::Udp::Port> src_port =
+          shared_state_->SrcPortAlloc(src_addr, rss_lambda);
       if (!src_port.has_value()) {
         LOG(ERROR) << "Cannot allocate source port for " << src_addr.ToString();
         it = pending_requests_.erase(it);
@@ -879,20 +877,19 @@ class MachnetEngine {
         const auto &flow_it = active_flows_map_[pkt_key];
         (*flow_it)->InputPacket(pkt);
 
-        
-
         if ((*flow_it)->is_state_retry()) {
           auto dst_port = udph->src_port;
           auto src_addr = ipv4h->dst_addr;
           auto dst_addr = ipv4h->src_addr;
 
           // This is src address of retry packet
-          // src_port vs 
+          // src_port vs
 
           auto rss_lambda = [src_addr, dst_addr, dst_port,
-                            rss_key = (*flow_it)->getRemoteRSS(), pmd_port = pmd_port_,
-                            rx_queue_id = (*flow_it)->getDesiredRemoteQueue()
-                                ](uint16_t port) -> bool {
+                             rss_key = (*flow_it)->getRemoteRSS(),
+                             pmd_port = pmd_port_,
+                             rx_queue_id = (*flow_it)->getDesiredRemoteQueue()](
+                                uint16_t port) -> bool {
             rte_thash_tuple ipv4_l3_l4_tuple;
             ipv4_l3_l4_tuple.v4.src_addr = src_addr.address.value();
             ipv4_l3_l4_tuple.v4.dst_addr = dst_addr.address.value();
@@ -930,22 +927,28 @@ class MachnetEngine {
             return true;
           };
 
-          auto src_port = shared_state_->SrcPortAlloc(ipv4h->dst_addr, rss_lambda);
+          std::optional<net::Udp::Port> src_port =
+              shared_state_->SrcPortAlloc(ipv4h->dst_addr, rss_lambda);
 
           if (!src_port.has_value()) {
-              LOG(WARNING) << "Cannot allocate source port for " << src_addr.ToString();
-              return;
+            LOG(WARNING) << "Cannot allocate source port for "
+                         << src_addr.ToString();
+            return;
           }
 
-          const auto &flow_it_dup =
-            (*flow_it)->channel()->CreateFlow(src_addr, src_port.value(), dst_addr, dst_port,
-                              pmd_port_->GetL2Addr(), eh->src_addr,
-                              txring_, (*flow_it)->getAppCallback());
+          // successfully picked a new SRC port now, creating a new flow that
+          // fits our criteria.
+
+          const auto &flow_it_dup = (*flow_it)->channel()->CreateFlow(
+              src_addr, src_port.value(), dst_addr, dst_port,
+              pmd_port_->GetL2Addr(), eh->src_addr, txring_,
+              (*flow_it)->getAppCallback());
 
           (*flow_it_dup)->InitiateHandshake();
-          active_flows_map_.emplace((*flow_it_dup)->key(), flow_it_dup);   
+          active_flows_map_.emplace((*flow_it_dup)->key(), flow_it_dup);
           (*flow_it)->channel()->RemoveFlow(flow_it);
-          active_flows_map_.erase(active_flows_map_.find(pkt_key)); // I need to find a way to do this.
+          active_flows_map_.erase(active_flows_map_.find(
+              pkt_key));  // I need to find a way to do this.
         }
         return;
       }
@@ -959,54 +962,56 @@ class MachnetEngine {
         if (listeners_.find(local_ipv4_addr) != listeners_.end()) {
           // We have a listener on this port.
           const auto &listeners_on_ip = listeners_[local_ipv4_addr];
-          auto qid = shared_state_->GetQueueId(local_ipv4_addr, local_udp_port);
+          const int qid =
+              shared_state_->GetQueueId(local_ipv4_addr, local_udp_port);
           if (listeners_on_ip.find(local_udp_port) == listeners_on_ip.end()) {
-
             if (qid > -1) {
-
-              // It needs a bit of work
-
-              LOG(WARNING) << "we should send a retry";
-              // we have a receiver for the other engine.
-              // let's return the packet back with kRtry one.
               auto *response = CHECK_NOTNULL(packet_pool_->PacketAlloc());
-              const size_t hdr_length = (sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) + sizeof(net::MachnetPktHdr));
-              const uint32_t pkt_len = hdr_length + 46; // I am assuming the rss key size to 40 bytes.
-              auto *response_eh = response->append<Ethernet *>(pkt_len);
+              const size_t hdr_length =
+                  (sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) +
+                   sizeof(net::MachnetPktHdr));
+              const uint32_t pkt_len =
+                  hdr_length +
+                  46;  // I am assuming the rss key size to 40 bytes.
+              Ethernet *response_eh = response->append<Ethernet *>(pkt_len);
 
               // THIS IS A BIG PROBLEM!
               LOG(WARNING) << pkt->length() << " XXXX " << pkt_len;
-              if(!response_eh)
-                LOG(WARNING) << "could not append";
+              if (!response_eh) LOG(WARNING) << "could not append";
               // Size is different that just packet->length;
               response_eh->dst_addr = eh->src_addr;
               response_eh->src_addr = pmd_port_->GetL2Addr();
               response_eh->eth_type = be16_t(Ethernet::kIpv4);
               response->set_l2_len(sizeof(*response_eh));
-              auto *response_ipv4h = reinterpret_cast<Ipv4 *>(response_eh + 1);
+              Ipv4 *response_ipv4h = reinterpret_cast<Ipv4 *>(response_eh + 1);
               response_ipv4h->version_ihl = 0x45;
               response_ipv4h->type_of_service = 0;
               response_ipv4h->packet_id = be16_t(0x1513);
               response_ipv4h->fragment_offset = be16_t(0);
               response_ipv4h->next_proto_id = Ipv4::Proto::kUdp;
               response_ipv4h->time_to_live = 64;
-              // response_ipv4h->total_length = be16_t(pkt->length() - sizeof(Ethernet));
+              // response_ipv4h->total_length = be16_t(pkt->length() -
+              // sizeof(Ethernet));
               response_ipv4h->total_length = be16_t(pkt_len - sizeof(Ethernet));
               response_ipv4h->src_addr = ipv4h->dst_addr;
               response_ipv4h->dst_addr = ipv4h->src_addr;
               response_ipv4h->hdr_checksum = 0;
               response->set_l3_len(sizeof(*response_ipv4h));
-              response->offload_ipv4_csum(); // I should calculate the checksum
-              auto *response_udp = reinterpret_cast<Udp *>(response_ipv4h + 1);
+              response->offload_ipv4_csum();  // I should calculate the checksum
+              Udp *response_udp = reinterpret_cast<Udp *>(response_ipv4h + 1);
               response_udp->dst_port = udph->src_port;
               response_udp->src_port = udph->dst_port;
-              // response_udp->len = be16_t(pkt->length() - sizeof(Ethernet) - sizeof(Ipv4));
-              response_udp->len = be16_t(pkt_len - sizeof(Ethernet) - sizeof(Ipv4));
+              // response_udp->len = be16_t(pkt->length() - sizeof(Ethernet) -
+              // sizeof(Ipv4));
+              response_udp->len =
+                  be16_t(pkt_len - sizeof(Ethernet) - sizeof(Ipv4));
               response_udp->cksum = be16_t(0);
               // calculate checksum for udp;
-              auto *response_mach = reinterpret_cast<net::MachnetPktHdr *>(response_udp + 1);
+              net::MachnetPktHdr *response_mach =
+                  reinterpret_cast<net::MachnetPktHdr *>(response_udp + 1);
               response_mach->magic = be16_t(net::MachnetPktHdr::kMagic);
-              response_mach->net_flags = net::MachnetPktHdr::MachnetFlags::kRtry;
+              response_mach->net_flags =
+                  net::MachnetPktHdr::MachnetFlags::kRetryForRss;
               response_mach->msg_flags = 0;
               response_mach->seqno = be32_t(0);
               response_mach->ackno = be32_t(0);
@@ -1014,19 +1019,21 @@ class MachnetEngine {
               response_mach->sack_bitmap_count = be16_t(0);
               response_mach->timestamp1 = be64_t(0);
               // copy data
-              auto* payload = reinterpret_cast<uint8_t*>(response_mach + 1);
+              uint8_t *payload = reinterpret_cast<uint8_t *>(response_mach + 1);
               utils::Copy(payload, &qid, sizeof(qid));
-              uint16_t sizeofrss = pmd_port_->GetRSSKey().size() * sizeof(uint8_t);
-              utils::Copy(payload+4, &sizeofrss, sizeof(qid));
-              utils::Copy(payload+6, pmd_port_->GetRSSKey().data(), sizeofrss);
-              auto nsent = txring_->TrySendPackets(&response, 1);
-              LOG_IF(WARNING, nsent != 1) << "Failed to send kRtry";
+              const uint16_t sizeofrss =
+                  pmd_port_->GetRSSKey().size() * sizeof(uint8_t);
+              utils::Copy(payload + 4, &sizeofrss, sizeof(qid));
+              utils::Copy(payload + 6, pmd_port_->GetRSSKey().data(),
+                          sizeofrss);
+              const uint16_t nsent = txring_->TrySendPackets(&response, 1);
+              LOG_IF(WARNING, nsent != 1) << "Failed to send kRetryForRss";
             }
             LOG(INFO) << "Dropping packet with RSS hash: " << pkt->rss_hash()
-              << " (be: " << __builtin_bswap32(pkt->rss_hash()) << ")"
-              << " because there is no listener on port "
-              << local_udp_port.port.value()
-              << " (engine @rx_q_id: " << rxring_->GetRingId() << ")";       
+                      << " (be: " << __builtin_bswap32(pkt->rss_hash()) << ")"
+                      << " because there is no listener on port "
+                      << local_udp_port.port.value()
+                      << " (engine @rx_q_id: " << rxring_->GetRingId() << ")";
             return;
           }
 
