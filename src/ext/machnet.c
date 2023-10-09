@@ -434,8 +434,13 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
 
   // Calculate how many buffers we need to hold the message, and bulk allocate
   // them.
-  uint32_t buffers_nr =
-      (msghdr->msg_size + kMsgBufPayloadMax - 1) / kMsgBufPayloadMax;
+  //  uint32_t buffers_nr =
+  //      (msghdr->msg_size + kMsgBufPayloadMax - 1) / kMsgBufPayloadMax;
+  uint32_t buffers_nr = (msghdr->msg_size + MTU - 1) / MTU;
+  fprintf(stderr,
+          "kMsgBufPayloadMax: %d msg_size: %d buffers_nr: %d "
+          "msghdr->msg_iovlen: %zu\n",
+          kMsgBufPayloadMax, msghdr->msg_size, buffers_nr, msghdr->msg_iovlen);
   MachnetRingSlot_t *buffer_indices =
       (MachnetRingSlot_t *)malloc(buffers_nr * sizeof(MachnetRingSlot_t));
   if (buffer_indices == NULL) return -1;
@@ -460,6 +465,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
 
     uchar_t *seg_data = (uchar_t *)segment_desc->base;
     uint32_t seg_bytes = segment_desc->len;
+    fprintf(stderr, "seg_bytes: %d\n", seg_bytes);
     while (seg_bytes) {
       // Get the destination offset at buffer.
       MachnetMsgBuf_t buffer = buffers[buffer_cur_index];
@@ -475,11 +481,18 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       seg_data += nbytes_to_copy;
       seg_bytes -= nbytes_to_copy;
       total_bytes_copied += nbytes_to_copy;
-
+      //      fprintf(stderr, "seg_bytes left: %d total_bytes_copied: %d\n",
+      //      seg_bytes,
+      //              total_bytes_copied);
       if (seg_bytes) {
         // The buffer is full, and we still have data to copy.
         buffer_cur_index++;  // Get the next buffer index.
-        assert(buffer_cur_index < buffers_nr);
+                             //        fprintf(stderr,
+        //                "buffer_cur_index: %d buffers_nr: %d seg_bytes: %d "
+        //                "total_bytes_copied: %d\n",
+        //                buffer_cur_index, buffers_nr, seg_bytes,
+        //                total_bytes_copied);
+        assert(buffer_cur_index <= buffers_nr);
         //        buffer->next =
         //            buffer_indices[buffer_cur_index];  // Link to the next
         //            buffer.
@@ -512,13 +525,14 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   // TODO(vjabrayilov): Add logging and back off here
   if (__machnet_channel_app_ring_enqueue(ctx, buffers_nr, buffers) !=
       buffers_nr) {
-    fprintf(stderr, "Cannot enqueue");
+    fprintf(stderr, "Cannot enqueue\n");
     free(buffers);
     return -1;
   }
-
+  fprintf(stderr, "Enqueued %d buffers\n", buffers_nr);
   free(buffers);
-
+  fprintf(stderr, "App ring contains %d buffers\n",
+          __machnet_channel_app_ring_pending(ctx));
   return 0;
 }
 

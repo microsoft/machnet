@@ -210,26 +210,26 @@ static inline int __machnet_channel_dataplane_init(
 
   // Initialize the message header of each buffer.
   // TODO(vjabrayilov): is that redundant??
-  for (uint32_t i = 0; i < machnet_ring_slot_nr; i++) {
-    MachnetMsgBuf_t *buf = __machnet_channel_machnet_buf(ctx, i);
-    __machnet_channel_buf_init(buf);
-    // The following fields should only be initialized once here.
-    *__DECONST(uint32_t *, &buf->magic) = MACHNET_MSGBUF_MAGIC;
-    *__DECONST(uint32_t *, &buf->index) = i;
-    *__DECONST(uint32_t *, &buf->size) =
-        buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
-  }
-
-  // TODO(vjabrayilov): is that redundant??
-  for (uint32_t i = 0; i < app_ring_slot_nr; i++) {
-    MachnetMsgBuf_t *buf = __machnet_channel_app_buf(ctx, i);
-    __machnet_channel_buf_init(buf);
-    // The following fields should only be initialized once here.
-    *__DECONST(uint32_t *, &buf->magic) = MACHNET_MSGBUF_MAGIC;
-    *__DECONST(uint32_t *, &buf->index) = i;
-    *__DECONST(uint32_t *, &buf->size) =
-        buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
-  }
+  //  for (uint32_t i = 0; i < machnet_ring_slot_nr; i++) {
+  //    MachnetMsgBuf_t *buf = __machnet_channel_machnet_buf(ctx, i);
+  //    __machnet_channel_buf_init(buf);
+  //    // The following fields should only be initialized once here.
+  //    *__DECONST(uint32_t *, &buf->magic) = MACHNET_MSGBUF_MAGIC;
+  //    *__DECONST(uint32_t *, &buf->index) = i;
+  //    *__DECONST(uint32_t *, &buf->size) =
+  //        buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
+  //  }
+  //
+  //  // TODO(vjabrayilov): is that redundant??
+  //  for (uint32_t i = 0; i < app_ring_slot_nr; i++) {
+  //    MachnetMsgBuf_t *buf = __machnet_channel_app_buf(ctx, i);
+  //    __machnet_channel_buf_init(buf);
+  //    // The following fields should only be initialized once here.
+  //    *__DECONST(uint32_t *, &buf->magic) = MACHNET_MSGBUF_MAGIC;
+  //    *__DECONST(uint32_t *, &buf->index) = i;
+  //    *__DECONST(uint32_t *, &buf->size) =
+  //        buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
+  //  }
 
   // Set the header magic at the end.
   __sync_synchronize();
