@@ -95,7 +95,7 @@ cd hello_world; make
 ## 5. Run the end-to-end benchmark
 
 ```bash
-# Build the `msg_gen` app used for benchmarking
+# Build the `msg_gen` app for benchmarking. This partial build does not need DPDK or rdma_core.
 cd machnet
 rm -rf build; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=Release ..; make -j
 
