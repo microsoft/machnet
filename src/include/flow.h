@@ -528,10 +528,6 @@ class Flow {
         break;
 
       case MachnetPktHdr::MachnetFlags::kRtry:
-        LOG(WARNING) << "another src port!";
-        // Maybe I return a value here! and then just terminate the connection.
-        // Then I create a new connection given the information in the packet.
-        // store requested queue id and requested RSS
         process_krtry(packet);
         state_ = State::kRtry;
         return;
