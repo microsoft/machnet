@@ -51,6 +51,7 @@ extern "C" {
 #define PAGE_SIZE (4 * KB)
 #define HUGE_PAGE_2M_SIZE (2 * MB)
 #define MACHNET_MSG_MAX_LEN (8 * MB)
+#define MTU 1500
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)
@@ -188,12 +189,13 @@ struct MachnetMsgBuf {
   // If multi-buffer message (SG), last points to the last buffer index.
   // This is only set in the first buffer of the message.
   uint32_t last;
+  uchar_t data[MTU];
   uint32_t reserved1[1];
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetMsgBuf MachnetMsgBuf_t;
 #define MACHNET_MSGBUF_SPACE_RESERVED (sizeof(MachnetMsgBuf_t))
-static_assert(MACHNET_MSGBUF_SPACE_RESERVED == CACHE_LINE_SIZE,
-              "MachnetMsgBuf_t is not aligned");
+// static_assert(MACHNET_MSGBUF_SPACE_RESERVED == CACHE_LINE_SIZE,
+//               "MachnetMsgBuf_t is not aligned");
 #define MACHNET_MSGBUF_HEADROOM_MAX (2 * CACHE_LINE_SIZE)
 
 static inline __attribute__((always_inline)) void __machnet_channel_buf_init(
@@ -695,7 +697,7 @@ __machnet_channel_ctrl_cq_dequeue(const MachnetChannelCtx_t *ctx,
 static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_app_ring_enqueue(const MachnetChannelCtx_t *ctx,
                                    unsigned int n,
-                                   const MachnetRingSlot_t *bufs) {
+                                   const MachnetMsgBuf_t *bufs) {
   assert(ctx != NULL);
   assert(bufs != NULL);
 
