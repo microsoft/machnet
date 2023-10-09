@@ -39,7 +39,7 @@ mandatory steps.
 ```bash
 # Install packages required to try out Machnet
 sudo apt-get update
-sudo apt-get install -y docker.io make gcc g++ uuid-dev libgflags-dev driverctl 
+sudo apt-get install -y docker.io make cmake gcc pkg-config g++ uuid-dev libgflags-dev net-tools driverctl jq
 
 # Reboot like below to allow non-root users to run Docker
 sudo usermod -aG docker $USER && sudo reboot
@@ -67,7 +67,7 @@ sudo driverctl -b vmbus set-override $DEV_UUID uio_hv_generic
 
 # Start Machnet
 echo "Machnet IP address: $MACHNET_IP_ADDR, MAC address: $MACHNET_MAC_ADDR"
-git clone https://github.com/microsoft/machnet.git
+git clone --recursive https://github.com/microsoft/machnet.git
 cd machnet
 ./machnet.sh --mac $MACHNET_MAC_ADDR --ip $MACHNET_IP_ADDR
 
@@ -85,14 +85,33 @@ test things end-to-end with a client-server application.
 ./build_shim.sh
 cd hello_world; make
 
-# On VM #1, run hello_world server
+# On VM #1, run the hello_world server
 ./hello_world --local <eth1 IP address of VM 1>
 
-# On VM #2, run hello_world client
+# On VM #2, run the hello_world client
 ./hello_world --local <eth1 IP address of VM 1> --remote <eth1 IP address of VM 2>
 ```
 
-If everything goes well, VM 1 should print "Hello World!"
+## 5. Run the end-to-end benchmark
+
+```bash
+# Build the `msg_gen` app used for benchmarking
+cd machnet
+rm -rf build; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=Release ..; make -j
+
+# See available benchmark options
+./src/apps/msg_gen/msg_gen --help
+
+# On VM #1, run the msg_gen server
+./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1> --logtostderr
+
+# On VM #2, run the msg_gen client
+./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1> --remote_ip <eth1 IP address of VM 2> --active_generator --logtostderr
+```
+
+The client should print message rate and latency percentile statistics.
+`msg_gen --help` lists all the options available (e.g., message size, number of outstanding messages, etc.).
+
 
 ## Application Programming Interface
 Applications use the following steps to interact with the Machnet service:
