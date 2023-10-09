@@ -4,7 +4,7 @@ set(target_name rocksdb_server)
 set(ROCKSDB_INSTALL_DIR /mnt/ankalia/rocksdb/local_install)
 list(APPEND CMAKE_PREFIX_PATH ${ROCKSDB_INSTALL_DIR}/lib/cmake/rocksdb)
 if (NOT EXISTS ${ROCKSDB_INSTALL_DIR}/lib/cmake/rocksdb)
-    message(WARNING "RocksDB installation not found at ${ROCKSDB_INSTALL_DIR}. Not building rocksdb_server")
+    message(WARNING "RocksDB installation not found at ${ROCKSDB_INSTALL_DIR}. Not building rocksdb_server example app.")
     return()
 endif()
 
