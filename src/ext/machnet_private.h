@@ -206,8 +206,10 @@ static inline int __machnet_channel_dataplane_init(
       ROUNDUP_U64_POW2(buffer_size + MACHNET_MSGBUF_SPACE_RESERVED +
                        MACHNET_MSGBUF_HEADROOM_MAX);
   ctx->data_ctx.buf_size = kTotalBufSize;
+  ctx->data_ctx.buf_mss = buffer_size;
 
   // Initialize the message header of each buffer.
+  // TODO(vjabrayilov): is that redundant??
   for (uint32_t i = 0; i < machnet_ring_slot_nr; i++) {
     MachnetMsgBuf_t *buf = __machnet_channel_machnet_buf(ctx, i);
     __machnet_channel_buf_init(buf);
@@ -218,6 +220,7 @@ static inline int __machnet_channel_dataplane_init(
         buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
   }
 
+  // TODO(vjabrayilov): is that redundant??
   for (uint32_t i = 0; i < app_ring_slot_nr; i++) {
     MachnetMsgBuf_t *buf = __machnet_channel_app_buf(ctx, i);
     __machnet_channel_buf_init(buf);
