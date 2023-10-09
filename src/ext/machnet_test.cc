@@ -27,8 +27,9 @@ constexpr const char *file_name(const char *path) {
 }
 const char *channel_name = file_name(__FILE__);
 
-DEFINE_uint64(machnet_slots_nr, 1 << 9, "Number of slots in the Machnet ring.");
-DEFINE_uint64(app_slots_nr, 1 << 9, "Number of slots in the app ring.");
+DEFINE_uint64(machnet_slots_nr, 1 << 13,
+              "Number of slots in the Machnet ring.");
+DEFINE_uint64(app_slots_nr, 1 << 13, "Number of slots in the app ring.");
 DEFINE_uint64(buffers_nr, 1 << 13, "Number of message buffers available.");
 DEFINE_uint64(buffer_size, 1 << 11, "Size of each message buffer.");
 
