@@ -157,7 +157,6 @@ static inline int jring_init(struct jring *r, uint32_t count, uint32_t esize,
 
   r->size = count;
   r->mask = r->size - 1;
-  fprintf(stderr, "size: %d capacity=mask: %d\n", r->size, r->mask);
   r->capacity = r->mask;  // Usable size of the ring.
   r->esize = esize;
 
@@ -459,8 +458,6 @@ static __attribute__((always_inline)) inline unsigned int jring_count(
     const struct jring *r) {
   uint32_t prod_tail = r->prod.tail;
   uint32_t cons_tail = r->cons.tail;
-  fprintf(stderr, "prod_tail: %d cons_tail: %d mask: %d\n", prod_tail,
-          cons_tail, r->mask);
   uint32_t count = (prod_tail - cons_tail) & r->mask;
   return (count > r->capacity) ? r->capacity : count;
 }

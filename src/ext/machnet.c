@@ -437,10 +437,11 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   //  uint32_t buffers_nr =
   //      (msghdr->msg_size + kMsgBufPayloadMax - 1) / kMsgBufPayloadMax;
   uint32_t buffers_nr = (msghdr->msg_size + MTU - 1) / MTU;
-  fprintf(stderr,
-          "kMsgBufPayloadMax: %d msg_size: %d buffers_nr: %d "
-          "msghdr->msg_iovlen: %zu\n",
-          kMsgBufPayloadMax, msghdr->msg_size, buffers_nr, msghdr->msg_iovlen);
+  //  fprintf(stderr,
+  ////          "kMsgBufPayloadMax: %d msg_size: %d buffers_nr: %d "
+  //          "msghdr->msg_iovlen: %zu\n",
+  //          kMsgBufPayloadMax, msghdr->msg_size, buffers_nr,
+  //          msghdr->msg_iovlen);
   MachnetRingSlot_t *buffer_indices =
       (MachnetRingSlot_t *)malloc(buffers_nr * sizeof(MachnetRingSlot_t));
   if (buffer_indices == NULL) return -1;
@@ -529,10 +530,10 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     free(buffers);
     return -1;
   }
-  fprintf(stderr, "Enqueued %d buffers\n", buffers_nr);
+  //  fprintf(stderr, "Enqueued %d buffers\n", buffers_nr);
   free(buffers);
-  fprintf(stderr, "App ring contains %d buffers\n",
-          __machnet_channel_app_ring_pending(ctx));
+  //  fprintf(stderr, "App ring contains %d buffers\n",
+  //          __machnet_channel_app_ring_pending(ctx));
   return 0;
 }
 
