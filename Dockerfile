@@ -17,7 +17,8 @@ RUN apt-get update && \
         libnl-3-dev libnl-route-3-dev python3-dev \
         python3-docutils python3-pyelftools libnuma-dev \
         ca-certificates autoconf \
-        libgflags-dev libgflags2.2 libhugetlbfs-dev pciutils libunwind-dev uuid-dev nlohmann-json3-dev
+        libgflags-dev libgflags1.2 libhugetlbfs-dev \
+        pciutils libunwind-dev uuid-dev nlohmann-json3-dev
 
 # Remove conflicting packages
 RUN apt-get --purge -y remove rdma-core librdmacm1 ibverbs-providers libibverbs-dev libibverbs1
