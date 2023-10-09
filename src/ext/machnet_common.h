@@ -322,6 +322,35 @@ __machnet_channel_buf(const MachnetChannelCtx_t *ctx, uint32_t index) {
 }
 
 /**
+ * Get a pointer to the begining of the Machnet ring MsgBuf at a particular
+ * index.
+ *
+ * @param ctx                Channel's context.
+ * @param index              Index of the buffer.
+ * @return                   A pointer to the beginning of the MsgBuf.
+ */
+static inline __attribute__((always_inline)) MachnetMsgBuf_t *
+__machnet_channel_machnet_buf(const MachnetChannelCtx_t *ctx, uint32_t index) {
+  size_t buf_ofs =
+      ctx->data_ctx.machnet_ring_ofs + (size_t)index * ctx->data_ctx.buf_size;
+  return (MachnetMsgBuf_t *)__machnet_channel_mem_ofs(ctx, buf_ofs);
+}
+
+/**
+ * Get a pointer to the begining of the App ring MsgBuf at a particular index.
+ *
+ * @param ctx                Channel's context.
+ * @param index              Index of the buffer.
+ * @return                   A pointer to the beginning of the MsgBuf.
+ */
+static inline __attribute__((always_inline)) MachnetMsgBuf_t *
+__machnet_channel_app_buf(const MachnetChannelCtx_t *ctx, uint32_t index) {
+  size_t buf_ofs =
+      ctx->data_ctx.app_ring_ofs + (size_t)index * ctx->data_ctx.buf_size;
+  return (MachnetMsgBuf_t *)__machnet_channel_mem_ofs(ctx, buf_ofs);
+}
+
+/**
  * Given a pointer to the channel context, and a pointer to a `MsgBuf' return
  * its index.
  *

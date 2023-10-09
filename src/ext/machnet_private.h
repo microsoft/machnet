@@ -188,50 +188,28 @@ static inline int __machnet_channel_dataplane_init(
                               MACHNET_CHANNEL_CTRL_CQ_SLOT_NR);
 
   jring_t *machnet_ring = __machnet_channel_machnet_ring(ctx);
-  ret = jring_init(machnet_ring, machnet_ring_slot_nr,
-                   sizeof(MachnetRingSlot_t), is_multithread, kMultiThread);
+  ret = jring_init(machnet_ring, machnet_ring_slot_nr, sizeof(MachnetMsgBuf_t),
+                   is_multithread, kMultiThread);
   if (ret != 0) return ret;
 
   // App->Machnet ring follows immediately after the Machnet->App ring.
   ctx->data_ctx.app_ring_ofs =
       ctx->data_ctx.machnet_ring_ofs +
-      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), machnet_ring_slot_nr);
+      jring_get_buf_ring_size(sizeof(MachnetMsgBuf_t), machnet_ring_slot_nr);
   jring_t *app_ring = __machnet_channel_app_ring(ctx);
-  ret = jring_init(app_ring, app_ring_slot_nr, sizeof(MachnetRingSlot_t),
+  ret = jring_init(app_ring, app_ring_slot_nr, sizeof(MachnetMsgBuf_t),
                    kMultiThread, is_multithread);
   if (ret != 0) return ret;
-
-  // jring_get_buf_ring_size() cannot fail here.
-  ctx->data_ctx.buf_ring_ofs =
-      ctx->data_ctx.app_ring_ofs +
-      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), app_ring_slot_nr);
-
-  // Initialize the buffer ring.
-  jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
-  ret = jring_init(buf_ring, buf_ring_slot_nr, sizeof(MachnetRingSlot_t),
-                   kMultiThread, kMultiThread);
-  if (ret != 0) return ret;
-
-  // Offset in memory channel where the final ring ends (buf_ring).
-  size_t buf_ring_end_ofs =
-      ctx->data_ctx.buf_ring_ofs +
-      jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), buf_ring_slot_nr);
 
   // Calculate the actual buffer size (incl. metadata).
   const size_t kTotalBufSize =
       ROUNDUP_U64_POW2(buffer_size + MACHNET_MSGBUF_SPACE_RESERVED +
                        MACHNET_MSGBUF_HEADROOM_MAX);
-  // Initialize the buffers. Note that the buffer pool start is aligned to the
-  // page_size boundary.
-  const size_t kPageSize = is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE;
-  ctx->data_ctx.buf_pool_ofs = ALIGN_TO_PAGE_SIZE(buf_ring_end_ofs, kPageSize);
-  ctx->data_ctx.buf_pool_mask = buf_ring->capacity;
   ctx->data_ctx.buf_size = kTotalBufSize;
-  ctx->data_ctx.buf_mss = buffer_size;
 
   // Initialize the message header of each buffer.
-  for (uint32_t i = 0; i < buf_ring->capacity; i++) {
-    MachnetMsgBuf_t *buf = __machnet_channel_buf(ctx, i);
+  for (uint32_t i = 0; i < machnet_ring_slot_nr; i++) {
+    MachnetMsgBuf_t *buf = __machnet_channel_machnet_buf(ctx, i);
     __machnet_channel_buf_init(buf);
     // The following fields should only be initialized once here.
     *__DECONST(uint32_t *, &buf->magic) = MACHNET_MSGBUF_MAGIC;
@@ -240,19 +218,15 @@ static inline int __machnet_channel_dataplane_init(
         buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
   }
 
-  // Initialize the buffer index table, and make all these buffers available.
-  MachnetRingSlot_t *buf_index_table = (MachnetRingSlot_t *)malloc(
-      buf_ring->capacity * sizeof(MachnetRingSlot_t));
-  if (buf_index_table == NULL) return -1;
-
-  for (size_t i = 0; i < buf_ring->capacity; i++) buf_index_table[i] = i;
-
-  unsigned int free_space;
-  int enqueued = jring_enqueue_bulk(buf_ring, buf_index_table,
-                                    buf_ring->capacity, &free_space);
-  free(buf_index_table);
-  if (((size_t)enqueued != buf_ring->capacity) || (free_space != 0))
-    return -1;  // Enqueue has failed.
+  for (uint32_t i = 0; i < app_ring_slot_nr; i++) {
+    MachnetMsgBuf_t *buf = __machnet_channel_app_buf(ctx, i);
+    __machnet_channel_buf_init(buf);
+    // The following fields should only be initialized once here.
+    *__DECONST(uint32_t *, &buf->magic) = MACHNET_MSGBUF_MAGIC;
+    *__DECONST(uint32_t *, &buf->index) = i;
+    *__DECONST(uint32_t *, &buf->size) =
+        buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
+  }
 
   // Set the header magic at the end.
   __sync_synchronize();
