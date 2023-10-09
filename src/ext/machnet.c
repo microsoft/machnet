@@ -10,7 +10,6 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
-#include <glog/logging.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -511,8 +510,9 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   // Finally, send the message.
   // TODO(ilias): Add retries if the ring is full, and add statistics.
   // TODO(vjabrayilov): Add logging and back off here
-  if (__machnet_channel_app_ring_enqueue(ctx, 1, buffers) != 1) {
-    LOG(INFO) << "Cannot enqueue";
+  if (__machnet_channel_app_ring_enqueue(ctx, buffers_nr, buffers) !=
+      buffers_nr) {
+    fprintf(stderr, "Cannot enqueue");
     free(buffers);
     return -1;
   }
