@@ -36,6 +36,6 @@ Other legal configuration options are safely ignored (for example, `engine_threa
 From `${REPOROOT}/build/src/apps/ping`:
 
 ```bash
-sudo GLOG_logtostderr=1 ./ping --remote_hostname 10.0.0.1
+sudo GLOG_logtostderr=1 ./ping --remote_ip 10.0.0.1
 ```
 **Attention**: Currently the utility expects the remote host to be specified with its IP address. This will be fixed in the future to support hostnames as well.
