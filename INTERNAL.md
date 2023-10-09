@@ -10,7 +10,7 @@ Dockerfile.
 
 ```bash
 # On latest Ubuntu:
-sudo apt -y install cmake libgflags-dev pkg-config nlohmann-json3-dev ninja-build gcc-10 g++-10 doxygen graphviz python3-pip meson libhugetlbfs-dev
+sudo apt -y install cmake libgflags-dev pkg-config nlohmann-json3-dev ninja-build gcc-10 g++-10 doxygen graphviz python3-pip meson libhugetlbfs-dev libnl-route-3-dev libnl-3-dev ibnl-genl-3-dev
 pip3 install pyelftools
 ```
 
