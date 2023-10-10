@@ -241,15 +241,16 @@ class MachnetEngineSharedState {
     return true;
   }
 
-  int GetQueueId(const net::Ipv4::Address &ipv4_addr,
-                 const net::Udp::Port &port) {
+  std::optional<uint16_t> GetQueueId(const net::Ipv4::Address &ipv4_addr,
+                                     const net::Udp::Port &port) {
     auto it = listeners_to_rxq.find({ipv4_addr, port});
     if (it == listeners_to_rxq.end()) {
-      return -1;
+      LOG(INFO) << "No listener registered on " << ipv4_addr.ToString() << ":"
+                << port.port.value();
+      return std::nullopt;
     }
 
-    int res = it->second;
-    LOG(WARNING) << "found the value ########### " << res;
+    uint16_t res = it->second;
 
     return res;
   }
@@ -910,11 +911,17 @@ class MachnetEngine {
                 RTE_THASH_V4_L4_LEN, rss_key.data());
 
             if (pmd_port->GetRSSRxQueue(reversed_rss_hash) != rx_queue_id) {
+              LOG(WARNING) << "Reverse RSS queue does not match "
+                           << pmd_port->GetRSSRxQueue(reversed_rss_hash)
+                           << " vs " << rx_queue_id;
               return false;
             }
 
             if (pmd_port->GetRSSRxQueue(__builtin_bswap32(reversed_rss_hash)) !=
                 rx_queue_id) {
+              LOG(WARNING) << "RSS queue does not match"
+                           << __builtin_bswap32(reversed_rss_hash) << " vs "
+                           << rx_queue_id;
               return false;
             }
 
@@ -931,8 +938,11 @@ class MachnetEngine {
               shared_state_->SrcPortAlloc(ipv4h->dst_addr, rss_lambda);
 
           if (!src_port.has_value()) {
-            LOG(WARNING) << "Cannot allocate source port for "
-                         << src_addr.ToString();
+            LOG(WARNING) << "Cannot allocate source port for"
+                         << " Src addr " << src_addr.ToString() << " Dst addr "
+                         << dst_addr.ToString() << " Dst port "
+                         << dst_port.port.value() << " Desired queue "
+                         << (*flow_it)->getDesiredRemoteQueue();
             return;
           }
 
@@ -960,80 +970,20 @@ class MachnetEngine {
         const auto &local_ipv4_addr = ipv4h->dst_addr;
         const auto &local_udp_port = udph->dst_port;
         if (listeners_.find(local_ipv4_addr) != listeners_.end()) {
-          // We have a listener on this port.
+          // We have a listener on this ip. Figure if the port is open on any
+          // other engines or not.
           const auto &listeners_on_ip = listeners_[local_ipv4_addr];
-          const int qid =
-              shared_state_->GetQueueId(local_ipv4_addr, local_udp_port);
           if (listeners_on_ip.find(local_udp_port) == listeners_on_ip.end()) {
-            if (qid > -1) {
-              auto *response = CHECK_NOTNULL(packet_pool_->PacketAlloc());
-              const size_t hdr_length =
-                  (sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) +
-                   sizeof(net::MachnetPktHdr));
-              const uint32_t pkt_len =
-                  hdr_length +
-                  46;  // I am assuming the rss key size to 40 bytes.
-              Ethernet *response_eh = response->append<Ethernet *>(pkt_len);
-
-              // THIS IS A BIG PROBLEM!
-              LOG(WARNING) << pkt->length() << " XXXX " << pkt_len;
-              if (!response_eh) LOG(WARNING) << "could not append";
-              // Size is different that just packet->length;
-              response_eh->dst_addr = eh->src_addr;
-              response_eh->src_addr = pmd_port_->GetL2Addr();
-              response_eh->eth_type = be16_t(Ethernet::kIpv4);
-              response->set_l2_len(sizeof(*response_eh));
-              Ipv4 *response_ipv4h = reinterpret_cast<Ipv4 *>(response_eh + 1);
-              response_ipv4h->version_ihl = 0x45;
-              response_ipv4h->type_of_service = 0;
-              response_ipv4h->packet_id = be16_t(0x1513);
-              response_ipv4h->fragment_offset = be16_t(0);
-              response_ipv4h->next_proto_id = Ipv4::Proto::kUdp;
-              response_ipv4h->time_to_live = 64;
-              // response_ipv4h->total_length = be16_t(pkt->length() -
-              // sizeof(Ethernet));
-              response_ipv4h->total_length = be16_t(pkt_len - sizeof(Ethernet));
-              response_ipv4h->src_addr = ipv4h->dst_addr;
-              response_ipv4h->dst_addr = ipv4h->src_addr;
-              response_ipv4h->hdr_checksum = 0;
-              response->set_l3_len(sizeof(*response_ipv4h));
-              response->offload_ipv4_csum();  // I should calculate the checksum
-              Udp *response_udp = reinterpret_cast<Udp *>(response_ipv4h + 1);
-              response_udp->dst_port = udph->src_port;
-              response_udp->src_port = udph->dst_port;
-              // response_udp->len = be16_t(pkt->length() - sizeof(Ethernet) -
-              // sizeof(Ipv4));
-              response_udp->len =
-                  be16_t(pkt_len - sizeof(Ethernet) - sizeof(Ipv4));
-              response_udp->cksum = be16_t(0);
-              // calculate checksum for udp;
-              net::MachnetPktHdr *response_mach =
-                  reinterpret_cast<net::MachnetPktHdr *>(response_udp + 1);
-              response_mach->magic = be16_t(net::MachnetPktHdr::kMagic);
-              response_mach->net_flags =
-                  net::MachnetPktHdr::MachnetFlags::kRetryForRss;
-              response_mach->msg_flags = 0;
-              response_mach->seqno = be32_t(0);
-              response_mach->ackno = be32_t(0);
-              response_mach->sack_bitmap = be64_t(0);
-              response_mach->sack_bitmap_count = be16_t(0);
-              response_mach->timestamp1 = be64_t(0);
-              // copy data
-              uint8_t *payload = reinterpret_cast<uint8_t *>(response_mach + 1);
-              utils::Copy(payload, &qid, sizeof(qid));
-              const uint16_t sizeofrss =
-                  pmd_port_->GetRSSKey().size() * sizeof(uint8_t);
-              utils::Copy(payload + 4, &sizeofrss, sizeof(qid));
-              utils::Copy(payload + 6, pmd_port_->GetRSSKey().data(),
-                          sizeofrss);
-              const uint16_t nsent = txring_->TrySendPackets(&response, 1);
-              LOG_IF(WARNING, nsent != 1) << "Failed to send kRetryForRss";
+            bool res = MaybeRequestRetryForRSS(eh, ipv4h, udph);
+            if (res) {
+              LOG(INFO) << "Requested retry for RSS";
+            } else {
+              LOG(INFO) << "Dropping packet with RSS hash: " << pkt->rss_hash()
+                        << " (be: " << __builtin_bswap32(pkt->rss_hash()) << ")"
+                        << " because there is no listener on port "
+                        << local_udp_port.port.value()
+                        << " (engine @rx_q_id: " << rxring_->GetRingId() << ")";
             }
-            LOG(INFO) << "Dropping packet with RSS hash: " << pkt->rss_hash()
-                      << " (be: " << __builtin_bswap32(pkt->rss_hash()) << ")"
-                      << " because there is no listener on port "
-                      << local_udp_port.port.value()
-                      << " (engine @rx_q_id: " << rxring_->GetRingId() << ")";
             return;
           }
 
@@ -1152,6 +1102,83 @@ class MachnetEngine {
   }
 
  private:
+  bool MaybeRequestRetryForRSS(const Ethernet *eh, const Ipv4 *ipv4h,
+                               const Udp *udph) {
+    const auto &local_ipv4_addr = ipv4h->dst_addr;
+    const auto &local_udp_port = udph->dst_port;
+
+    const std::optional<uint16_t> qid =
+        shared_state_->GetQueueId(local_ipv4_addr, local_udp_port);
+    if (qid.has_value()) {
+      auto *response = CHECK_NOTNULL(packet_pool_->PacketAlloc());
+      const size_t hdr_length = (sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp) +
+                                 sizeof(net::MachnetPktHdr));
+      const uint16_t sizeofrss =
+          pmd_port_->GetRSSKey().size() * sizeof(uint8_t);
+      const uint32_t pkt_len = hdr_length +
+                               pmd_port_->GetRSSKey().size() * sizeof(uint8_t) +
+                               sizeof(qid.value()) + sizeof(sizeofrss);
+      auto *response_eh = response->append<Ethernet *>(pkt_len);
+      if (!response_eh) {
+        LOG(WARNING)
+            << "Could not append a packet for RSS retry response!: Address "
+            << local_ipv4_addr.ToString() << " Port "
+            << local_udp_port.port.value() << " QID "
+            << static_cast<uint16_t>(qid.value());
+        return false;
+      }
+      // Size is different that just packet->length;
+      response_eh->dst_addr = eh->src_addr;
+      response_eh->src_addr = pmd_port_->GetL2Addr();
+      response_eh->eth_type = be16_t(Ethernet::kIpv4);
+      response->set_l2_len(sizeof(*response_eh));
+
+      Ipv4 *response_ipv4h = reinterpret_cast<Ipv4 *>(response_eh + 1);
+      response_ipv4h->version_ihl = 0x45;
+      response_ipv4h->type_of_service = 0;
+      response_ipv4h->packet_id = be16_t(0x1513);
+      response_ipv4h->fragment_offset = be16_t(0);
+      response_ipv4h->next_proto_id = Ipv4::Proto::kUdp;
+      response_ipv4h->time_to_live = 64;
+
+      response_ipv4h->total_length = be16_t(pkt_len - sizeof(Ethernet));
+      response_ipv4h->src_addr = ipv4h->dst_addr;
+      response_ipv4h->dst_addr = ipv4h->src_addr;
+      response_ipv4h->hdr_checksum = 0;
+      response->set_l3_len(sizeof(*response_ipv4h));
+      response->offload_ipv4_csum();  // I should calculate the checksum
+
+      Udp *response_udp = reinterpret_cast<Udp *>(response_ipv4h + 1);
+      response_udp->dst_port = udph->src_port;
+      response_udp->src_port = udph->dst_port;
+      response_udp->len = be16_t(pkt_len - sizeof(Ethernet) - sizeof(Ipv4));
+      response_udp->cksum = be16_t(0);
+
+      net::MachnetPktHdr *response_mach =
+          reinterpret_cast<net::MachnetPktHdr *>(response_udp + 1);
+      response_mach->magic = be16_t(net::MachnetPktHdr::kMagic);
+      response_mach->net_flags = net::MachnetPktHdr::MachnetFlags::kRetryForRss;
+      response_mach->msg_flags = 0;
+      response_mach->seqno = be32_t(0);
+      response_mach->ackno = be32_t(0);
+      response_mach->sack_bitmap = be64_t(0);
+      response_mach->sack_bitmap_count = be16_t(0);
+      response_mach->timestamp1 = be64_t(0);
+
+      // copy data
+      uint8_t *payload = reinterpret_cast<uint8_t *>(response_mach + 1);
+      utils::Copy(payload, &qid.value(), sizeof(qid.value()));
+
+      utils::Copy(payload + sizeof(qid.value()), &sizeofrss, sizeof(sizeofrss));
+      utils::Copy(payload + sizeof(qid.value()) + sizeof(sizeofrss),
+                  pmd_port_->GetRSSKey().data(), sizeofrss);
+      const uint16_t nsent = txring_->TrySendPackets(&response, 1);
+      LOG_IF(WARNING, nsent != 1) << "Failed to send kRetryForRss";
+      return true;
+    }
+    return false;
+  }
+
   using channel_info =
       std::tuple<std::shared_ptr<shm::Channel>, std::promise<bool>>;
   using flow_info =

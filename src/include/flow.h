@@ -472,7 +472,8 @@ class Flow {
         state_ = State::kClosed;
         break;
       case State::kRetryForRss:
-        [[fallthrough]];
+        state_ = State::kClosed;
+        break;
       default:
         LOG(FATAL) << "Unknown state";
     }
@@ -890,14 +891,14 @@ class Flow {
     uint8_t* payload =
         packet->head_data<uint8_t*>(net_hdr_len + sizeof(MachnetPktHdr));
 
-    int* qid = reinterpret_cast<int*>(payload);
+    uint16_t* qid = reinterpret_cast<uint16_t*>(payload);
     uint16_t* sizeofrss = reinterpret_cast<uint16_t*>(qid + 1);
     uint8_t* rss = reinterpret_cast<uint8_t*>(sizeofrss + 1);
 
     remote_desired_rx_queue_ = *qid;
 
     remote_rss_hash_key_.resize(*sizeofrss);
-    for (int i = 0; i < *sizeofrss; i++) remote_rss_hash_key_.push_back(rss[i]);
+    for (int i = 0; i < *sizeofrss; i++) remote_rss_hash_key_[i] = rss[i];
   }
 
   void process_ack(const MachnetPktHdr* machneth) {
@@ -1000,7 +1001,7 @@ class Flow {
   // RX queue for the flow.
   RXQueue rx_queue_;
   // desired rx queue for this flow at the receiver machine.
-  size_t remote_desired_rx_queue_;
+  uint16_t remote_desired_rx_queue_;
   // remote RSS key
   std::vector<uint8_t> remote_rss_hash_key_;
 };

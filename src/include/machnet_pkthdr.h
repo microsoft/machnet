@@ -22,8 +22,8 @@ struct __attribute__((packed)) MachnetPktHdr {
     kSyn = 0b1,            // SYN packet.
     kAck = 0b10,           // ACK packet.
     kSynAck = 0b11,        // SYN-ACK packet.
+    kRetryForRss = 0b100,  // Retry for RSS packet.
     kRst = 0b10000000,     // RST packet.
-    kRetryForRss = 0b100,  // Retry packet.
   };
   MachnetFlags net_flags;  // Network flags.
   uint8_t msg_flags;       // Field to reflect the `MachnetMsgBuf_t' flags.
