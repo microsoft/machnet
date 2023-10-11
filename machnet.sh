@@ -137,7 +137,7 @@ else
         sudo docker run --privileged --net=host \
             -v /dev/hugepages:/dev/hugepages \
             -v /var/run/machnet:/var/run/machnet \
-            ghcr.io/microsoft/machnet/machnet:debug \
+            ghcr.io/microsoft/machnet/machnet:latest \
             /root/machnet/debug_build/src/apps/machnet/machnet \
             --config_json /var/run/machnet/local_config.json \
             --logtostderr=1
