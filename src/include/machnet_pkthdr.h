@@ -12,6 +12,14 @@ namespace juggler {
 namespace net {
 
 /**
+ * Machnet RSS header.
+ */
+struct __attribute__((packed)) MachnetRetryForRSSPktHdr {
+  uint16_t target_rx_queue_id;
+  uint16_t rss_key_len;
+};
+
+/**
  * Machnet Packet Header.
  */
 struct __attribute__((packed)) MachnetPktHdr {
@@ -25,6 +33,9 @@ struct __attribute__((packed)) MachnetPktHdr {
     kRetryForRss = 0b100,  // Retry for RSS packet.
     kRst = 0b10000000,     // RST packet.
   };
+  struct MachnetRetryForRSSPktHdr
+      rss_retry_hdr;       // header for RSS retry message. It only has
+                           // value if the packet is a retry for RSS.
   MachnetFlags net_flags;  // Network flags.
   uint8_t msg_flags;       // Field to reflect the `MachnetMsgBuf_t' flags.
   be32_t seqno;  // Sequence number to denote the packet counter in the flow.
@@ -33,7 +44,7 @@ struct __attribute__((packed)) MachnetPktHdr {
   be16_t sack_bitmap_count;  // Length of the SACK bitmap [0-64].
   be64_t timestamp1;         // Timestamp of the packet before sending.
 };
-static_assert(sizeof(MachnetPktHdr) == 30, "MachnetPktHdr size mismatch");
+static_assert(sizeof(MachnetPktHdr) == 34, "MachnetPktHdr size mismatch");
 
 inline MachnetPktHdr::MachnetFlags operator|(MachnetPktHdr::MachnetFlags lhs,
                                              MachnetPktHdr::MachnetFlags rhs) {

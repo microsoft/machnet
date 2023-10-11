@@ -529,8 +529,10 @@ class Flow {
         break;
 
       case MachnetPktHdr::MachnetFlags::kRetryForRss:
-        process_krtry(packet);
         state_ = State::kRetryForRss;
+        remote_desired_rx_queue_ = machneth->rss_retry_hdr.target_rx_queue_id;
+        remote_rss_key_len_ = machneth->rss_retry_hdr.rss_key_len;
+        process_krtry_for_rss(machneth);
         return;
         break;
       case MachnetPktHdr::MachnetFlags::kSynAck:
@@ -886,19 +888,13 @@ class Flow {
     if (pcb_.rto_disabled()) pcb_.rto_enable();
   }
 
-  void process_krtry(const dpdk::Packet* packet) {
-    const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
-    uint8_t* payload =
-        packet->head_data<uint8_t*>(net_hdr_len + sizeof(MachnetPktHdr));
+  void process_krtry_for_rss(MachnetPktHdr* machneteh) {
+    uint8_t* payload = reinterpret_cast<uint8_t*>(machneteh + 1);
+    uint8_t* rss = reinterpret_cast<uint8_t*>(payload);
 
-    uint16_t* qid = reinterpret_cast<uint16_t*>(payload);
-    uint16_t* sizeofrss = reinterpret_cast<uint16_t*>(qid + 1);
-    uint8_t* rss = reinterpret_cast<uint8_t*>(sizeofrss + 1);
-
-    remote_desired_rx_queue_ = *qid;
-
-    remote_rss_hash_key_.resize(*sizeofrss);
-    for (int i = 0; i < *sizeofrss; i++) remote_rss_hash_key_[i] = rss[i];
+    remote_rss_hash_key_.resize(remote_rss_key_len_);
+    for (int i = 0; i < remote_rss_key_len_; i++)
+      remote_rss_hash_key_[i] = rss[i];
   }
 
   void process_ack(const MachnetPktHdr* machneth) {
@@ -1002,6 +998,8 @@ class Flow {
   RXQueue rx_queue_;
   // desired rx queue for this flow at the receiver machine.
   uint16_t remote_desired_rx_queue_;
+  // key size for RSS
+  uint16_t remote_rss_key_len_;
   // remote RSS key
   std::vector<uint8_t> remote_rss_hash_key_;
 };

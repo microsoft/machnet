@@ -1157,6 +1157,8 @@ class MachnetEngine {
       net::MachnetPktHdr *response_mach =
           reinterpret_cast<net::MachnetPktHdr *>(response_udp + 1);
       response_mach->magic = be16_t(net::MachnetPktHdr::kMagic);
+      response_mach->rss_retry_hdr.rss_key_len = sizeofrss;
+      response_mach->rss_retry_hdr.target_rx_queue_id = qid.value();
       response_mach->net_flags = net::MachnetPktHdr::MachnetFlags::kRetryForRss;
       response_mach->msg_flags = 0;
       response_mach->seqno = be32_t(0);
@@ -1167,11 +1169,8 @@ class MachnetEngine {
 
       // copy data
       uint8_t *payload = reinterpret_cast<uint8_t *>(response_mach + 1);
-      utils::Copy(payload, &qid.value(), sizeof(qid.value()));
 
-      utils::Copy(payload + sizeof(qid.value()), &sizeofrss, sizeof(sizeofrss));
-      utils::Copy(payload + sizeof(qid.value()) + sizeof(sizeofrss),
-                  pmd_port_->GetRSSKey().data(), sizeofrss);
+      utils::Copy(payload, pmd_port_->GetRSSKey().data(), sizeofrss);
       const uint16_t nsent = txring_->TrySendPackets(&response, 1);
       LOG_IF(WARNING, nsent != 1) << "Failed to send kRetryForRss";
       return true;
