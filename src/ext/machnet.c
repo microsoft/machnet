@@ -566,127 +566,139 @@ ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
   *flow = msghdr.flow_info;
   return msghdr.msg_size;
 }
-
+int machnet_recvmsg_buf(const void *channel_ctx, MachnetMsgBuf_t *msgbuf) {
+  assert(channel_ctx != NULL);
+  const MachnetChannelCtx_t *ctx = (const MachnetChannelCtx_t *)channel_ctx;
+  uint32_t n = __machnet_channel_machnet_ring_dequeue(ctx, 1, msgbuf);
+  if (n != 1) return 0;
+  return 1;
+}
 int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
   assert(channel_ctx != NULL);
   assert(msghdr != NULL);
   const MachnetChannelCtx_t *ctx = (const MachnetChannelCtx_t *)channel_ctx;
-
-  const uint32_t kBufferBatchSize = 16;
-  uint32_t ret __attribute__((unused));
-
-  // Deque a message from the ring.
-  MachnetRingSlot_t buffer_index;
-  uint32_t n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
-  if (n != 1) return 0;  // No message available.
-
-  MachnetMsgBuf_t *buffer;
-  buffer = __machnet_channel_buf(ctx, buffer_index);
-  MachnetFlow_t flow_info = buffer->flow;
-  uint32_t buf_data_ofs = 0;
-  size_t iov_index = 0;
-  uint32_t seg_data_ofs = 0;
-  uint32_t total_bytes_copied = 0;
-
-  // `buffer_indices' array is being used to track used buffers, for later
-  // release.
-  MachnetRingSlot_t buffer_indices[kBufferBatchSize];
-  uint32_t buffer_indices_index = 0;
-
-  while (buffer != NULL &&
-         __machnet_channel_buf_data_len(buffer) > buf_data_ofs) {
-    if (unlikely(iov_index >= msghdr->msg_iovlen)) {
-      // We have already used all the segments provided, but there are more
-      // data in this message.
-      goto fail;
-    }
-
-    // Get the source buffer.
-    uchar_t *buf_data = __machnet_channel_buf_data_ofs(buffer, buf_data_ofs);
-
-    // Get the destination segment.
-    assert(msghdr->msg_iov != NULL);
-    const size_t seg_len = msghdr->msg_iov[iov_index].len;
-    if (unlikely(seg_len == 0)) {
-      // At the unlikely event of a zero-sized segment, move to the next.
-      iov_index++;
-      continue;
-    }
-
-    assert(msghdr->msg_iov[iov_index].base != NULL);
-    uchar_t *seg_data =
-        (uchar_t *)msghdr->msg_iov[iov_index].base + seg_data_ofs;
-
-    // Copy the appropriate amount of data over.
-    uint32_t remaining_bytes_in_buf =
-        __machnet_channel_buf_data_len(buffer) - buf_data_ofs;
-    uint32_t remaining_space_in_seg = seg_len - seg_data_ofs;
-    uint32_t nbytes_to_copy =
-        MIN(remaining_space_in_seg, remaining_bytes_in_buf);
-    memcpy(seg_data, buf_data, nbytes_to_copy);
-    buf_data_ofs += nbytes_to_copy;
-    seg_data_ofs += nbytes_to_copy;
-    total_bytes_copied += nbytes_to_copy;
-
-    // Have we copied the entire buffer?
-    if (buf_data_ofs == __machnet_channel_buf_data_len(buffer)) {
-      // Mark the buffer for later release.
-      buffer_indices[buffer_indices_index++] = buffer_index;
-
-      // Get the next buffer index, if any.
-      if (buffer->flags & MACHNET_MSGBUF_FLAGS_SG) {
-        // This is the last buffer of the message.
-        buffer_index = buffer->next;
-        buffer = __machnet_channel_buf(ctx, buffer_index);
-        buf_data_ofs = 0;
-      }
-
-      // Do a batch buffer release if we reached the threshold.
-      if (buffer_indices_index == kBufferBatchSize) {
-        ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                              buffer_indices);
-        assert(ret == buffer_indices_index);
-        buffer_indices_index = 0;
-      }
-    }
-
-    // Grab the next segment, if no space in this one.
-    if (seg_data_ofs == seg_len) {
-      iov_index++;
-      seg_data_ofs = 0;
-    }
-  }
-
-  // We have finished copying over the message. Now add the control data.
-  msghdr->msg_size = total_bytes_copied;
-  msghdr->flow_info = flow_info;
-
-  // Free up any remaining buffers.
-  ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                        buffer_indices);
-  assert(ret == buffer_indices_index);
-
-  // Success.
+  MachnetMsgBuf_t buffer;
+  uint32_t n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer);
+  if (n != 1) return 0;
+  //  msghdr->msg_size = MTU;
+  //  memcpy(msghdr->msg_iov->base, buffer.data, MTU);
   return 1;
-
-fail:
-  while (buffer != NULL) {
-    buffer_indices[buffer_indices_index++] = buffer_index;
-    if (buffer->flags & MACHNET_MSGBUF_FLAGS_SG) {
-      buffer_index = buffer->next;
-      buffer = __machnet_channel_buf(ctx, buffer_index);
-    } else {
-      buffer = NULL;
-    }
-    if (buffer == NULL || buffer_indices_index == kBufferBatchSize) {
-      ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                            buffer_indices);
-      assert(ret == buffer_indices_index);
-      buffer_indices_index = 0;
-    }
-  }
-
-  return -1;
+  //  const uint32_t kBufferBatchSize = 16;
+  //  uint32_t ret __attribute__((unused));
+  //
+  //  // Deque a message from the ring.
+  ////  MachnetRingSlot_t buffer_index;
+  //  uint32_t n = __machnet_channel_machnet_ring_dequeue(ctx, 1,
+  //  &buffer_index); if (n != 1) return 0;  // No message available.
+  //
+  //  MachnetMsgBuf_t *buffer;
+  //  buffer = __machnet_channel_buf(ctx, buffer_index);
+  //  MachnetFlow_t flow_info = buffer->flow;
+  //  uint32_t buf_data_ofs = 0;
+  //  size_t iov_index = 0;
+  //  uint32_t seg_data_ofs = 0;
+  //  uint32_t total_bytes_copied = 0;
+  //
+  //  // `buffer_indices' array is being used to track used buffers, for later
+  //  // release.
+  //  MachnetRingSlot_t buffer_indices[kBufferBatchSize];
+  //  uint32_t buffer_indices_index = 0;
+  //
+  //  while (buffer != NULL &&
+  //         __machnet_channel_buf_data_len(buffer) > buf_data_ofs) {
+  //    if (unlikely(iov_index >= msghdr->msg_iovlen)) {
+  //      // We have already used all the segments provided, but there are more
+  //      // data in this message.
+  //      goto fail;
+  //    }
+  //
+  //    // Get the source buffer.
+  //    uchar_t *buf_data = __machnet_channel_buf_data_ofs(buffer,
+  //    buf_data_ofs);
+  //
+  //    // Get the destination segment.
+  //    assert(msghdr->msg_iov != NULL);
+  //    const size_t seg_len = msghdr->msg_iov[iov_index].len;
+  //    if (unlikely(seg_len == 0)) {
+  //      // At the unlikely event of a zero-sized segment, move to the next.
+  //      iov_index++;
+  //      continue;
+  //    }
+  //
+  //    assert(msghdr->msg_iov[iov_index].base != NULL);
+  //    uchar_t *seg_data =
+  //        (uchar_t *)msghdr->msg_iov[iov_index].base + seg_data_ofs;
+  //
+  //    // Copy the appropriate amount of data over.
+  //    uint32_t remaining_bytes_in_buf =
+  //        __machnet_channel_buf_data_len(buffer) - buf_data_ofs;
+  //    uint32_t remaining_space_in_seg = seg_len - seg_data_ofs;
+  //    uint32_t nbytes_to_copy =
+  //        MIN(remaining_space_in_seg, remaining_bytes_in_buf);
+  //    memcpy(seg_data, buf_data, nbytes_to_copy);
+  //    buf_data_ofs += nbytes_to_copy;
+  //    seg_data_ofs += nbytes_to_copy;
+  //    total_bytes_copied += nbytes_to_copy;
+  //
+  //    // Have we copied the entire buffer?
+  //    if (buf_data_ofs == __machnet_channel_buf_data_len(buffer)) {
+  //      // Mark the buffer for later release.
+  //      buffer_indices[buffer_indices_index++] = buffer_index;
+  //
+  //      // Get the next buffer index, if any.
+  //      if (buffer->flags & MACHNET_MSGBUF_FLAGS_SG) {
+  //        // This is the last buffer of the message.
+  //        buffer_index = buffer->next;
+  //        buffer = __machnet_channel_buf(ctx, buffer_index);
+  //        buf_data_ofs = 0;
+  //      }
+  //
+  //      // Do a batch buffer release if we reached the threshold.
+  //      if (buffer_indices_index == kBufferBatchSize) {
+  //        ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
+  //                                              buffer_indices);
+  //        assert(ret == buffer_indices_index);
+  //        buffer_indices_index = 0;
+  //      }
+  //    }
+  //
+  //    // Grab the next segment, if no space in this one.
+  //    if (seg_data_ofs == seg_len) {
+  //      iov_index++;
+  //      seg_data_ofs = 0;
+  //    }
+  //  }
+  //
+  //  // We have finished copying over the message. Now add the control data.
+  //  msghdr->msg_size = total_bytes_copied;
+  //  msghdr->flow_info = flow_info;
+  //
+  //  // Free up any remaining buffers.
+  //  ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
+  //                                        buffer_indices);
+  //  assert(ret == buffer_indices_index);
+  //
+  //  // Success.
+  //  return 1;
+  //
+  // fail:
+  //  while (buffer != NULL) {
+  //    buffer_indices[buffer_indices_index++] = buffer_index;
+  //    if (buffer->flags & MACHNET_MSGBUF_FLAGS_SG) {
+  //      buffer_index = buffer->next;
+  //      buffer = __machnet_channel_buf(ctx, buffer_index);
+  //    } else {
+  //      buffer = NULL;
+  //    }
+  //    if (buffer == NULL || buffer_indices_index == kBufferBatchSize) {
+  //      ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
+  //                                            buffer_indices);
+  //      assert(ret == buffer_indices_index);
+  //      buffer_indices_index = 0;
+  //    }
+  //  }
+  //
+  //  return -1;
 }
 
 void machnet_detach(const MachnetChannelCtx_t *ctx) {}

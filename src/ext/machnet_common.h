@@ -720,7 +720,7 @@ __machnet_channel_app_ring_enqueue(const MachnetChannelCtx_t *ctx,
  */
 static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_app_ring_dequeue(const MachnetChannelCtx_t *ctx,
-                                   unsigned int n, MachnetRingSlot_t *bufs) {
+                                   unsigned int n, MachnetMsgBuf_t *bufs) {
   jring_t *app_ring = __machnet_channel_app_ring(ctx);
 
   // Multiple application threads might be enqueuing concurrently.
@@ -745,7 +745,7 @@ __machnet_channel_app_ring_dequeue(const MachnetChannelCtx_t *ctx,
 static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_machnet_ring_enqueue(const MachnetChannelCtx_t *ctx,
                                        unsigned int n,
-                                       const MachnetRingSlot_t *bufs) {
+                                       const MachnetMsgBuf_t *bufs) {
   assert(ctx != NULL);
   assert(bufs != NULL);
 
@@ -768,8 +768,7 @@ __machnet_channel_machnet_ring_enqueue(const MachnetChannelCtx_t *ctx,
  */
 static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_machnet_ring_dequeue(const MachnetChannelCtx_t *ctx,
-                                       unsigned int n,
-                                       MachnetRingSlot_t *bufs) {
+                                       unsigned int n, MachnetMsgBuf_t *bufs) {
   jring_t *machnet_ring = __machnet_channel_machnet_ring(ctx);
 
   // Multiple application threads might be enqueuing concurrently.

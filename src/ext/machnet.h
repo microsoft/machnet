@@ -183,7 +183,7 @@ ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
  *                               received, -1 on failure
  */
 int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr);
-
+int machnet_recvmsg_buf(const void *channel_ctx, MachnetMsgBuf_t *msgbuf);
 #ifdef __cplusplus
 }
 #endif

@@ -172,10 +172,8 @@ class ShmChannel {
    * @param nb_msgs          The number of entries in the array above.
    * @return                 The number of messages enqueued.
    */
-  uint32_t EnqueueMessages(MachnetRingSlot_t *msgbuf_indices,
-                           uint32_t nb_msgs) {
-    return __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs,
-                                                  msgbuf_indices);
+  uint32_t EnqueueMessages(MachnetMsgBuf_t *bufs, uint32_t nb_msgs) {
+    return __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs, bufs);
   }
 
   /**
@@ -189,15 +187,17 @@ class ShmChannel {
    * @return           The number of messages enqueued.
    */
   uint32_t EnqueueMessages(MsgBuf *const *msgs, uint32_t nb_msgs) {
-    MachnetRingSlot_t slots[MsgBufBatch::kMaxBurst];
+    // TODO(vjabrayilov): refactor here
+    //    MachnetRingSlot_t slots[MsgBufBatch::kMaxBurst];
     auto nmsgs = std::min(nb_msgs, MsgBufBatch::kMaxBurst);
+    MachnetMsgBuf_t *bufs = reinterpret_cast<MachnetMsgBuf_t *>(
+        malloc(nmsgs * sizeof(MachnetMsgBuf_t)));
+    //    for (uint32_t i = 0; i < nmsgs; i++) {
+    //      slots[i] = __machnet_channel_buf_index(
+    //          ctx_, reinterpret_cast<const MachnetMsgBuf_t *>(msgs[i]));
+    //    }
 
-    for (uint32_t i = 0; i < nmsgs; i++) {
-      slots[i] = __machnet_channel_buf_index(
-          ctx_, reinterpret_cast<const MachnetMsgBuf_t *>(msgs[i]));
-    }
-
-    return EnqueueMessages(slots, nmsgs);
+    return EnqueueMessages(bufs, nmsgs);
   }
 
   /**
@@ -208,7 +208,11 @@ class ShmChannel {
    * @return uint32_t   The number of messages enqueued.
    */
   uint32_t EnqueueMessages(MsgBufBatch *batch) {
-    return EnqueueMessages(batch->buf_indices(), batch->GetSize());
+    // TODO(vjabrayilov): this function is not used; ask ilias the reason for
+    // its existence
+    //    return EnqueueMessages(batch->buf_indices(), batch->GetSize())
+    //   ;
+    return 1;
   }
 
   /**
@@ -223,16 +227,20 @@ class ShmChannel {
    */
   uint32_t DequeueMessages(MachnetRingSlot_t *msg_indices, MsgBuf **msgs,
                            uint32_t nb_msgs) {
-    uint32_t ret =
-        __machnet_channel_app_ring_dequeue(ctx_, nb_msgs, msg_indices);
-    for (uint32_t i = 0; i < ret; i++) {
-      msgs[i] = reinterpret_cast<MsgBuf *>(
-          __machnet_channel_buf(ctx_, msg_indices[i]));
-    }
+    // TODO(vjabrayilov): refactor here properly
+    uint32_t ret = 1;
+    //        __machnet_channel_app_ring_dequeue(ctx_, nb_msgs, msg_indices);
+    //    for (uint32_t i = 0; i < ret; i++) {
+    //      msgs[i] = reinterpret_cast<MsgBuf *>(
+    //          __machnet_channel_buf(ctx_, msg_indices[i]));
+    //    }
 
     return ret;
   }
 
+  uint32_t DequeueMessages(MachnetMsgBuf_t *msgs, uint32_t nb_msgs) {
+    return __machnet_channel_app_ring_dequeue(ctx_, nb_msgs, msgs);
+  }
   /**
    * @brief Dequeues a batch of messages from the channel (destined to the
    * Machnet stack).
@@ -259,7 +267,8 @@ class ShmChannel {
     MachnetRingSlot_t indices[1];
     MachnetMsgBuf_t *buf[1];
     auto ret = __machnet_channel_buf_alloc_bulk(ctx_, 1, indices, buf);
-    if (ret == 1) [[likely]] return reinterpret_cast<MsgBuf *>(buf[0]);
+    if (ret == 1) [[likely]]
+      return reinterpret_cast<MsgBuf *>(buf[0]);
     return nullptr;
   }
 
@@ -298,7 +307,8 @@ class ShmChannel {
         batch->buf_indices(),
         reinterpret_cast<MachnetMsgBuf_t **>(batch->bufs()));
     batch->IncrCount(ret);
-    if (ret == 0) [[unlikely]] return false;
+    if (ret == 0) [[unlikely]]
+      return false;
     return true;
   }
 
@@ -311,11 +321,13 @@ class ShmChannel {
   bool MsgBufBulkFree(MsgBufBatch *batch) {
     (void)DCHECK_NOTNULL(batch);
 
-    if (batch->GetSize() == 0) [[unlikely]] return true;  // NOLINT
+    if (batch->GetSize() == 0) [[unlikely]]
+      return true;  // NOLINT
 
     auto ret = MsgBufBulkFree(batch->buf_indices(), batch->GetSize());
 
-    if (ret == 0) [[unlikely]] return false;  // NOLINT
+    if (ret == 0) [[unlikely]]
+      return false;  // NOLINT
     batch->Clear();
     return true;
   }
@@ -328,7 +340,8 @@ class ShmChannel {
       ret = __machnet_channel_buf_free_bulk(ctx_, cnt, indices);
     } while (ret == 0 && retries-- > 0);
 
-    if (ret == 0) [[unlikely]] return false;  // NOLINT
+    if (ret == 0) [[unlikely]]
+      return false;  // NOLINT
 
     return true;
   }
@@ -406,7 +419,7 @@ class Channel : public ShmChannel {
    * @return A const iterator to the newly created flow.
    */
   const std::list<std::unique_ptr<Flow>>::const_iterator CreateFlow(
-      auto &&... params) {
+      auto &&...params) {
     active_flows_.emplace_back(std::make_unique<Flow>(
         std::forward<decltype(params)>(params)..., this));
     return std::prev(active_flows_.end());
@@ -420,7 +433,7 @@ class Channel : public ShmChannel {
    * @param params The parameters pack to be forwarded to the constructor of the
    *               Listener.
    */
-  void AddListener(auto &&... params) {
+  void AddListener(auto &&...params) {
     Listener listener{std::forward<decltype(params)>(params)...};
     CHECK(listeners_.find(listener) == listeners_.end())
         << "Listener already exists for channel " << GetName();

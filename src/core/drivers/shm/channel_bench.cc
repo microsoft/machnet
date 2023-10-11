@@ -83,22 +83,23 @@ void stack_loop(thread_conf *conf) {
   auto start = std::chrono::high_resolution_clock::now();
   while (!g_should_stop.load()) {
     // Receive any messages.
-    juggler::shm::MsgBuf *buf;
-    MachnetRingSlot_t slot;
-
-    auto ret = channel->DequeueMessages(&slot, &buf, 1);
+    //    juggler::shm::MsgBuf *buf;
+    //    MachnetRingSlot_t slot;
+    MachnetMsgBuf_t *buf =
+        reinterpret_cast<MachnetMsgBuf_t *>(malloc(sizeof(MachnetMsgBuf_t)));
+    auto ret = channel->DequeueMessages(buf, 1);
     if (ret == 1) {
       // We have received one message.
       conf->messages_received++;
-      buffer_indexes.emplace_back(slot);
-      while (buf->has_next()) {
-        buffer_indexes.emplace_back(buf->next());
-        buf = channel->GetMsgBuf(buf->next());
-      }
+      //      buffer_indexes.emplace_back(slot);
+      //      while (buf->has_next()) {
+      //        buffer_indexes.emplace_back(buf->next());
+      //        buf = channel->GetMsgBuf(buf->next());
+      //      }
 
-      CHECK(channel->MsgBufBulkFree(buffer_indexes.data(),
-                                    buffer_indexes.size()));
-      buffer_indexes.clear();
+      //      CHECK(channel->MsgBufBulkFree(buffer_indexes.data(),
+      //                                    buffer_indexes.size()));
+      //      buffer_indexes.clear();
     }
 
     if (conf->messages_sent >= conf->messages_to_send) {
@@ -108,25 +109,25 @@ void stack_loop(thread_conf *conf) {
       continue;
     }
 
-    buf = channel->MsgBufAlloc();
-    if (buf == nullptr) {
-      continue;
-    }
+    //    buf = channel->MsgBufAlloc();
+    //    if (buf == nullptr) {
+    //      continue;
+    //    }
 
-    CHECK_NOTNULL(buf->append(tx_buffer.size()));
+    //    CHECK_NOTNULL(buf->append(tx_buffer.size()));
 
-    juggler::utils::Copy(buf->head_data(), tx_buffer.data(), buf->length());
-    buf->set_src_ip(kDummyIp);
-    buf->set_src_port(kDummyPort);
-    buf->set_dst_ip(kDummyIp);
-    buf->set_dst_port(kDummyPort);
-    buf->mark_first();
-    buf->mark_last();
+    //    juggler::utils::Copy(buf->head_data(), tx_buffer.data(),
+    //    buf->length()); buf->set_src_ip(kDummyIp);
+    //    buf->set_src_port(kDummyPort);
+    //    buf->set_dst_ip(kDummyIp);
+    //    buf->set_dst_port(kDummyPort);
+    //    buf->mark_first();
+    //    buf->mark_last();
     // TODO(ilias): Copy some data.
     // Send the message.
-    ret = channel->EnqueueMessages(&buf, 1);
+    ret = channel->EnqueueMessages(buf, 1);
     if (ret != 1) {
-      channel->MsgBufFree(buf);
+      //      channel->MsgBufFree(buf);
     }
     conf->messages_sent += ret;
   }
@@ -165,12 +166,14 @@ void application_loop(thread_conf *conf) {
   while (!g_should_stop.load()) {
     // RX.
     MachnetFlow_t flow;
-
-    auto nbytes =
-        machnet_recv(channel->ctx(), rx_buffer.data(), rx_buffer.size(), &flow);
+    MachnetMsgBuf_t *msgBuf =
+        reinterpret_cast<MachnetMsgBuf_t *>(malloc(sizeof(MachnetMsgBuf_t)));
+    auto nbytes = machnet_recvmsg_buf(channel->ctx(), msgBuf);
+    //        machnet_recv(channel->ctx(), rx_buffer.data(),
+    //        rx_buffer.size(), &flow);
     if (nbytes > 0) {
       conf->messages_received++;
-      CHECK_EQ(nbytes, conf->tx_message_size);
+      //      CHECK_EQ(ms, conf->tx_message_size);
     }
 
     if (conf->messages_sent >= conf->messages_to_send) {
