@@ -124,7 +124,7 @@ else
         -v /dev/hugepages:/dev/hugepages \
         -v /var/run/machnet:/var/run/machnet \
         ghcr.io/microsoft/machnet/machnet:latest \
-        /root/machnet/build/src/apps/machnet/machnet \
+        /root/machnet/release_build/src/apps/machnet/machnet \
         --config_json /var/run/machnet/local_config.json \
         --logtostderr=1
 fi
