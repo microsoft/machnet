@@ -243,6 +243,7 @@ class MachnetEngineSharedState {
 
   std::optional<uint16_t> GetQueueId(const net::Ipv4::Address &ipv4_addr,
                                      const net::Udp::Port &port) {
+    const std::lock_guard<std::mutex> lock(mtx_);
     auto it = listeners_to_rxq.find({ipv4_addr, port});
     if (it == listeners_to_rxq.end()) {
       LOG(INFO) << "No listener registered on " << ipv4_addr.ToString() << ":"
