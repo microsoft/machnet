@@ -13,8 +13,8 @@ set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -g")
 set(CMAKE_C_FLAGS_DEBUG "-O0 -g -DDEBUG -fno-omit-frame-pointer -fsanitize=address")
 
 set(CMAKE_CXX_FLAGS "-Wall -fno-rtti -fno-exceptions -msse4.2")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -Wno-unused-value")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -g -Wno-unused-value")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -fno-omit-frame-pointer -fsanitize=address -DDEBUG")
 set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 
