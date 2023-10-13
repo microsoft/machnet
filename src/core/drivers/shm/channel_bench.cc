@@ -289,8 +289,14 @@ void print_results(const thread_conf &stack_conf, const thread_conf &app_conf) {
 
 int main() {
   google::InitGoogleLogging("channel_bench");
+  FLAGS_logtostderr = 1;
   signal(SIGINT, [](int) { g_should_stop.store(true); });
-  // Create a new channel using the channel manager.
+
+  if (geteuid() != 0) {
+    LOG(ERROR) << "Must be run as root.";
+    return -1;
+  }
+
   ChannelManager channel_manager;
   CHECK(channel_manager.AddChannel(channel_name, kRingSlotEntries,
                                    kRingSlotEntries, kBuffersNr, kBufferSize));
