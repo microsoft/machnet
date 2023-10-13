@@ -221,6 +221,13 @@ static inline int __machnet_channel_dataplane_init(
   const size_t kTotalBufSize =
       ROUNDUP_U64_POW2(buffer_size + MACHNET_MSGBUF_SPACE_RESERVED +
                        MACHNET_MSGBUF_HEADROOM_MAX);
+
+  if (kTotalBufSize < MACHNET_MIN_CHANNEL_BUFFER_SIZE) {
+    fprintf(stderr, "Channel's per-buffer size %zu is too small, %d reqd\n",
+            kTotalBufSize, MACHNET_MIN_CHANNEL_BUFFER_SIZE);
+    return -1;
+  }
+
   // Initialize the buffers. Note that the buffer pool start is aligned to the
   // page_size boundary.
   const size_t kPageSize = is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE;
