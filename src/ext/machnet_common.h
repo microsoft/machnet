@@ -124,6 +124,7 @@ struct MachnetChannelCtx {
   char name[MACHNET_CHANNEL_NAME_MAX_LEN];
   MachnetChannelCtrlCtx_t ctrl_ctx;  // Control channel's specific metadata.
   MachnetChannelDataCtx_t data_ctx;  // Dataplane channel's specific metadata.
+  uint32_t batch_buf_available;
   uint32_t batch_buf_index;
   MachnetRingSlot_t batch_buffer_indices[BATCH_BUFFER_SIZE];
   MachnetRingSlot_t
