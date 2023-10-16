@@ -52,7 +52,7 @@ extern "C" {
 #define HUGE_PAGE_2M_SIZE (2 * MB)
 #define MACHNET_MSG_MAX_LEN (8 * MB)
 #define MACHNET_MIN_CHANNEL_BUFFER_SIZE (2 * KB)
-#define BATCH_BUFFER_SIZE (1 << 5)
+#define BATCH_BUFFER_SIZE (1 << 7)
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)

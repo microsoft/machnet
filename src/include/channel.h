@@ -256,11 +256,26 @@ class ShmChannel {
    * @return - pointer to the buffer on success, nullptr otherwise.
    */
   MsgBuf *MsgBufAlloc() {
-    MachnetRingSlot_t indices[1];
-    MachnetMsgBuf_t *buf[1];
-    auto ret = __machnet_channel_buf_alloc_bulk(ctx_, 1, indices, buf);
-    if (ret == 1) [[likely]] return reinterpret_cast<MsgBuf *>(buf[0]);
-    return nullptr;
+    //    MachnetRingSlot_t indices[1];
+    //    MachnetMsgBuf_t *buf[1];
+    if (batch_buf_indices.empty()) {
+      batch_buf_indices.resize(BATCH_BUFFER_SIZE);
+      batch_bufs.resize(BATCH_BUFFER_SIZE);
+      uint32_t ret = __machnet_channel_buf_alloc_bulk(
+          ctx_, BATCH_BUFFER_SIZE, batch_buf_indices.data(), batch_bufs.data());
+      if (ret != BATCH_BUFFER_SIZE) return nullptr;
+      //      fprintf(stderr, "batch_buf_indices empty, batched [%d] from
+      //      buf_ring\n",
+      //              BATCH_BUFFER_SIZE);
+    }
+    batch_buf_indices.pop_back();
+    auto buf = batch_bufs.back();
+    batch_bufs.pop_back();
+    return reinterpret_cast<MsgBuf *>(buf);
+    //    auto ret = __machnet_channel_buf_alloc_bulk(ctx_, 1, indices, buf);
+    //    if (ret == 1) [[likely]]
+    //      return reinterpret_cast<MsgBuf *>(buf[0]);
+    //    return nullptr;
   }
 
   /**
@@ -298,7 +313,8 @@ class ShmChannel {
         batch->buf_indices(),
         reinterpret_cast<MachnetMsgBuf_t **>(batch->bufs()));
     batch->IncrCount(ret);
-    if (ret == 0) [[unlikely]] return false;
+    if (ret == 0) [[unlikely]]
+      return false;
     return true;
   }
 
@@ -311,11 +327,13 @@ class ShmChannel {
   bool MsgBufBulkFree(MsgBufBatch *batch) {
     (void)DCHECK_NOTNULL(batch);
 
-    if (batch->GetSize() == 0) [[unlikely]] return true;  // NOLINT
+    if (batch->GetSize() == 0) [[unlikely]]
+      return true;  // NOLINT
 
     auto ret = MsgBufBulkFree(batch->buf_indices(), batch->GetSize());
 
-    if (ret == 0) [[unlikely]] return false;  // NOLINT
+    if (ret == 0) [[unlikely]]
+      return false;  // NOLINT
     batch->Clear();
     return true;
   }
@@ -328,7 +346,8 @@ class ShmChannel {
       ret = __machnet_channel_buf_free_bulk(ctx_, cnt, indices);
     } while (ret == 0 && retries-- > 0);
 
-    if (ret == 0) [[unlikely]] return false;  // NOLINT
+    if (ret == 0) [[unlikely]]
+      return false;  // NOLINT
 
     return true;
   }
@@ -339,6 +358,8 @@ class ShmChannel {
   const size_t mem_size_;
   const bool is_posix_shm_;
   int channel_fd_;
+  std::vector<MachnetRingSlot_t> batch_buf_indices;
+  std::vector<MachnetMsgBuf_t *> batch_bufs;
 };
 
 /**
@@ -406,7 +427,7 @@ class Channel : public ShmChannel {
    * @return A const iterator to the newly created flow.
    */
   const std::list<std::unique_ptr<Flow>>::const_iterator CreateFlow(
-      auto &&... params) {
+      auto &&...params) {
     active_flows_.emplace_back(std::make_unique<Flow>(
         std::forward<decltype(params)>(params)..., this));
     return std::prev(active_flows_.end());
@@ -420,7 +441,7 @@ class Channel : public ShmChannel {
    * @param params The parameters pack to be forwarded to the constructor of the
    *               Listener.
    */
-  void AddListener(auto &&... params) {
+  void AddListener(auto &&...params) {
     Listener listener{std::forward<decltype(params)>(params)...};
     CHECK(listeners_.find(listener) == listeners_.end())
         << "Listener already exists for channel " << GetName();
