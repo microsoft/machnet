@@ -156,6 +156,7 @@ static inline int __machnet_channel_dataplane_init(
   ctx->ctrl_ctx.req_id = 0;
   // Initialize batch_index
   ctx->batch_buf_index = 0;
+  ctx->batch_buf_available = 0;
   // Clear out statatistics.
   ctx->data_ctx.stats_ofs = sizeof(*ctx);
   MachnetChannelStats_t *stats =
@@ -267,8 +268,6 @@ static inline int __machnet_channel_dataplane_init(
   ctx->magic = MACHNET_CHANNEL_CTX_MAGIC;
   __sync_synchronize();
 
-  __machnet_channel_buf_alloc_bulk(ctx, BATCH_BUFFER_SIZE,
-                                   ctx->batch_buffer_indices, NULL);
   return 0;
 }
 
