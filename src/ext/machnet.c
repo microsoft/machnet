@@ -437,7 +437,9 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   const uint32_t buffers_nr =
       (msghdr->msg_size + kMsgBufPayloadMax - 1) / kMsgBufPayloadMax;
 
-  if (__machnet_channel_buf_alloc_bulk(ctx, buffers_nr, ctx->tmp_buffer_indices,
+  MachnetRingSlot_t *buf_index_table =
+      __machnet_channel_buffer_index_table(ctx);
+  if (__machnet_channel_buf_alloc_bulk(ctx, buffers_nr, buf_index_table,
                                        NULL) != buffers_nr) {
     return -1;
   }
@@ -454,7 +456,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     while (seg_bytes) {
       // Get the destination offset at buffer.
       MachnetMsgBuf_t *buffer =
-          __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[buffer_cur_index]);
+          __machnet_channel_buf(ctx, buf_index_table[buffer_cur_index]);
       if (unlikely(buffer->magic != MACHNET_MSGBUF_MAGIC)) abort();
 
       // Copy the data.
@@ -472,7 +474,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
         // The buffer is full, and we still have data to copy.
         buffer_cur_index++;  // Get the next buffer index.
         assert(buffer_cur_index < buffers_nr);
-        buffer->next = ctx->tmp_buffer_indices[buffer_cur_index];
+        buffer->next = buf_index_table[buffer_cur_index];
       }
     }
   }
@@ -482,7 +484,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
 
   // For the last buffer, we need to mark it as the tail of the message.
   MachnetMsgBuf_t *last =
-      __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[buffers_nr - 1]);
+      __machnet_channel_buf(ctx, buf_index_table[buffers_nr - 1]);
   last->flags |= MACHNET_MSGBUF_FLAGS_FIN;
   last->flags &= ~(MACHNET_MSGBUF_FLAGS_SG);
 
@@ -491,19 +493,16 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   // Mark the first buffer of the message as the head of the message, and also
   // piggyback any flags requested by the application (e.g., delivery
   // notification).
-  MachnetMsgBuf_t *first =
-      __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[0]);
+  MachnetMsgBuf_t *first = __machnet_channel_buf(ctx, buf_index_table[0]);
   first->flags |= MACHNET_MSGBUF_FLAGS_SYN;
   first->flags |= (msghdr->flags & MACHNET_MSGBUF_NOTIFY_DELIVERY);
   first->flow = msghdr->flow_info;
   first->msg_len = msghdr->msg_size;
-  first->last =
-      ctx->tmp_buffer_indices[buffers_nr - 1];  // Link to the last buffer.
+  first->last = buf_index_table[buffers_nr - 1];  // Link to the last buffer.
 
   // Finally, send the message.
   // TODO(ilias): Add retries if the ring is full, and add statistics.
-  if (__machnet_channel_app_ring_enqueue(ctx, 1, ctx->tmp_buffer_indices) !=
-      1) {
+  if (__machnet_channel_app_ring_enqueue(ctx, 1, buf_index_table) != 1) {
     return -1;
   }
 

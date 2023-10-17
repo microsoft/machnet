@@ -98,14 +98,19 @@ static inline size_t __machnet_channel_dataplane_calculate_size(
     total_size += acc;
   }
 
+  // Align to cache line boundary, and add the size of the scratch buffer index
+  // table.
+  total_size = ALIGN_TO_BOUNDARY(total_size, CACHE_LINE_SIZE);
+  total_size += buf_ring_slot_nr * sizeof(MachnetRingSlot_t);
+
   // Align to page boundary.
-  total_size = ALIGN_TO_PAGE_SIZE(total_size, kPageSize);
+  total_size = ALIGN_TO_BOUNDARY(total_size, kPageSize);
 
   // Add the size of the buffers.
   total_size += buf_ring_slot_nr * total_buffer_size;
 
   // Align to page boundary.
-  total_size = ALIGN_TO_PAGE_SIZE(total_size, kPageSize);
+  total_size = ALIGN_TO_BOUNDARY(total_size, kPageSize);
 
   return total_size;
 }
@@ -217,21 +222,23 @@ static inline int __machnet_channel_dataplane_init(
       ctx->data_ctx.buf_ring_ofs +
       jring_get_buf_ring_size(sizeof(MachnetRingSlot_t), buf_ring_slot_nr);
 
+  // Offset in memory, of the scratch buffer index table.
+  ctx->data_ctx.buffer_index_table_ofs =
+      ALIGN_TO_BOUNDARY(buf_ring_end_ofs, CACHE_LINE_SIZE);
+  size_t tmp_buffer_index_table_end_ofs =
+      ctx->data_ctx.buffer_index_table_ofs +
+      buf_ring_slot_nr * sizeof(MachnetRingSlot_t);
+
   // Calculate the actual buffer size (incl. metadata).
   const size_t kTotalBufSize =
       ROUNDUP_U64_POW2(buffer_size + MACHNET_MSGBUF_SPACE_RESERVED +
                        MACHNET_MSGBUF_HEADROOM_MAX);
 
-  if (kTotalBufSize < MACHNET_MIN_CHANNEL_BUFFER_SIZE) {
-    fprintf(stderr, "Channel's per-buffer size %zu is too small, %d reqd\n",
-            kTotalBufSize, MACHNET_MIN_CHANNEL_BUFFER_SIZE);
-    return -1;
-  }
-
   // Initialize the buffers. Note that the buffer pool start is aligned to the
   // page_size boundary.
   const size_t kPageSize = is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE;
-  ctx->data_ctx.buf_pool_ofs = ALIGN_TO_PAGE_SIZE(buf_ring_end_ofs, kPageSize);
+  ctx->data_ctx.buf_pool_ofs =
+      ALIGN_TO_BOUNDARY(tmp_buffer_index_table_end_ofs, kPageSize);
   ctx->data_ctx.buf_pool_mask = buf_ring->capacity;
   ctx->data_ctx.buf_size = kTotalBufSize;
   ctx->data_ctx.buf_mss = buffer_size;
