@@ -326,25 +326,6 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
     EXPECT_EQ(msg_rx, kMsgNr);
     EXPECT_EQ(error, kSuccess);
 
-    // Check the buffer pool status.
-    // not relevant anymore some buffer indices are batched
-    //    EXPECT_EQ(channel->GetFreeBufCount(), channel->GetTotalBufCount());
-
-    //    std::vector<MachnetRingSlot_t> expected_buffers(
-    //        channel->GetTotalBufCount());
-    //    std::iota(expected_buffers.begin(), expected_buffers.end(), 0);
-    //    std::vector<MachnetRingSlot_t> buffers(channel->GetTotalBufCount());
-
-    // Allocate all the buffers in the channel.
-    // not relevant anymore some buffer indices are batched
-    //    EXPECT_EQ(__machnet_channel_buf_alloc_bulk(channel->ctx(),
-    //    buffers.size(),
-    //                                               buffers.data(), nullptr),
-    //              buffers.size());
-    //    EXPECT_EQ(channel->GetFreeBufCount(), 0);
-    //    sort(buffers.begin(), buffers.end());
-    //    EXPECT_EQ(buffers, expected_buffers);
-
   } else {
     // Child process.
     const int kNumRetries = 5;
