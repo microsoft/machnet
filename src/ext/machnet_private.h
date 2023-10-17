@@ -155,8 +155,8 @@ static inline int __machnet_channel_dataplane_init(
   // Initiliaze the ctrl context.
   ctx->ctrl_ctx.req_id = 0;
   // Initialize batch_index
-  ctx->batch_buf_index = 0;
-  ctx->batch_buf_available = 0;
+  ctx->cached_buf_index = 0;
+  ctx->cached_buf_available = 0;
   // Clear out statatistics.
   ctx->data_ctx.stats_ofs = sizeof(*ctx);
   MachnetChannelStats_t *stats =

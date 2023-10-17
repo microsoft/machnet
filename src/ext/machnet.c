@@ -437,29 +437,30 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       (msghdr->msg_size + kMsgBufPayloadMax - 1) / kMsgBufPayloadMax;
   // get from batched indices
   // if not possible call buf_alloc to fill the batch
-  if (__machnet_channel_buf_alloc_bulk(ctx, BATCH_BUFFER_SIZE,
-                                       ctx->batch_buffer_indices,
-                                       NULL) == BATCH_BUFFER_SIZE) {
-    ctx->batch_buf_index = 0;
-    ctx->batch_buf_available = BATCH_BUFFER_SIZE;
+  if (__machnet_channel_buf_alloc_bulk(ctx, CACHED_BUF_SIZE,
+                                       ctx->cached_buf_indices,
+                                       NULL) == CACHED_BUF_SIZE) {
+    ctx->cached_buf_index = 0;
+    ctx->cached_buf_available = CACHED_BUF_SIZE;
     //    fprintf(stderr,
-    //            "batch_buf_index empty, allocated & batched [%d] indices from
-    //            " "buf_ring\n", BATCH_BUFFER_SIZE);
+    //            "cached_buf_index empty, allocated & batched [%d] indices from
+    //            " "buf_ring\n", CACHED_BUF_SIZE);
   }
-  //  fprintf(stderr, "initially batch_buf_index: %d\n", ctx->batch_buf_index);
-  if (buffers_nr <= ctx->batch_buf_available) {
-    //    fprintf(stderr, "served [%d] indices from batch_buf_index\n",
+  //  fprintf(stderr, "initially cached_buf_index: %d\n",
+  //  ctx->cached_buf_index);
+  if (buffers_nr <= ctx->cached_buf_available) {
+    //    fprintf(stderr, "served [%d] indices from cached_buf_index\n",
     //    buffers_nr);
     for (uint32_t i = 0; i < buffers_nr; i++) {
       ctx->tmp_buffer_indices[i] =
-          ctx->batch_buffer_indices[ctx->batch_buf_index];
-      ctx->batch_buf_index++;
-      ctx->batch_buf_available--;
+          ctx->cached_buf_indices[ctx->cached_buf_index];
+      ctx->cached_buf_index++;
+      ctx->cached_buf_available--;
     }
 
   } else {
     // directly get from ring
-    uint32_t remaining = buffers_nr - ctx->batch_buf_available;
+    uint32_t remaining = buffers_nr - ctx->cached_buf_available;
     if (__machnet_channel_buf_alloc_bulk(
             ctx, remaining, ctx->tmp_buffer_indices, NULL) != remaining) {
       return -1;
@@ -468,12 +469,12 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     //        stderr,
     //        "couldn't get [%d] from batched, directly allocated [%d] indices
     //        from " "buf_ring and [%d] from batched \n", buffers_nr, remaining,
-    //        ctx->batch_buf_available);
+    //        ctx->cached_buf_available);
     for (uint32_t i = remaining; i < buffers_nr; i++) {
       ctx->tmp_buffer_indices[i] =
-          ctx->batch_buffer_indices[ctx->batch_buf_index];
-      ctx->batch_buf_index++;
-      ctx->batch_buf_available--;
+          ctx->cached_buf_indices[ctx->cached_buf_index];
+      ctx->cached_buf_index++;
+      ctx->cached_buf_available--;
     }
   }
 

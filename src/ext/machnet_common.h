@@ -52,7 +52,7 @@ extern "C" {
 #define HUGE_PAGE_2M_SIZE (2 * MB)
 #define MACHNET_MSG_MAX_LEN (8 * MB)
 #define MACHNET_MIN_CHANNEL_BUFFER_SIZE (2 * KB)
-#define BATCH_BUFFER_SIZE (1 << 7)
+#define CACHED_BUF_SIZE (1 << 7)
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)
@@ -124,9 +124,9 @@ struct MachnetChannelCtx {
   char name[MACHNET_CHANNEL_NAME_MAX_LEN];
   MachnetChannelCtrlCtx_t ctrl_ctx;  // Control channel's specific metadata.
   MachnetChannelDataCtx_t data_ctx;  // Dataplane channel's specific metadata.
-  uint32_t batch_buf_available;
-  uint32_t batch_buf_index;
-  MachnetRingSlot_t batch_buffer_indices[BATCH_BUFFER_SIZE];
+  uint32_t cached_buf_available;
+  uint32_t cached_buf_index;
+  MachnetRingSlot_t cached_buf_indices[CACHED_BUF_SIZE];
   MachnetRingSlot_t
       tmp_buffer_indices[MACHNET_MSG_MAX_LEN / MACHNET_MIN_CHANNEL_BUFFER_SIZE];
 } __attribute__((aligned(CACHE_LINE_SIZE)));

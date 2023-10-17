@@ -258,19 +258,19 @@ class ShmChannel {
   MsgBuf *MsgBufAlloc() {
     //    MachnetRingSlot_t indices[1];
     //    MachnetMsgBuf_t *buf[1];
-    if (batch_buf_indices.empty()) {
-      batch_buf_indices.resize(BATCH_BUFFER_SIZE);
-      batch_bufs.resize(BATCH_BUFFER_SIZE);
+    if (cached_buf_indices.empty()) {
+      cached_buf_indices.resize(CACHED_BUF_SIZE);
+      cached_bufs.resize(CACHED_BUF_SIZE);
       uint32_t ret = __machnet_channel_buf_alloc_bulk(
-          ctx_, BATCH_BUFFER_SIZE, batch_buf_indices.data(), batch_bufs.data());
-      if (ret != BATCH_BUFFER_SIZE) return nullptr;
-      //      fprintf(stderr, "batch_buf_indices empty, batched [%d] from
+          ctx_, CACHED_BUF_SIZE, cached_buf_indices.data(), cached_bufs.data());
+      if (ret != CACHED_BUF_SIZE) return nullptr;
+      //      fprintf(stderr, "cached_buf_indices empty, batched [%d] from
       //      buf_ring\n",
-      //              BATCH_BUFFER_SIZE);
+      //              CACHED_BUF_SIZE);
     }
-    batch_buf_indices.pop_back();
-    auto buf = batch_bufs.back();
-    batch_bufs.pop_back();
+    cached_buf_indices.pop_back();
+    auto buf = cached_bufs.back();
+    cached_bufs.pop_back();
     return reinterpret_cast<MsgBuf *>(buf);
     //    auto ret = __machnet_channel_buf_alloc_bulk(ctx_, 1, indices, buf);
     //    if (ret == 1) [[likely]]
@@ -358,8 +358,8 @@ class ShmChannel {
   const size_t mem_size_;
   const bool is_posix_shm_;
   int channel_fd_;
-  std::vector<MachnetRingSlot_t> batch_buf_indices;
-  std::vector<MachnetMsgBuf_t *> batch_bufs;
+  std::vector<MachnetRingSlot_t> cached_buf_indices;
+  std::vector<MachnetMsgBuf_t *> cached_bufs;
 };
 
 /**
