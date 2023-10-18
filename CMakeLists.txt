@@ -33,5 +33,9 @@ include_directories(SYSTEM third_party/HdrHistogram_c/include/)
 
 include_directories(SYSTEM third_party/xxHash)
 
+# For FASTER DB
+add_subdirectory(third_party/FASTER/cc/src)
+include_directories(SYSTEM third_party/FASTER/cc/src/core)
+
 set(BUILD_TESTING ON)
 add_subdirectory(src)
