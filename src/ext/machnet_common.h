@@ -506,39 +506,6 @@ __machnet_channel_buf_alloc_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
   return ret;
 }
 
-static inline __attribute__((always_inline)) uint32_t
-__machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx,
-                                  uint32_t buffer_indices_index,
-                                  MachnetRingSlot_t *buffer_indices) {
-  uint32_t ret = 0;
-  if (ctx->cached_buf_available == 0) {
-    // cache initially empty
-    while (ret < buffer_indices_index) {
-      ctx->cached_buf_indices[ret] = buffer_indices[ret];
-      ret++;
-      ctx->cached_buf_available++;
-    }
-  } else if (ctx->cached_buf_index == 0) {
-    // cache has space, but not used yet
-    // fill from cached_buf_index + cached_buf_available to the end
-    for (uint32_t i = ctx->cached_buf_index + ctx->cached_buf_available;
-         ret < buffer_indices_index; ret++, i++) {
-      ctx->cached_buf_indices[i] = buffer_indices[ret];
-      ctx->cached_buf_available++;
-    }
-  } else {
-    // cache has space and being used
-    // fill from cached_buf_index-1 to the beginning
-    for (uint32_t i = ctx->cached_buf_index - 1; ret < buffer_indices_index;
-         ret++, i--) {
-      ctx->cached_buf_indices[i] = buffer_indices[ret];
-      ctx->cached_buf_available++;
-      ctx->cached_buf_index--;
-    }
-  }
-  return ret;
-}
-
 /**
  * Release a number of `MsgBuf' buffers back to the channel's pool.
  *
@@ -567,6 +534,48 @@ __machnet_channel_buf_free_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
   // Both sides can release buffers concurrently, so use directly the
   // multi-consumer function.
   return jring_mp_enqueue_bulk(buf_ring, bufs, n, NULL);
+}
+
+static inline __attribute__((always_inline)) uint32_t
+__machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx,
+                                  uint32_t buffer_indices_index,
+                                  MachnetRingSlot_t *buffer_indices) {
+  uint32_t ret = 0;
+  if (ctx->cached_buf_available == 0 &&
+      ctx->cached_buf_index == CACHED_BUF_SIZE) {
+    // very rare case cache is fully used and empty
+    // tricky to fill here so just return all back to buf_ring
+    fprintf(stderr,
+            "rare case: cache is fully used and free_cached discovered it\n");
+    return __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
+                                           buffer_indices);
+  }
+  if (ctx->cached_buf_available == 0) {
+    // cache initially empty
+    while (ret < buffer_indices_index) {
+      ctx->cached_buf_indices[ret] = buffer_indices[ret];
+      ret++;
+      ctx->cached_buf_available++;
+    }
+  } else if (ctx->cached_buf_index == 0) {
+    // cache has space, but not used yet
+    // fill from cached_buf_index + cached_buf_available to the end
+    for (uint32_t i = ctx->cached_buf_index + ctx->cached_buf_available;
+         ret < buffer_indices_index; ret++, i++) {
+      ctx->cached_buf_indices[i] = buffer_indices[ret];
+      ctx->cached_buf_available++;
+    }
+  } else {
+    // cache has space and being used
+    // fill from cached_buf_index-1 to the beginning
+    for (uint32_t i = ctx->cached_buf_index - 1; ret < buffer_indices_index;
+         ret++, i--) {
+      ctx->cached_buf_indices[i] = buffer_indices[ret];
+      ctx->cached_buf_available++;
+      ctx->cached_buf_index--;
+    }
+  }
+  return ret;
 }
 
 /**
