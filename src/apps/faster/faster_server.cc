@@ -182,7 +182,7 @@ void MachnetTransportServer() {
     const ssize_t ret =
         machnet_recv(channel, rx_message.data(), rx_message.size(), &rx_flow);
     if (ret == 0) {
-      usleep(1);
+    //   usleep(1);
       continue;
     }
 
