@@ -151,7 +151,7 @@ class ReadContext : public IAsyncContext {
   uint64_t output;
 };
 
-FasterKv<Key, Value, FASTER::device::NullDisk> store{4096, 1073741824, ""};
+FasterKv<Key, Value, FASTER::device::NullDisk> store{1<<16, 1073741824, ""};
 
 static constexpr uint16_t kPort = 888;
 
@@ -173,7 +173,7 @@ void MachnetTransportServer() {
     // std::array<char, 1024> buf;
     MachnetFlow rx_flow;
     const ssize_t ret = machnet_recv(channel, rx_message.data(), rx_message.size(), &rx_flow);
-    CHECK_GE(ret, 0) << "machnet_recv() failed";
+    // CHECK_GE(ret, 0) << "machnet_recv() failed";
     if (ret == 0) {
       usleep(1);
       continue;
@@ -182,24 +182,19 @@ void MachnetTransportServer() {
     const msg_hdr_t* msg_hdr =
         reinterpret_cast<const msg_hdr_t*>(rx_message.data());
 
-    // std::string key(buf.data(), ret);
-    VLOG(1) << "Received GET request for key: " << msg_hdr->key;
-
-    // std::string value;
-    // const rocksdb::Status status = db->Get(rocksdb::ReadOptions(), key, &value);
-
     auto callback = [](IAsyncContext* ctxt, Status result) {
       // In-memory test.
       CHECK_EQ(true, false);
     };
 
     // ReadContext context{std::stoull(key)};
+    // LOG(INFO) << "Received GET request for key: " << msg_hdr->key;
     ReadContext context{msg_hdr->key};
     Status result = store.Read(context, callback, 1);
-    CHECK_EQ(Status::Ok, result);
-    CHECK_EQ(23, context.output);
+    // CHECK_EQ(23, context.output);
 
     if (result == Status::Ok) {
+      CHECK_EQ(Status::Ok, result);
       MachnetFlow tx_flow;
       tx_flow.dst_ip = rx_flow.src_ip;
       tx_flow.src_ip = rx_flow.dst_ip;
@@ -221,7 +216,27 @@ void MachnetTransportServer() {
         LOG(ERROR) << "machnet_send() failed";
       }
     } else {
-      LOG(ERROR) << "Error retrieving key: " << "result.ToString()";
+      MachnetFlow tx_flow;
+      tx_flow.dst_ip = rx_flow.src_ip;
+      tx_flow.src_ip = rx_flow.dst_ip;
+      tx_flow.dst_port = rx_flow.src_port;
+      tx_flow.src_port = rx_flow.dst_port;
+
+      // Send the response
+      msg_hdr_t* tx_msg_hdr =
+          reinterpret_cast<msg_hdr_t*>(tx_message.data());
+      tx_msg_hdr->window_slot = msg_hdr->window_slot;
+      tx_msg_hdr->key = msg_hdr->key;
+      tx_msg_hdr->value = 0;
+
+      ssize_t send_ret = machnet_send(channel, tx_flow, tx_message.data(),
+                                      sizeof(tx_message.data()));
+
+      VLOG(1) << "Sent value of size " << sizeof(context.output) << " bytes to client";
+      if (send_ret == -1) {
+        LOG(ERROR) << "machnet_send() failed";
+      }
+      LOG(INFO) << "Error retrieving key: " << "result.ToString()";
     }
   }
 }

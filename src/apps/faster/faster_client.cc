@@ -64,9 +64,9 @@ class ThreadCtx {
   ThreadCtx(const void *channel_ctx, const MachnetFlow_t *flow_info)
       : channel_ctx(CHECK_NOTNULL(channel_ctx)), flow(flow_info), stats() {
     // Fill-in max-sized messages, we'll send the actual size later
-    rx_message.resize(MACHNET_MSG_MAX_LEN);
-    tx_message.resize(MACHNET_MSG_MAX_LEN);
-    message_gold.resize(MACHNET_MSG_MAX_LEN);
+    rx_message.resize(sizeof(msg_hdr_t));
+    tx_message.resize(sizeof(msg_hdr_t));
+    message_gold.resize(sizeof(msg_hdr_t));
     std::iota(message_gold.begin(), message_gold.end(), 0);
     std::memcpy(tx_message.data(), message_gold.data(), tx_message.size());
 
@@ -156,61 +156,6 @@ void ReportStats(ThreadCtx *thread_ctx) {
   }
 }
 
-void ServerLoop(void *channel_ctx) {
-  ThreadCtx thread_ctx(channel_ctx, nullptr /* flow info */);
-  LOG(INFO) << "Server Loop: Starting.";
-
-  while (true) {
-    if (g_keep_running == 0) {
-      LOG(INFO) << "MsgGenLoop: Exiting.";
-      break;
-    }
-
-    auto &stats_cur = thread_ctx.stats.current;
-    const auto *channel_ctx = thread_ctx.channel_ctx;
-
-    MachnetFlow_t rx_flow;
-    const ssize_t rx_size =
-        machnet_recv(channel_ctx, thread_ctx.rx_message.data(),
-                     thread_ctx.rx_message.size(), &rx_flow);
-    if (rx_size <= 0) continue;
-    stats_cur.rx_count++;
-    stats_cur.rx_bytes += rx_size;
-
-    const msg_hdr_t *msg_hdr =
-        reinterpret_cast<const msg_hdr_t *>(thread_ctx.rx_message.data());
-    VLOG(1) << "Server: Received msg for window slot " << msg_hdr->window_slot;
-
-    // Send the response
-    msg_hdr_t *tx_msg_hdr =
-        reinterpret_cast<msg_hdr_t *>(thread_ctx.tx_message.data());
-    tx_msg_hdr->window_slot = msg_hdr->window_slot;
-
-    MachnetFlow_t tx_flow;
-    tx_flow.dst_ip = rx_flow.src_ip;
-    tx_flow.src_ip = rx_flow.dst_ip;
-    tx_flow.src_port = rx_flow.dst_port;
-    tx_flow.dst_port = rx_flow.src_port;
-
-    const int ret = machnet_send(
-        channel_ctx, tx_flow, thread_ctx.tx_message.data(), FLAGS_tx_msg_size);
-    if (ret == 0) {
-      stats_cur.tx_success++;
-      stats_cur.tx_bytes += FLAGS_tx_msg_size;
-    } else {
-      stats_cur.err_tx_drops++;
-    }
-
-    ReportStats(&thread_ctx);
-  }
-
-  auto &stats_cur = thread_ctx.stats.current;
-  LOG(INFO) << "Application Statistics (TOTAL) - [TX] Sent: "
-            << stats_cur.tx_success << " (" << stats_cur.tx_bytes
-            << " Bytes), Drops: " << stats_cur.err_tx_drops
-            << ", [RX] Received: " << stats_cur.rx_count << " ("
-            << stats_cur.rx_bytes << " Bytes)";
-}
 
 void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   VLOG(1) << "Client: Sending message for window slot " << window_slot;
@@ -222,13 +167,14 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
       reinterpret_cast<msg_hdr_t *>(thread_ctx->tx_message.data());
   msg_hdr->window_slot = window_slot;
   msg_hdr->key = window_slot; // This can be changed
+  msg_hdr->value = 0; // This can be changed
 
   const int ret =
       machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
-                   thread_ctx->tx_message.data(), FLAGS_tx_msg_size);
+                   thread_ctx->tx_message.data(), sizeof(msg_hdr_t));
   if (ret == 0) {
     stats_cur.tx_success++;
-    stats_cur.tx_bytes += FLAGS_tx_msg_size;
+    stats_cur.tx_bytes += sizeof(msg_hdr_t);
   } else {
     LOG(WARNING) << "Client: Failed to send message for window slot "
                  << window_slot;
@@ -357,8 +303,6 @@ int main(int argc, char *argv[]) {
   std::thread datapath_thread;
   if (FLAGS_active_generator) {
     datapath_thread = std::thread(ClientLoop, channel_ctx, &flow);
-  } else {
-    datapath_thread = std::thread(ServerLoop, channel_ctx);
   }
 
   while (g_keep_running) sleep(5);
