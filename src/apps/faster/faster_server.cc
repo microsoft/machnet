@@ -39,6 +39,10 @@ struct msg_hdr_t {
 std::vector<uint8_t> tx_message;
 std::vector<uint8_t> rx_message;
 
+static volatile int g_keep_running = 1;
+
+
+void SigIntHandler([[maybe_unused]] int signal) { g_keep_running = 0; }
 
 
 class Latch {
@@ -160,7 +164,7 @@ void MachnetTransportServer() {
 
   int ret = machnet_init();
   CHECK_EQ(ret, 0) << "machnet_init() failed";
-  void *channel = machnet_attach();
+  void* channel = machnet_attach();
 
   CHECK(channel != nullptr) << "machnet_attach() failed";
   ret = machnet_listen(channel, FLAGS_local.c_str(), kPort);
@@ -169,11 +173,14 @@ void MachnetTransportServer() {
   // Handle client requests
   LOG(INFO) << "Waiting for client requests";
   while (true) {
+    if (g_keep_running == 0) {
+      LOG(INFO) << "MsgGenLoop: Exiting.";
+      break;
+    }
 
-    // std::array<char, 1024> buf;
     MachnetFlow rx_flow;
-    const ssize_t ret = machnet_recv(channel, rx_message.data(), rx_message.size(), &rx_flow);
-    // CHECK_GE(ret, 0) << "machnet_recv() failed";
+    const ssize_t ret =
+        machnet_recv(channel, rx_message.data(), rx_message.size(), &rx_flow);
     if (ret == 0) {
       usleep(1);
       continue;
@@ -183,64 +190,35 @@ void MachnetTransportServer() {
         reinterpret_cast<const msg_hdr_t*>(rx_message.data());
 
     auto callback = [](IAsyncContext* ctxt, Status result) {
-      // In-memory test.
+      // It is an in-memory store so, we never get here!
       CHECK_EQ(true, false);
     };
 
-    // ReadContext context{std::stoull(key)};
-    // LOG(INFO) << "Received GET request for key: " << msg_hdr->key;
     ReadContext context{msg_hdr->key};
     Status result = store.Read(context, callback, 1);
-    // CHECK_EQ(23, context.output);
+
+    MachnetFlow tx_flow;
+    tx_flow.dst_ip = rx_flow.src_ip;
+    tx_flow.src_ip = rx_flow.dst_ip;
+    tx_flow.dst_port = rx_flow.src_port;
+    tx_flow.src_port = rx_flow.dst_port;
+
+    msg_hdr_t* tx_msg_hdr = reinterpret_cast<msg_hdr_t*>(tx_message.data());
+    tx_msg_hdr->window_slot = msg_hdr->window_slot;
+    tx_msg_hdr->key = msg_hdr->key;
 
     if (result == Status::Ok) {
-      CHECK_EQ(Status::Ok, result);
-      MachnetFlow tx_flow;
-      tx_flow.dst_ip = rx_flow.src_ip;
-      tx_flow.src_ip = rx_flow.dst_ip;
-      tx_flow.dst_port = rx_flow.src_port;
-      tx_flow.src_port = rx_flow.dst_port;
-
-      // Send the response
-      msg_hdr_t* tx_msg_hdr =
-          reinterpret_cast<msg_hdr_t*>(tx_message.data());
-      tx_msg_hdr->window_slot = msg_hdr->window_slot;
-      tx_msg_hdr->key = msg_hdr->key;
       tx_msg_hdr->value = context.output;
-
-      ssize_t send_ret = machnet_send(channel, tx_flow, tx_message.data(),
-                                      sizeof(tx_message.data()));
-
-      VLOG(1) << "Sent value of size " << sizeof(context.output) << " bytes to client";
-      if (send_ret == -1) {
-        LOG(ERROR) << "machnet_send() failed";
-      }
     } else {
-      MachnetFlow tx_flow;
-      tx_flow.dst_ip = rx_flow.src_ip;
-      tx_flow.src_ip = rx_flow.dst_ip;
-      tx_flow.dst_port = rx_flow.src_port;
-      tx_flow.src_port = rx_flow.dst_port;
-
-      // Send the response
-      msg_hdr_t* tx_msg_hdr =
-          reinterpret_cast<msg_hdr_t*>(tx_message.data());
-      tx_msg_hdr->window_slot = msg_hdr->window_slot;
-      tx_msg_hdr->key = msg_hdr->key;
       tx_msg_hdr->value = 0;
-
-      ssize_t send_ret = machnet_send(channel, tx_flow, tx_message.data(),
-                                      sizeof(tx_message.data()));
-
-      VLOG(1) << "Sent value of size " << sizeof(context.output) << " bytes to client";
-      if (send_ret == -1) {
-        LOG(ERROR) << "machnet_send() failed";
-      }
-      LOG(INFO) << "Error retrieving key: " << "result.ToString()";
+      LOG(WARNING) << "Key not found";
     }
+
+    ssize_t send_ret = machnet_send(channel, tx_flow, tx_message.data(),
+                                    sizeof(tx_message.data()));
+    if (send_ret == -1) LOG(ERROR) << "machnet_send() failed";
   }
 }
-
 
 void UDPTransportServer() {
   // Create and configure the UDP socket
@@ -357,6 +335,8 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   FLAGS_logtostderr = 1;
+
+  signal(SIGINT, SigIntHandler);
 
   tx_message.resize(sizeof(msg_hdr_t));
   rx_message.resize(sizeof(msg_hdr_t));
