@@ -256,35 +256,17 @@ class ShmChannel {
    * @return - pointer to the buffer on success, nullptr otherwise.
    */
   MsgBuf *MsgBufAlloc() {
-    //    MachnetRingSlot_t indices[1];
-    //    MachnetMsgBuf_t *buf[1];
     if (cached_buf_indices.empty()) {
-      //      fprintf(stderr, "[App] Initially cached [%zu]",
-      //              cached_buf_indices.size());
       cached_buf_indices.resize(CACHED_BUF_SIZE);
       cached_bufs.resize(CACHED_BUF_SIZE);
-      cached_buf_indices.clear();
-      cached_bufs.clear();
       uint32_t ret = __machnet_channel_buf_alloc_bulk(
           ctx_, CACHED_BUF_SIZE, cached_buf_indices.data(), cached_bufs.data());
-      //      fprintf(stderr, " so cache [%zu] from buf_ring\n",
-      //              cached_buf_indices.size());
       if (ret != CACHED_BUF_SIZE) return nullptr;
-      //      fprintf(stderr, "cached_buf_indices empty, batched [%d] from
-      //      buf_ring\n",
-      //              CACHED_BUF_SIZE);
     }
-    auto ret = cached_buf_indices.back();
-    //    VLOG(DEBUG) << "allocated the index: " << ret;
-    //    fprintf(stderr, "MsgBufAlloc allocated the index: %d\n", ret);
     cached_buf_indices.pop_back();
     auto buf = cached_bufs.back();
     cached_bufs.pop_back();
     return reinterpret_cast<MsgBuf *>(buf);
-    //    auto ret = __machnet_channel_buf_alloc_bulk(ctx_, 1, indices, buf);
-    //    if (ret == 1) [[likely]]
-    //      return reinterpret_cast<MsgBuf *>(buf[0]);
-    //    return nullptr;
   }
 
   /**
@@ -298,12 +280,13 @@ class ShmChannel {
     MachnetRingSlot_t index[1] = {__machnet_channel_buf_index(
         ctx_, reinterpret_cast<const MachnetMsgBuf_t *>(buf))};
     int retries = 5;
-    uint32_t ret;
+    int ret;
     do {
       if (cached_buf_indices.size() < CACHED_BUF_SIZE) {
-        fprintf(stderr, "Free single buffer: [%d]\n",
-                cached_buf_indices.back());
         cached_buf_indices.push_back(index[0]);
+        MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, index[0]);
+        __machnet_channel_buf_init(msg_buf);
+        cached_bufs.push_back(msg_buf);
         ret = 1;
       } else {
         ret = __machnet_channel_buf_free_bulk(ctx_, 1, index);
@@ -358,13 +341,18 @@ class ShmChannel {
     int retries = 5;
     uint32_t ret;
     do {
-      // Attempt to release the buffers.
-      if (cnt < CACHED_BUF_SIZE - cached_buf_indices.size()) {
-        for (ret = 0; ret < cnt; ret++)
-          cached_buf_indices.push_back(indices[ret]);
-      } else {
-        ret = __machnet_channel_buf_free_bulk(ctx_, cnt, indices);
+      uint32_t free_capacity = CACHED_BUF_SIZE - cached_buf_indices.size();
+      uint32_t limit = (cnt <= free_capacity) ? cnt : free_capacity;
+      for (ret = 0; ret < limit; ret++) {
+        cached_buf_indices.push_back(indices[ret]);
+        MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, indices[ret]);
+        __machnet_channel_buf_init(msg_buf);
+        cached_bufs.push_back(msg_buf);
       }
+      if (cnt > free_capacity) {
+        ret += __machnet_channel_buf_free_bulk(ctx_, cnt - ret, indices + ret);
+      }
+      assert(cached_buf_indices.size() == cached_bufs.size());
     } while (ret == 0 && retries-- > 0);
 
     if (ret == 0) [[unlikely]]
