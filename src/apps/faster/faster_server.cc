@@ -3,6 +3,7 @@
 
 #include <fcntl.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <deque>
@@ -17,7 +18,12 @@
 #include "device/null_disk.h"
 #include "test_types.h"
 
+using std::chrono::duration_cast;
+using std::chrono::high_resolution_clock;
+using std::chrono::time_point;
+
 DEFINE_uint64(num_keys, 1000, "Number of keys to insert and retrieve");
+DEFINE_uint32(thread_size, 1, "Number of threads to use for the server application");
 DEFINE_int32(num_probes, 10000, "Number of probes to perform");
 DEFINE_int32(value_size, 200, "Size of value in bytes");
 DEFINE_string(local, "", "Local IP address, needed for Machnet only");
@@ -44,6 +50,26 @@ static volatile int g_keep_running = 1;
 
 void SigIntHandler([[maybe_unused]] int signal) { g_keep_running = 0; }
 
+class ThreadCtx {
+ private:
+
+ public:
+  ThreadCtx(const void *channel_ctx, const MachnetFlow_t *flow_info, const uint32_t listen_port)
+      : channel_ctx(CHECK_NOTNULL(channel_ctx)), flow(flow_info), listen_port(listen_port){
+    rx_message.resize(sizeof(msg_hdr_t));
+    tx_message.resize(sizeof(msg_hdr_t));
+  }
+  ~ThreadCtx() {}
+
+
+
+ public:
+  const void *channel_ctx;
+  const MachnetFlow_t *flow;
+  std::vector<uint8_t> rx_message;
+  std::vector<uint8_t> tx_message;
+  uint32_t listen_port;
+};
 
 class Latch {
  private:
@@ -159,19 +185,27 @@ FasterKv<Key, Value, FASTER::device::NullDisk> store{1<<16, 1073741824, ""};
 
 static constexpr uint16_t kPort = 888;
 
-void MachnetTransportServer() {
+void MachnetTransportServer(uint8_t thread_id) {
   // Initialize machnet and attach
 
-  int ret = machnet_init();
-  CHECK_EQ(ret, 0) << "machnet_init() failed";
   void* channel = machnet_attach();
-
   CHECK(channel != nullptr) << "machnet_attach() failed";
-  ret = machnet_listen(channel, FLAGS_local.c_str(), kPort);
-  CHECK_EQ(ret, 0) << "machnet_listen() failed";
+  if (channel == nullptr) {
+    LOG(INFO) << "machnet_attch() failed";
+    return;
+  }
+  ThreadCtx thread_ctx(channel, nullptr /* flow info */, kPort + thread_id);
+
+  int ret = machnet_listen(channel, FLAGS_local.c_str(), thread_ctx.listen_port);
+  if (ret != 0) {
+    LOG(INFO) << "machnet_listen() failed";
+    return;
+  }
 
   // Handle client requests
   LOG(INFO) << "Waiting for client requests";
+  store.StartSession();
+
   while (true) {
     if (g_keep_running == 0) {
       LOG(INFO) << "MsgGenLoop: Exiting.";
@@ -180,14 +214,14 @@ void MachnetTransportServer() {
 
     MachnetFlow rx_flow;
     const ssize_t ret =
-        machnet_recv(channel, rx_message.data(), rx_message.size(), &rx_flow);
+        machnet_recv(channel, thread_ctx.rx_message.data(), thread_ctx.rx_message.size(), &rx_flow);
     if (ret == 0) {
     //   usleep(1);
       continue;
     }
 
     const msg_hdr_t* msg_hdr =
-        reinterpret_cast<const msg_hdr_t*>(rx_message.data());
+        reinterpret_cast<const msg_hdr_t*>(thread_ctx.rx_message.data());
 
     auto callback = [](IAsyncContext* ctxt, Status result) {
       // It is an in-memory store so, we never get here!
@@ -203,7 +237,7 @@ void MachnetTransportServer() {
     tx_flow.dst_port = rx_flow.src_port;
     tx_flow.src_port = rx_flow.dst_port;
 
-    msg_hdr_t* tx_msg_hdr = reinterpret_cast<msg_hdr_t*>(tx_message.data());
+    msg_hdr_t* tx_msg_hdr = reinterpret_cast<msg_hdr_t*>(thread_ctx.tx_message.data());
     tx_msg_hdr->window_slot = msg_hdr->window_slot;
     tx_msg_hdr->key = msg_hdr->key;
 
@@ -214,10 +248,12 @@ void MachnetTransportServer() {
       LOG(WARNING) << "Key not found";
     }
 
-    ssize_t send_ret = machnet_send(channel, tx_flow, tx_message.data(),
-                                    sizeof(tx_message.data()));
+    ssize_t send_ret = machnet_send(channel, tx_flow, thread_ctx.tx_message.data(),
+                                    sizeof(thread_ctx.tx_message.data()));
     if (send_ret == -1) LOG(ERROR) << "machnet_send() failed";
   }
+
+  store.StopSession();
 }
 
 void UDPTransportServer() {
@@ -341,18 +377,32 @@ int main(int argc, char* argv[]) {
   tx_message.resize(sizeof(msg_hdr_t));
   rx_message.resize(sizeof(msg_hdr_t));
 
+  std::thread datapath_threads[FLAGS_thread_size];
+
+  // Initializing machnet
+  int ret = machnet_init();
+  CHECK_EQ(ret, 0) << "machnet_init() failed";
+
   if (FLAGS_transport == "machnet") {
     Populate();
-    store.StartSession();
-    MachnetTransportServer();
-    store.StopSession();
+    for(size_t i = 0; i < FLAGS_thread_size; i++)
+      datapath_threads[i] = std::thread(&MachnetTransportServer, i);
   } else if (FLAGS_transport == "udp") {
-    UDPTransportServer();
-  } else if (FLAGS_transport == "test") {
-    run_key_value();
+    Populate();
+    datapath_threads[0] = std::thread(&UDPTransportServer);
+    // UDPTransportServer();
+  } else if (FLAGS_transport ==   "test") {
+    datapath_threads[0] = std::thread(&run_key_value);
+    // run_key_value();
   } else {
     LOG(FATAL) << "Unknown transport: " << FLAGS_transport;
   }
 
+  while (g_keep_running) sleep(5);
+
+  for(size_t i = 0; i < FLAGS_thread_size; i++)
+    datapath_threads[i].join();
+
+  store.StopSession();
   return 0;
 }
