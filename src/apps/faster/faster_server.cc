@@ -181,7 +181,7 @@ class ReadContext : public IAsyncContext {
   uint64_t output;
 };
 
-FasterKv<Key, Value, FASTER::device::NullDisk> store{1<<16, 1073741824, ""};
+FasterKv<Key, Value, FASTER::device::NullDisk> store{1<<25, 1073741824, ""};
 
 static constexpr uint16_t kPort = 888;
 
@@ -245,7 +245,7 @@ void MachnetTransportServer(uint8_t thread_id) {
       tx_msg_hdr->value = context.output;
     } else {
       tx_msg_hdr->value = 0;
-      LOG(WARNING) << "Key not found";
+      // LOG(WARNING) << "Key not found";
     }
 
     ssize_t send_ret = machnet_send(channel, tx_flow, thread_ctx.tx_message.data(),
@@ -358,11 +358,18 @@ void Populate() {
     CHECK_EQ(true, false);
   };
 
+  LOG(INFO) << "Populating store with " << FLAGS_num_keys << " keys";
+
   for (size_t idx = 0; idx < FLAGS_num_keys; ++idx) {
     UpsertContext context{static_cast<uint64_t>(idx), static_cast<uint64_t>(idx)};
     Status result = store.Upsert(context, callback, 1);
     CHECK_EQ(Status::Ok, result);
+    if (idx % 500000 == 0) {
+      LOG(INFO) << "Inserted " << idx << " keys";
+    }
   }
+
+  LOG(INFO) << "Finished populating store";
 }
 
 
@@ -391,7 +398,7 @@ int main(int argc, char* argv[]) {
     Populate();
     datapath_threads[0] = std::thread(&UDPTransportServer);
     // UDPTransportServer();
-  } else if (FLAGS_transport ==   "test") {
+  } else if (FLAGS_transport == "test") {
     datapath_threads[0] = std::thread(&run_key_value);
     // run_key_value();
   } else {

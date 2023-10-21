@@ -27,6 +27,7 @@ DEFINE_uint32(tx_msg_size, 64,
               "Size of the message (request/response) to send.");
 DEFINE_uint32(msg_window, 8, "Maximum number of messages in flight.");
 DEFINE_uint64(msg_nr, UINT64_MAX, "Number of messages to send.");
+DEFINE_uint64(max_key_range, 10000, "Maximum key range to se");
 DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
             "bouncing.");
@@ -62,7 +63,7 @@ class ThreadCtx {
 
  public:
   ThreadCtx(const void *channel_ctx, const MachnetFlow_t *flow_info)
-      : channel_ctx(CHECK_NOTNULL(channel_ctx)), flow(flow_info), stats() {
+      : channel_ctx(CHECK_NOTNULL(channel_ctx)), flow(flow_info), key_start(0), stats() {
     // Fill-in max-sized messages, we'll send the actual size later
     rx_message.resize(sizeof(msg_hdr_t));
     tx_message.resize(sizeof(msg_hdr_t));
@@ -103,6 +104,7 @@ class ThreadCtx {
   hdr_histogram *latency_hist;
   size_t num_request_latency_samples;
   std::vector<msg_latency_info_t> msg_latency_info_vec;
+  size_t key_start;
 
   struct {
     stats_t current;
@@ -166,8 +168,8 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   msg_hdr_t *msg_hdr =
       reinterpret_cast<msg_hdr_t *>(thread_ctx->tx_message.data());
   msg_hdr->window_slot = window_slot;
-  msg_hdr->key = window_slot; // This can be changed
-  msg_hdr->value = 0; // This can be changed
+  msg_hdr->key = thread_ctx->key_start++ % FLAGS_max_key_range;
+  msg_hdr->value = 0;
 
   const int ret =
       machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
@@ -214,15 +216,8 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
             << msg_hdr->window_slot << " in " << latency_us << " us";
 
     if (FLAGS_verify) {
-      for (uint32_t i = sizeof(msg_hdr_t); i < rx_size; i++) {
-        if (thread_ctx->rx_message[i] != thread_ctx->message_gold[i]) {
-          LOG(ERROR) << "Message data mismatch at index " << i << std::hex
-                     << " " << static_cast<uint32_t>(thread_ctx->rx_message[i])
-                     << " "
-                     << static_cast<uint32_t>(thread_ctx->message_gold[i]);
-          break;
-        }
-      }
+      if (msg_hdr->value != 0)
+        CHECK(msg_hdr->key == msg_hdr->value);
     }
 
     return msg_hdr->window_slot;
