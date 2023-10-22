@@ -52,7 +52,7 @@ extern "C" {
 #define HUGE_PAGE_2M_SIZE (2 * MB)
 #define MACHNET_MSG_MAX_LEN (8 * MB)
 #define MACHNET_MIN_CHANNEL_BUFFER_SIZE (2 * KB)
-#define CACHED_BUF_SIZE (200)
+#define CACHED_BUF_SIZE (1 << 6)
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)
@@ -537,44 +537,55 @@ __machnet_channel_buf_free_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
 }
 
 static inline __attribute__((always_inline)) uint32_t
-__machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx,
-                                  uint32_t buffer_indices_index,
+__machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx, uint32_t cnt,
                                   MachnetRingSlot_t *buffer_indices) {
   uint32_t ret = 0;
-  if (ctx->cached_buf_available == 0 &&
-      ctx->cached_buf_index == CACHED_BUF_SIZE) {
-    // very rare case cache is fully used and empty
-    // tricky to fill here so just return all back to buf_ring
-    fprintf(stderr,
-            "rare case: cache is fully used and free_cached discovered it\n");
-    return __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                           buffer_indices);
-  }
+
   if (ctx->cached_buf_available == 0) {
-    // cache initially empty
-    while (ret < buffer_indices_index) {
+    // Cache initially empty or full completely
+    for (; ret < cnt; ret++) {
       ctx->cached_buf_indices[ret] = buffer_indices[ret];
-      ret++;
+      MachnetMsgBuf_t *msg_buf =
+          __machnet_channel_buf(ctx, ctx->cached_buf_indices[ret]);
+      //      msg_buf->data_len = 0;
+      __machnet_channel_buf_init(msg_buf);
       ctx->cached_buf_available++;
     }
-  } else if (ctx->cached_buf_index == 0) {
-    // cache has space, but not used yet
-    // fill from cached_buf_index + cached_buf_available to the end
-    for (uint32_t i = ctx->cached_buf_index + ctx->cached_buf_available;
-         ret < buffer_indices_index; ret++, i++) {
-      ctx->cached_buf_indices[i] = buffer_indices[ret];
-      ctx->cached_buf_available++;
-    }
+    if (ctx->cached_buf_index == CACHED_BUF_SIZE) ctx->cached_buf_index = 0;
   } else {
-    // cache has space and being used
-    // fill from cached_buf_index-1 to the beginning
-    for (uint32_t i = ctx->cached_buf_index - 1; ret < buffer_indices_index;
-         ret++, i--) {
+    //    fprintf(stderr,
+    //            "--space available--\ncnt: %d ctx->cached_buf_avail: %d "
+    //            "ctx->cached_buf_index: %d\n",
+    //            cnt, ctx->cached_buf_available, ctx->cached_buf_index);
+    uint32_t start = (ctx->cached_buf_index == 0) ? ctx->cached_buf_available
+                                                  : ctx->cached_buf_index - 1;
+    int step = (ctx->cached_buf_index == 0) ? 1 : -1;
+
+    for (uint32_t i = start; ret < cnt && ctx->cached_buf_index;
+         ret++, i += step) {
+      //      fprintf(stderr, "i:%d ret: %d cnt:%d ", i, ret, cnt);
       ctx->cached_buf_indices[i] = buffer_indices[ret];
+      MachnetMsgBuf_t *msg_buf =
+          __machnet_channel_buf(ctx, ctx->cached_buf_indices[i]);
+      //      msg_buf->data_len = 0;
+      __machnet_channel_buf_init(msg_buf);
       ctx->cached_buf_available++;
-      ctx->cached_buf_index--;
+      if (step == -1) ctx->cached_buf_index--;
+      //      fprintf(stderr, "ctx->avail: %d ctx->cached_buf: %d\n",
+      //              ctx->cached_buf_available, ctx->cached_buf_index);
+    }
+    for (uint32_t i = ctx->cached_buf_index + ctx->cached_buf_available;
+         ret < cnt; ret++, i++) {
+      ctx->cached_buf_indices[i] = buffer_indices[ret];
+      MachnetMsgBuf_t *msg_buf =
+          __machnet_channel_buf(ctx, ctx->cached_buf_indices[i]);
+      __machnet_channel_buf_init(msg_buf);
+      //      msg_buf->data_len = 0;
+      ctx->cached_buf_available++;
     }
   }
+  //  fprintf(stderr, "ret[%d] == cnt[%d]\n", ret, cnt);
+  assert(ret == cnt);
   return ret;
 }
 
