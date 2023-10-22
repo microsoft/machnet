@@ -443,15 +443,16 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
                                          NULL) == CACHED_BUF_SIZE) {
       if (ctx->cached_buf_index == 0)
         fprintf(stderr,
-                "[Stack] Initially cached: [%d] so cache [%d] from buf_ring\n",
-                ctx->cached_buf_available, CACHED_BUF_SIZE);
+                "[ctx->cached_bufs] Initially empty, allocated & cached [%d] "
+                "from "
+                "buf_ring\n",
+                CACHED_BUF_SIZE);
       ctx->cached_buf_index = 0;
       ctx->cached_buf_available = CACHED_BUF_SIZE;
 
       //      fprintf(stderr,
-      //              "cached_buf_index empty, allocated & batched [%d] indices
-      //              from " "buf_ring\n",
-      //              CACHED_BUF_SIZE);
+      //              "[ctx->cached_bufs] empty, allocated & cached [%d] indices
+      //              from " " buf_ring\n ", CACHED_BUF_SIZE);
     }
   }
   //  fprintf(stderr, "initially cached_buf_index: %d\n",
@@ -515,6 +516,9 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       if ((__machnet_channel_buf_tailroom(buffer) == 0) && seg_bytes) {
         // The buffer is full, and we still have data to copy.
         buffer_cur_index++;  // Get the next buffer index.
+        //        fprintf(stderr, "tailroom: %d buf_index: %d\n",
+        //                __machnet_channel_buf_tailroom(buffer),
+        //                ctx->tmp_buffer_indices[buffer_cur_index]);
         assert(buffer_cur_index < buffers_nr);
         buffer->next = ctx->tmp_buffer_indices[buffer_cur_index];
       }
@@ -591,6 +595,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
 
   const uint32_t kBufferBatchSize = 16;
   uint32_t ret;  // __attribute__((unused));
+  uint32_t to_free, available_capacity;
 
   // Deque a message from the ring.
   MachnetRingSlot_t buffer_index;
@@ -661,13 +666,18 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
       // Do a batch buffer release if we reached the threshold.
       if (buffer_indices_index == kBufferBatchSize) {
         // release to the buf_ring
-        if (buffer_indices_index <=
-            CACHED_BUF_SIZE - ctx->cached_buf_available) {
-          ret = __machnet_channel_buf_free_cached(ctx, buffer_indices_index,
-                                                  buffer_indices);
-        } else {
-          ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                                buffer_indices);
+        available_capacity = CACHED_BUF_SIZE - ctx->cached_buf_available;
+        to_free = MIN(buffer_indices_index, available_capacity);
+        //        fprintf(stderr, "to_free: %d buf_ind_index: %d avail_cap:
+        //        %d\n",
+        //                to_free, buffer_indices_index, available_capacity);
+        ret = (to_free) ? __machnet_channel_buf_free_cached(ctx, to_free,
+                                                            buffer_indices)
+                        : 0;
+        if (buffer_indices_index > available_capacity) {
+          ret += __machnet_channel_buf_free_bulk(
+              ctx, buffer_indices_index - available_capacity,
+              buffer_indices + available_capacity);
         }
         assert(ret == buffer_indices_index);
         buffer_indices_index = 0;
@@ -686,12 +696,15 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
   msghdr->flow_info = flow_info;
 
   // Free up any remaining buffers.
-  if (buffer_indices_index <= CACHED_BUF_SIZE - ctx->cached_buf_available) {
-    ret = __machnet_channel_buf_free_cached(ctx, buffer_indices_index,
-                                            buffer_indices);
-  } else {
-    ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                          buffer_indices);
+  available_capacity = CACHED_BUF_SIZE - ctx->cached_buf_available;
+  to_free = MIN(buffer_indices_index, available_capacity);
+  ret = (to_free)
+            ? __machnet_channel_buf_free_cached(ctx, to_free, buffer_indices)
+            : 0;
+  if (buffer_indices_index > available_capacity) {
+    ret += __machnet_channel_buf_free_bulk(
+        ctx, buffer_indices_index - available_capacity,
+        buffer_indices + available_capacity);
   }
   assert(ret == buffer_indices_index);
 
@@ -708,12 +721,15 @@ fail:
       buffer = NULL;
     }
     if (buffer == NULL || buffer_indices_index == kBufferBatchSize) {
-      if (buffer_indices_index <= CACHED_BUF_SIZE - ctx->cached_buf_available) {
-        ret = __machnet_channel_buf_free_cached(ctx, buffer_indices_index,
-                                                buffer_indices);
-      } else {
-        ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                              buffer_indices);
+      available_capacity = CACHED_BUF_SIZE - ctx->cached_buf_available;
+      to_free = MIN(buffer_indices_index, available_capacity);
+      ret = (to_free) ? __machnet_channel_buf_free_cached(ctx, to_free,
+                                                          buffer_indices)
+                      : 0;
+      if (buffer_indices_index > available_capacity) {
+        ret += __machnet_channel_buf_free_bulk(
+            ctx, buffer_indices_index - available_capacity,
+            buffer_indices + available_capacity);
       }
       assert(ret == buffer_indices_index);
       buffer_indices_index = 0;
