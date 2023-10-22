@@ -282,10 +282,10 @@ class ShmChannel {
     int retries = 5;
     int ret;
     do {
+      MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, index[0]);
+      __machnet_channel_buf_init(msg_buf);
       if (cached_buf_indices.size() < CACHED_BUF_SIZE) {
         cached_buf_indices.push_back(index[0]);
-        MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, index[0]);
-        __machnet_channel_buf_init(msg_buf);
         cached_bufs.push_back(msg_buf);
         ret = 1;
       } else {
@@ -350,6 +350,11 @@ class ShmChannel {
         cached_bufs.push_back(msg_buf);
       }
       if (cnt > free_capacity) {
+        for (uint32_t i = 0; i < cnt - ret; i++) {
+          MachnetMsgBuf_t *msg_buf =
+              __machnet_channel_buf(ctx_, indices[ret + i]);
+          __machnet_channel_buf_init(msg_buf);
+        }
         ret += __machnet_channel_buf_free_bulk(ctx_, cnt - ret, indices + ret);
       }
       assert(cached_buf_indices.size() == cached_bufs.size());

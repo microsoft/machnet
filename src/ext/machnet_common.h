@@ -547,7 +547,7 @@ static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx, uint32_t cnt,
                                   MachnetRingSlot_t *buffer_indices) {
   uint32_t ret = 0;
-
+  // sanity check
   if (ctx->cached_buf_available == 0) {
     // Cache initially empty or full completely
     for (; ret < cnt; ret++) {
@@ -558,7 +558,9 @@ __machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx, uint32_t cnt,
       __machnet_channel_buf_init(msg_buf);
       ctx->cached_buf_available++;
     }
-    if (ctx->cached_buf_index == CACHED_BUF_SIZE) ctx->cached_buf_index = 0;
+    if (ctx->cached_buf_index != 0) ctx->cached_buf_index = 0;
+    assert(ctx->cached_buf_index + ctx->cached_buf_available <=
+           CACHED_BUF_SIZE);
   } else {
     //    fprintf(stderr,
     //            "--space available--\ncnt: %d ctx->cached_buf_avail: %d "
@@ -589,9 +591,14 @@ __machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx, uint32_t cnt,
       __machnet_channel_buf_init(msg_buf);
       //      msg_buf->data_len = 0;
       ctx->cached_buf_available++;
+      assert(ctx->cached_buf_index + ctx->cached_buf_available <=
+             CACHED_BUF_SIZE);
     }
+    assert(ctx->cached_buf_index + ctx->cached_buf_available <=
+           CACHED_BUF_SIZE);
   }
   //  fprintf(stderr, "ret[%d] == cnt[%d]\n", ret, cnt);
+  assert(ctx->cached_buf_index + ctx->cached_buf_available <= CACHED_BUF_SIZE);
   assert(ret == cnt);
   return ret;
 }
@@ -602,14 +609,21 @@ __machnet_channel_buf_free(MachnetChannelCtx_t *ctx, uint32_t cnt,
   uint32_t available_capacity, to_free, ret;
   available_capacity = CACHED_BUF_SIZE - ctx->cached_buf_available;
   to_free = MIN(cnt, available_capacity);
+  //  fprintf(stderr, "cnt: %d ctx->avail_bufs: %d buf_index:%d\n", to_free,
+  //          ctx->cached_buf_available, ctx->cached_buf_index);
   ret = (to_free)
             ? __machnet_channel_buf_free_cached(ctx, to_free, buffer_indices)
             : 0;
   if (cnt > available_capacity) {
+    //    for (uint32_t i = 0; i < cnt - available_capacity; ++i) {
+    //      fprintf(stderr, "free to buf_ring: %d\n",
+    //              buffer_indices[available_capacity + i]);
+    //    }
     ret += __machnet_channel_buf_free_bulk(ctx, cnt - available_capacity,
                                            buffer_indices + available_capacity);
   }
   return ret;
+  return __machnet_channel_buf_free_bulk(ctx, cnt, buffer_indices);
 }
 
 /**

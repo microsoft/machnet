@@ -438,6 +438,10 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   // get from batched indices
   // if not possible call buf_alloc to fill the batch
   if (ctx->cached_buf_available == 0) {
+    //    fprintf(stderr, "avail: %d ind: %d\n", ctx->cached_buf_available,
+    //            ctx->cached_buf_index);
+    //    assert(ctx->cached_buf_index == 0 ||
+    //           ctx->cached_buf_index == CACHED_BUF_SIZE);
     if (__machnet_channel_buf_alloc_bulk(ctx, CACHED_BUF_SIZE,
                                          ctx->cached_buf_indices,
                                          NULL) == CACHED_BUF_SIZE) {
@@ -463,6 +467,11 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     for (uint32_t i = 0; i < buffers_nr; i++) {
       ctx->tmp_buffer_indices[i] =
           ctx->cached_buf_indices[ctx->cached_buf_index];
+      MachnetMsgBuf_t *b =
+          __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[i]);
+      __machnet_channel_buf_init(b);
+      assert(b->data_ofs == MACHNET_MSGBUF_HEADROOM_MAX);
+      assert(b->data_len == 0);
       ctx->cached_buf_index++;
       ctx->cached_buf_available--;
     }
@@ -474,6 +483,12 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
             ctx, remaining, ctx->tmp_buffer_indices, NULL) != remaining) {
       return -1;
     }
+    for (uint32_t i = 0; i < remaining; i++) {
+      MachnetMsgBuf_t *b =
+          __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[i]);
+      __machnet_channel_buf_init(b);
+      assert(b->data_len == 0);
+    }
     //    fprintf(
     //        stderr,
     //        "couldn't get [%d] from batched, directly allocated [%d] indices
@@ -482,6 +497,11 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     for (uint32_t i = remaining; i < buffers_nr; i++) {
       ctx->tmp_buffer_indices[i] =
           ctx->cached_buf_indices[ctx->cached_buf_index];
+      MachnetMsgBuf_t *b =
+          __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[i]);
+      __machnet_channel_buf_init(b);
+      assert(b->data_ofs == MACHNET_MSGBUF_HEADROOM_MAX);
+      assert(b->data_len == 0);
       ctx->cached_buf_index++;
       ctx->cached_buf_available--;
     }
@@ -500,6 +520,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       // Get the destination offset at buffer.
       MachnetMsgBuf_t *buffer =
           __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[buffer_cur_index]);
+      //      assert(buffer->data_len == 0);
       if (unlikely(buffer->magic != MACHNET_MSGBUF_MAGIC)) abort();
 
       // Copy the data.
@@ -516,9 +537,9 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       if ((__machnet_channel_buf_tailroom(buffer) == 0) && seg_bytes) {
         // The buffer is full, and we still have data to copy.
         buffer_cur_index++;  // Get the next buffer index.
-        //        fprintf(stderr, "tailroom: %d buf_index: %d\n",
-        //                __machnet_channel_buf_tailroom(buffer),
-        //                ctx->tmp_buffer_indices[buffer_cur_index]);
+        assert(__machnet_channel_buf(ctx,
+                                     ctx->tmp_buffer_indices[buffer_cur_index])
+                   ->data_len == 0);
         assert(buffer_cur_index < buffers_nr);
         buffer->next = ctx->tmp_buffer_indices[buffer_cur_index];
       }
@@ -658,8 +679,11 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
       if (buffer->flags & MACHNET_MSGBUF_FLAGS_SG) {
         // This is the last buffer of the message.
         buffer_index = buffer->next;
+        __machnet_channel_buf_init(buffer);
         buffer = __machnet_channel_buf(ctx, buffer_index);
         buf_data_ofs = 0;
+      } else {
+        __machnet_channel_buf_init(buffer);
       }
 
       // Do a batch buffer release if we reached the threshold.
@@ -695,8 +719,10 @@ fail:
     buffer_indices[buffer_indices_index++] = buffer_index;
     if (buffer->flags & MACHNET_MSGBUF_FLAGS_SG) {
       buffer_index = buffer->next;
+      __machnet_channel_buf_init(buffer);
       buffer = __machnet_channel_buf(ctx, buffer_index);
     } else {
+      __machnet_channel_buf_init(buffer);
       buffer = NULL;
     }
     if (buffer == NULL || buffer_indices_index == kBufferBatchSize) {
