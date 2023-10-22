@@ -64,6 +64,13 @@ extern "C" {
 #define __DECONST(type, var) ((type)(uintptr_t)(const void *)(var))
 #define ALIGN_TO_PAGE_SIZE(x, _pagesz) (((x) + _pagesz - 1) & ~(_pagesz - 1))
 
+#define MIN(a, b)           \
+  ({                        \
+    __typeof__(a) _a = (a); \
+    __typeof__(b) _b = (b); \
+    _a < _b ? _a : _b;      \
+  })
+
 typedef unsigned char uchar_t;
 typedef uint32_t MachnetRingSlot_t;
 static_assert(sizeof(MachnetRingSlot_t) % 4 == 0,
@@ -586,6 +593,22 @@ __machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx, uint32_t cnt,
   }
   //  fprintf(stderr, "ret[%d] == cnt[%d]\n", ret, cnt);
   assert(ret == cnt);
+  return ret;
+}
+
+static inline __attribute__((always_inline)) uint32_t
+__machnet_channel_buf_free(MachnetChannelCtx_t *ctx, uint32_t cnt,
+                           MachnetRingSlot_t *buffer_indices) {
+  uint32_t available_capacity, to_free, ret;
+  available_capacity = CACHED_BUF_SIZE - ctx->cached_buf_available;
+  to_free = MIN(cnt, available_capacity);
+  ret = (to_free)
+            ? __machnet_channel_buf_free_cached(ctx, to_free, buffer_indices)
+            : 0;
+  if (cnt > available_capacity) {
+    ret += __machnet_channel_buf_free_bulk(ctx, cnt - available_capacity,
+                                           buffer_indices + available_capacity);
+  }
   return ret;
 }
 
