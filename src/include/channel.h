@@ -282,6 +282,7 @@ class ShmChannel {
     int retries = 5;
     int ret;
     do {
+      // clear and free buffer
       MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, index[0]);
       __machnet_channel_buf_init(msg_buf);
       if (cached_buf_indices.size() < CACHED_BUF_SIZE) {
@@ -343,12 +344,14 @@ class ShmChannel {
     do {
       uint32_t free_capacity = CACHED_BUF_SIZE - cached_buf_indices.size();
       uint32_t limit = (cnt <= free_capacity) ? cnt : free_capacity;
+      // clear and free to cache
       for (ret = 0; ret < limit; ret++) {
         cached_buf_indices.push_back(indices[ret]);
         MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, indices[ret]);
         __machnet_channel_buf_init(msg_buf);
         cached_bufs.push_back(msg_buf);
       }
+      // clear and free to ring
       if (cnt > free_capacity) {
         for (uint32_t i = 0; i < cnt - ret; i++) {
           MachnetMsgBuf_t *msg_buf =
