@@ -599,16 +599,10 @@ __machnet_channel_buf_free(MachnetChannelCtx_t *ctx, uint32_t cnt,
   uint32_t available_capacity, to_free, ret;
   available_capacity = CACHED_BUF_SIZE - ctx->cached_buf_available;
   to_free = MIN(cnt, available_capacity);
-  //  fprintf(stderr, "cnt: %d ctx->avail_bufs: %d buf_index:%d\n", to_free,
-  //          ctx->cached_buf_available, ctx->cached_buf_index);
   ret = (to_free)
             ? __machnet_channel_buf_free_cached(ctx, to_free, buffer_indices)
             : 0;
   if (cnt > available_capacity) {
-    //    for (uint32_t i = 0; i < cnt - available_capacity; ++i) {
-    //      fprintf(stderr, "free to buf_ring: %d\n",
-    //              buffer_indices[available_capacity + i]);
-    //    }
     ret += __machnet_channel_buf_free_bulk(ctx, cnt - available_capacity,
                                            buffer_indices + available_capacity);
   }
