@@ -627,7 +627,7 @@ __machnet_channel_buffers_avail(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
   jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
-  return jring_count(buf_ring);
+  return ctx->cached_buf_available + jring_count(buf_ring);
 }
 
 /**

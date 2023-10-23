@@ -113,7 +113,7 @@ class ShmChannel {
 
   // Get the number of buffers that are currently available (i.e., not in use).
   uint32_t GetFreeBufCount() const {
-    return __machnet_channel_buffers_avail(ctx_);
+    return cached_bufs.size() + __machnet_channel_buffers_avail(ctx_);
   }
 
   /**
