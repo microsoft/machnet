@@ -113,7 +113,7 @@ class ShmChannel {
 
   // Get the number of buffers that are currently available (i.e., not in use).
   uint32_t GetFreeBufCount() const {
-    return cached_bufs.size() + __machnet_channel_buffers_avail(ctx_);
+    return cached_buf_indices.size() + __machnet_channel_buffers_avail(ctx_);
   }
 
   /**
@@ -367,6 +367,14 @@ class ShmChannel {
       return false;  // NOLINT
 
     return true;
+  }
+
+  int GetAllCachedBufferIndices(std::vector<MachnetRingSlot_t> *indices) {
+    indices->insert(indices->end(), cached_buf_indices.begin(),
+                    cached_buf_indices.end());
+    uint32_t ret = cached_buf_indices.size();
+    cached_buf_indices.clear();
+    return ret;
   }
 
  private:
