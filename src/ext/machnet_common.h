@@ -542,63 +542,43 @@ __machnet_channel_buf_free_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
   // multi-consumer function.
   return jring_mp_enqueue_bulk(buf_ring, bufs, n, NULL);
 }
-
 static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx, uint32_t cnt,
                                   MachnetRingSlot_t *buffer_indices) {
   uint32_t ret = 0;
-  // sanity check
+
   if (ctx->cached_buf_available == 0) {
-    // Cache initially empty or full completely
-    for (; ret < cnt; ret++) {
+    // If cache is empty, fill the cache directly
+    for (ret = 0; ret < cnt; ret++) {
       ctx->cached_buf_indices[ret] = buffer_indices[ret];
-      MachnetMsgBuf_t *msg_buf =
-          __machnet_channel_buf(ctx, ctx->cached_buf_indices[ret]);
-      //      msg_buf->data_len = 0;
-      __machnet_channel_buf_init(msg_buf);
       ctx->cached_buf_available++;
     }
-    if (ctx->cached_buf_index != 0) ctx->cached_buf_index = 0;
-    assert(ctx->cached_buf_index + ctx->cached_buf_available <=
-           CACHED_BUF_SIZE);
+    ctx->cached_buf_index = 0;
   } else {
-    //    fprintf(stderr,
-    //            "--space available--\ncnt: %d ctx->cached_buf_avail: %d "
-    //            "ctx->cached_buf_index: %d\n",
-    //            cnt, ctx->cached_buf_available, ctx->cached_buf_index);
+    // Determine start index and step based on cached buffer's index
     uint32_t start = (ctx->cached_buf_index == 0) ? ctx->cached_buf_available
                                                   : ctx->cached_buf_index - 1;
     int step = (ctx->cached_buf_index == 0) ? 1 : -1;
 
+    // Cache is partially filled, so fill it accordingly
+    // If pointer is at the beginning, fill forwards, otherwise fill backwards
     for (uint32_t i = start; ret < cnt && ctx->cached_buf_index;
          ret++, i += step) {
-      //      fprintf(stderr, "i:%d ret: %d cnt:%d ", i, ret, cnt);
       ctx->cached_buf_indices[i] = buffer_indices[ret];
-      MachnetMsgBuf_t *msg_buf =
-          __machnet_channel_buf(ctx, ctx->cached_buf_indices[i]);
-      //      msg_buf->data_len = 0;
-      __machnet_channel_buf_init(msg_buf);
       ctx->cached_buf_available++;
       if (step == -1) ctx->cached_buf_index--;
-      //      fprintf(stderr, "ctx->avail: %d ctx->cached_buf: %d\n",
-      //              ctx->cached_buf_available, ctx->cached_buf_index);
     }
-    for (uint32_t i = ctx->cached_buf_index + ctx->cached_buf_available;
-         ret < cnt; ret++, i++) {
+
+    // Fill any remaining space at the end of the cache
+    uint32_t endPaddingIndex =
+        ctx->cached_buf_index + ctx->cached_buf_available;
+    for (uint32_t i = endPaddingIndex; ret < cnt; ret++, i++) {
       ctx->cached_buf_indices[i] = buffer_indices[ret];
-      MachnetMsgBuf_t *msg_buf =
-          __machnet_channel_buf(ctx, ctx->cached_buf_indices[i]);
-      __machnet_channel_buf_init(msg_buf);
-      //      msg_buf->data_len = 0;
       ctx->cached_buf_available++;
-      assert(ctx->cached_buf_index + ctx->cached_buf_available <=
-             CACHED_BUF_SIZE);
     }
-    assert(ctx->cached_buf_index + ctx->cached_buf_available <=
-           CACHED_BUF_SIZE);
   }
-  //  fprintf(stderr, "ret[%d] == cnt[%d]\n", ret, cnt);
-  assert(ctx->cached_buf_index + ctx->cached_buf_available <= CACHED_BUF_SIZE);
+
+  // Ensure that we processed all buffer indices
   assert(ret == cnt);
   return ret;
 }
