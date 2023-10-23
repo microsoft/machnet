@@ -175,14 +175,12 @@ bool check_buffer_pool(const MachnetChannelCtx_t *ctx) {
   // Dequeue all the buffers from the pool.
   if (__machnet_channel_buf_alloc_bulk(ctx, buffers.size(), buffers.data(),
                                        nullptr) != buffers.size()) {
-    fprintf(stderr, "Couldn't alloc_bulk all buffers, return false\n");
     return false;
   }
 
   // Release all the buffers back to the pool.
   if (__machnet_channel_buf_free_bulk(ctx, buffers.size(), buffers.data()) !=
       buffers.size()) {
-    fprintf(stderr, "couldn't free_bulk all buffers, return false\n");
     return false;
   }
 
