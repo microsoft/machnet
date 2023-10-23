@@ -423,7 +423,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   assert(channel_ctx != NULL);
   assert(msghdr != NULL);
   MachnetChannelCtx_t *ctx = (MachnetChannelCtx_t *)channel_ctx;
-  // Sanity checks on the full message size.
+
   if (unlikely(msghdr->msg_size > MACHNET_MSG_MAX_LEN || msghdr->msg_size == 0))
     return -1;
 
@@ -435,73 +435,36 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   // them.
   const uint32_t buffers_nr =
       (msghdr->msg_size + kMsgBufPayloadMax - 1) / kMsgBufPayloadMax;
-  // get from batched indices
-  // if not possible call buf_alloc to fill the batch
+
+  // if buffer cache empty fill it
   if (ctx->cached_buf_available == 0) {
-    //    fprintf(stderr, "avail: %d ind: %d\n", ctx->cached_buf_available,
-    //            ctx->cached_buf_index);
-    //    assert(ctx->cached_buf_index == 0 ||
-    //           ctx->cached_buf_index == CACHED_BUF_SIZE);
     if (__machnet_channel_buf_alloc_bulk(ctx, CACHED_BUF_SIZE,
                                          ctx->cached_buf_indices,
                                          NULL) == CACHED_BUF_SIZE) {
-      if (ctx->cached_buf_index == 0)
-        fprintf(stderr,
-                "[ctx->cached_bufs] Initially empty, allocated & cached [%d] "
-                "from "
-                "buf_ring\n",
-                CACHED_BUF_SIZE);
       ctx->cached_buf_index = 0;
       ctx->cached_buf_available = CACHED_BUF_SIZE;
-
-      //      fprintf(stderr,
-      //              "[ctx->cached_bufs] empty, allocated & cached [%d] indices
-      //              from " " buf_ring\n ", CACHED_BUF_SIZE);
     }
   }
-  //  fprintf(stderr, "initially cached_buf_index: %d\n",
-  //  ctx->cached_buf_index);
+
   if (buffers_nr <= ctx->cached_buf_available) {
-    //    fprintf(stderr, "served [%d] indices from cached_buf_index\n",
-    //    buffers_nr);
+    // get all buffers from cache
     for (uint32_t i = 0; i < buffers_nr; i++) {
       ctx->tmp_buffer_indices[i] =
           ctx->cached_buf_indices[ctx->cached_buf_index];
-      MachnetMsgBuf_t *b =
-          __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[i]);
-      __machnet_channel_buf_init(b);
-      assert(b->data_ofs == MACHNET_MSGBUF_HEADROOM_MAX);
-      assert(b->data_len == 0);
       ctx->cached_buf_index++;
       ctx->cached_buf_available--;
     }
-
   } else {
-    // directly get from ring
     uint32_t remaining = buffers_nr - ctx->cached_buf_available;
+    // allocate directly from ring
     if (__machnet_channel_buf_alloc_bulk(
             ctx, remaining, ctx->tmp_buffer_indices, NULL) != remaining) {
       return -1;
     }
-    for (uint32_t i = 0; i < remaining; i++) {
-      MachnetMsgBuf_t *b =
-          __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[i]);
-      __machnet_channel_buf_init(b);
-      assert(b->data_len == 0);
-    }
-    //    fprintf(
-    //        stderr,
-    //        "couldn't get [%d] from batched, directly allocated [%d] indices
-    //        from " "buf_ring and [%d] from batched \n", buffers_nr, remaining,
-    //        ctx->cached_buf_available);
+    // get the rest from cache
     for (uint32_t i = remaining; i < buffers_nr; i++) {
       ctx->tmp_buffer_indices[i] =
           ctx->cached_buf_indices[ctx->cached_buf_index];
-      MachnetMsgBuf_t *b =
-          __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[i]);
-      __machnet_channel_buf_init(b);
-      assert(b->data_ofs == MACHNET_MSGBUF_HEADROOM_MAX);
-      assert(b->data_len == 0);
       ctx->cached_buf_index++;
       ctx->cached_buf_available--;
     }
@@ -520,9 +483,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       // Get the destination offset at buffer.
       MachnetMsgBuf_t *buffer =
           __machnet_channel_buf(ctx, ctx->tmp_buffer_indices[buffer_cur_index]);
-      //      assert(buffer->data_len == 0);
       if (unlikely(buffer->magic != MACHNET_MSGBUF_MAGIC)) abort();
-
       // Copy the data.
       uint32_t nbytes_to_copy =
           MIN(seg_bytes, __machnet_channel_buf_tailroom(buffer));
