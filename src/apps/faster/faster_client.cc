@@ -15,6 +15,9 @@
 #include <numeric>
 #include <sstream>
 #include <thread>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
@@ -32,6 +35,9 @@ DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
             "bouncing.");
 DEFINE_bool(verify, false, "Verify payload of received messages.");
+DEFINE_string(transport, "", "machnet transport or UDP or TCP");
+DEFINE_uint64(num_keys, 1000, "Number of keys to request for");
+
 
 static volatile int g_keep_running = 1;
 
@@ -81,6 +87,25 @@ class ThreadCtx {
 
     msg_latency_info_vec.resize(FLAGS_msg_window);
   }
+
+  ThreadCtx()
+      : key_start(0),
+        single_key_counter(0),
+        stats() {
+    // Fill-in max-sized messages, we'll send the actual size later
+    rx_message.resize(sizeof(msg_hdr_t));
+    tx_message.resize(sizeof(msg_hdr_t));
+    message_gold.resize(sizeof(msg_hdr_t));
+    std::iota(message_gold.begin(), message_gold.end(), 0);
+    std::memcpy(tx_message.data(), message_gold.data(), tx_message.size());
+
+    int ret = hdr_init(kMinLatencyMicros, kMaxLatencyMicros, kLatencyPrecision,
+                       &latency_hist);
+    CHECK_EQ(ret, 0) << "Failed to initialize latency histogram.";
+
+    msg_latency_info_vec.resize(FLAGS_msg_window);
+  }
+
   ~ThreadCtx() { hdr_close(latency_hist); }
 
   void RecordRequestStart(uint64_t window_slot) {
@@ -239,6 +264,70 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
   return 0;
 }
 
+int ClientSendUDP() {
+
+  ThreadCtx thread_ctx;
+
+
+  int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+  if (udpSocket == -1) {
+    perror("Failed to create UDP socket");
+    return 1;
+  }
+
+  // Define the server address (IP and port)
+  sockaddr_in serverAddress;
+  serverAddress.sin_family = AF_INET;
+  serverAddress.sin_port = htons(FLAGS_remote_port);  // Port number
+  serverAddress.sin_addr.s_addr = inet_addr(
+      FLAGS_remote_ip.c_str());  // Server IP address (change to the actual server's IP)
+
+  uint64_t i = 0;
+  while (i < FLAGS_num_keys) {
+    const msg_hdr_t msg = {0, i, 15};
+
+    // Send the message to the server
+    ssize_t bytesSent =
+        sendto(udpSocket, &msg, sizeof(msg), 0,
+               (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+
+    if (bytesSent == -1) {
+      perror("Failed to send data");
+      close(udpSocket);
+      return 1;
+    }
+
+    // std::cout << "Sent " << bytesSent << " bytes to the server" << std::endl;
+
+    // Receive a response from the server
+    char buffer[1024] = {0};
+    socklen_t serverAddressLength = sizeof(serverAddress);
+    ssize_t bytesReceived =
+        recvfrom(udpSocket, buffer, sizeof(buffer), 0,
+                 (struct sockaddr*)&serverAddress, &serverAddressLength);
+
+    if (bytesReceived == -1) {
+      perror("Error while receiving data");
+    } else {
+      buffer[bytesReceived] = '\0';
+      if (FLAGS_verify) {
+        msg_hdr_t* response;
+        CHECK_EQ(bytesReceived, sizeof(msg_hdr_t));
+        response = (msg_hdr_t*)buffer;
+        CHECK_EQ(response->key, i);
+        CHECK_EQ(response->value, i);
+        LOG(INFO) << "key: " << response->key << " value: " << response->value << std::endl;
+      }
+      i++;
+    }
+  }
+
+  // Close the socket
+  close(udpSocket);
+
+  return 0;
+}
+
 void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
   ThreadCtx thread_ctx(channel_ctx, flow);
   LOG(INFO) << "Client Loop: Starting.";
@@ -281,35 +370,40 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Starting in client mode, request size " << FLAGS_tx_msg_size;
   }
 
-  CHECK_EQ(machnet_init(), 0) << "Failed to initialize Machnet library.";
-  void *channel_ctx = machnet_attach();
-  CHECK_NOTNULL(channel_ctx);
-
-  MachnetFlow_t flow;
-  if (FLAGS_active_generator) {
-    int ret =
-        machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
-                        FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
-    CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
-                       "error: "
-                    << strerror(ret);
-
-    LOG(INFO) << "[CONNECTED] [" << FLAGS_local_ip << ":" << flow.src_port
-              << " <-> " << FLAGS_remote_ip << ":" << flow.dst_port << "]";
-  } else {
-    int ret =
-        machnet_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_remote_port);
-    CHECK(ret == 0)
-        << "Failed to listen on local port. machnet_listen() error: "
-        << strerror(ret);
-
-    LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_remote_port
-              << "]";
-  }
-
   std::thread datapath_thread;
-  if (FLAGS_active_generator) {
-    datapath_thread = std::thread(ClientLoop, channel_ctx, &flow);
+
+  if (FLAGS_transport == "machnet") {
+    CHECK_EQ(machnet_init(), 0) << "Failed to initialize Machnet library.";
+    void *channel_ctx = machnet_attach();
+    CHECK_NOTNULL(channel_ctx);
+
+    MachnetFlow_t flow;
+    if (FLAGS_active_generator) {
+      int ret =
+          machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
+                          FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
+      CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
+                         "error: "
+                      << strerror(ret);
+
+      LOG(INFO) << "[CONNECTED] [" << FLAGS_local_ip << ":" << flow.src_port
+                << " <-> " << FLAGS_remote_ip << ":" << flow.dst_port << "]";
+    } else {
+      int ret = machnet_listen(channel_ctx, FLAGS_local_ip.c_str(),
+                               FLAGS_remote_port);
+      CHECK(ret == 0)
+          << "Failed to listen on local port. machnet_listen() error: "
+          << strerror(ret);
+
+      LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_remote_port
+                << "]";
+    }
+
+    if (FLAGS_active_generator) {
+      datapath_thread = std::thread(ClientLoop, channel_ctx, &flow);
+    }
+  } else if (FLAGS_transport == "UDP") {
+      datapath_thread = std::thread(ClientSendUDP);
   }
 
   while (g_keep_running) sleep(5);

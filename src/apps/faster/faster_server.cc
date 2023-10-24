@@ -268,8 +268,11 @@ void UDPTransportServer() {
   struct sockaddr_in server_addr;
   memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
+  // server_addr.sin_addr.s_addr = htonl(std::strtoul(FLAGS_local.c_str(), nullptr, 10));
   server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  server_addr.sin_port = htons(kPort);
+  server_addr.sin_port = htons(kPort + 10000);
+
+  LOG(INFO) << "Binding to " << FLAGS_local << ":" << kPort + 10000;
 
   int ret = bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
   if (ret < 0) {
@@ -279,12 +282,25 @@ void UDPTransportServer() {
   // Handle client requests
   LOG(INFO) << "Waiting for client requests";
   while (true) {
+
+    if (g_keep_running == 0) {
+      LOG(INFO) << "MsgGenLoop: Exiting.";
+      break;
+    }
+
+
     std::array<char, 1024> buf;
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
+
+
     const ssize_t ret =
-        recvfrom(sockfd, buf.data(), buf.size(), 0,
+        recvfrom(sockfd, buf.data(), sizeof(msg_hdr_t), 0,
                  (struct sockaddr *)&client_addr, &client_addr_len);
+
+    const msg_hdr_t* msg_hdr =
+        reinterpret_cast<const msg_hdr_t*>(buf.data());
+
     if (ret < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         usleep(1);
@@ -293,22 +309,28 @@ void UDPTransportServer() {
       LOG(FATAL) << "recvfrom() failed, error: " << strerror(errno);
     }
 
-    std::string key(buf.data(), ret);
-    VLOG(1) << "Received GET request for key: " << key;
+    VLOG(1) << "Received GET request for key: " << msg_hdr->key;
 
     auto callback = [](IAsyncContext* ctxt, Status result) {
       // In-memory test.
       CHECK_EQ(true, false);
     };
 
-    ReadContext context{std::stoull(key)};
+    uint64_t key = msg_hdr->key;
+
+    ReadContext context{msg_hdr->key};
     Status result = store.Read(context, callback, 1);
-    CHECK_EQ(Status::Ok, result);
-    CHECK_EQ(23, context.output);
 
     if (result == Status::Ok) {
+      memset(buf.data(), 0, sizeof(buf));
+
+      msg_hdr_t* tx_msg_hdr = reinterpret_cast<msg_hdr_t*>(buf.data());
+      tx_msg_hdr->window_slot = msg_hdr->window_slot;
+      tx_msg_hdr->key = key;
+      tx_msg_hdr->value = context.output;
+
       ssize_t send_ret =
-          sendto(sockfd, &context.output, sizeof(context.output), 0,
+          sendto(sockfd, buf.data(), sizeof(struct msg_hdr_t), 0,
                  (struct sockaddr *)&client_addr, client_addr_len);
       VLOG(1) << "Sent value of size " << sizeof(context.output) << " bytes to client";
       if (send_ret == -1) {
@@ -387,10 +409,11 @@ int main(int argc, char* argv[]) {
   std::thread datapath_threads[FLAGS_thread_size];
 
   // Initializing machnet
-  int ret = machnet_init();
-  CHECK_EQ(ret, 0) << "machnet_init() failed";
+
 
   if (FLAGS_transport == "machnet") {
+    int ret = machnet_init();
+    CHECK_EQ(ret, 0) << "machnet_init() failed";
     Populate();
     for(size_t i = 0; i < FLAGS_thread_size; i++)
       datapath_threads[i] = std::thread(&MachnetTransportServer, i);

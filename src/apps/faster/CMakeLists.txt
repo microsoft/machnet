@@ -24,3 +24,11 @@ set (target_name faster_client)
 add_executable (${target_name} faster_client.cc)
 target_link_libraries(${target_name} PUBLIC glog machnet_shim rt hdr_histogram ${LIBDPDK_LIBRARIES})
 
+set (target_name faster_udp_client)
+add_executable (${target_name} faster_udp_client.cc)
+target_link_libraries(${target_name} PUBLIC glog machnet_shim rt hdr_histogram ${LIBDPDK_LIBRARIES})
+
+# set (target_name faster_client_all)
+# add_executable (${target_name} faster_client_all.cc)
+# target_link_libraries(${target_name} PUBLIC glog machnet_shim rt hdr_histogram ${LIBDPDK_LIBRARIES})
+
