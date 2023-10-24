@@ -167,7 +167,7 @@ void ServerLoop(void *sock_fd) {
   int client_sock_fd =
       accept(thread_ctx.sock_fd, reinterpret_cast<sockaddr *>(&client_addr),
              &client_addr_size);
-  CHECK(client_sock_fd < 0)
+  CHECK(client_sock_fd > 0)
       << "Server: Failed to accept connection. accept():  " << strerror(errno);
 
   while (true) {
@@ -318,7 +318,7 @@ int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   gflags::SetUsageMessage("Simple Linux Kernel TCP-based message generator.");
-  signal(SIGINT, SigIntHandler);
+  //  signal(SIGINT, SigIntHandler);
 
   CHECK_GT(FLAGS_tx_msg_size, sizeof(msg_hdr_t)) << "Message size too small";
   if (!FLAGS_active_generator) {
@@ -328,7 +328,7 @@ int main(int argc, char *argv[]) {
   }
 
   int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
-  CHECK(sock_fd < 0) << "Failed to create a socket. socket() error: "
+  CHECK(sock_fd > 0) << "Failed to create a socket. socket() error: "
                      << strerror(sock_fd);
   sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
@@ -351,9 +351,9 @@ int main(int argc, char *argv[]) {
 
     int ret = connect(sock_fd, reinterpret_cast<sockaddr *>(&server_addr),
                       sizeof(server_addr));
-    CHECK(ret < 0) << "Failed to connect to remote host. machnet_connect() "
-                      "error: "
-                   << strerror(ret);
+    CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
+                       "error: "
+                    << strerror(ret);
 
     LOG(INFO) << "[CONNECTED] [" << FLAGS_local_ip << " <-> " << FLAGS_remote_ip
               << ":" << FLAGS_port << "]";
@@ -367,8 +367,9 @@ int main(int argc, char *argv[]) {
 
     int ret = bind(sock_fd, reinterpret_cast<sockaddr *>(&server_addr),
                    sizeof(server_addr));
-    CHECK(ret < 0) << "Failed to listen on local port. machnet_listen() error: "
-                   << strerror(errno);
+    CHECK(ret == 0)
+        << "Failed to listen on local port. machnet_listen() error: "
+        << strerror(errno);
 
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_port << "]";
   }
