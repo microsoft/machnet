@@ -226,13 +226,13 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   msg_hdr->window_slot = window_slot;
 
   const int ret = write(thread_ctx->sock_fd, thread_ctx->tx_message.data(),
-                        FLAGS_tx_msg_size);
+                        thread_ctx->tx_message.size());
   if (ret == FLAGS_tx_msg_size) {
     stats_cur.tx_success++;
     stats_cur.tx_bytes += FLAGS_tx_msg_size;
   } else {
     LOG(WARNING) << "Client: Failed to send message for window slot "
-                 << window_slot;
+                 << window_slot << ". write() error: " << strerror(errno);
     stats_cur.err_tx_drops++;
   }
 }
@@ -335,23 +335,13 @@ int main(int argc, char *argv[]) {
 
   if (FLAGS_active_generator) {
     // client
-    hostent *server = gethostbyname(FLAGS_remote_ip.c_str());
-    CHECK(server != NULL)
-        << "Failed to resolve the remote ip. gethostbyname() error: "
-        << hstrerror(h_errno);
-
-    std::memset(reinterpret_cast<char *>(&server_addr), 0, sizeof(server_addr));
-
     server_addr.sin_port = htons(FLAGS_port);
-    CHECK(server->h_addr_list[0] != NULL)
-        << "Failed to get the address for remote host.";
-    std::memcpy(reinterpret_cast<char *>(server->h_addr_list[0]),
-                reinterpret_cast<char *>(&server_addr.sin_addr),
-                server->h_length);
-
-    int ret = connect(sock_fd, reinterpret_cast<sockaddr *>(&server_addr),
-                      sizeof(server_addr));
-    CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
+    int ret =
+        inet_pton(AF_INET, FLAGS_remote_ip.c_str(), &server_addr.sin_addr);
+    CHECK(ret == 1) << "Failed to resolve the remote ip.";
+    ret = connect(sock_fd, reinterpret_cast<sockaddr *>(&server_addr),
+                  sizeof(server_addr));
+    CHECK(ret == 0) << "Failed to connect to remote host. connect() "
                        "error: "
                     << strerror(ret);
 
