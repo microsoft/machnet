@@ -318,7 +318,7 @@ int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   gflags::SetUsageMessage("Simple Linux Kernel TCP-based message generator.");
-  //  signal(SIGINT, SigIntHandler);
+  signal(SIGINT, SigIntHandler);
 
   CHECK_GT(FLAGS_tx_msg_size, sizeof(msg_hdr_t)) << "Message size too small";
   if (!FLAGS_active_generator) {
@@ -369,7 +369,6 @@ int main(int argc, char *argv[]) {
                    sizeof(server_addr));
     CHECK(ret == 0) << "Failed to bind on fd: " << sock_fd
                     << " bind() error: " << strerror(errno);
-    LOG(INFO) << "Server: bind on" << sock_fd;
     ret = listen(sock_fd, SOMAXCONN);
     CHECK(ret == 0) << "Failed to listen on fd: " << sock_fd
                     << " listen() error: " << strerror(errno);
