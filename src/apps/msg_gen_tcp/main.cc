@@ -367,10 +367,12 @@ int main(int argc, char *argv[]) {
 
     int ret = bind(sock_fd, reinterpret_cast<sockaddr *>(&server_addr),
                    sizeof(server_addr));
-    CHECK(ret == 0)
-        << "Failed to listen on local port. machnet_listen() error: "
-        << strerror(errno);
-
+    CHECK(ret == 0) << "Failed to bind on fd: " << sock_fd
+                    << " bind() error: " << strerror(errno);
+    LOG(INFO) << "Server: bind on" << sock_fd;
+    ret = listen(sock_fd, SOMAXCONN);
+    CHECK(ret == 0) << "Failed to listen on fd: " << sock_fd
+                    << " listen() error: " << strerror(errno);
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_port << "]";
   }
 
