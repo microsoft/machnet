@@ -337,7 +337,7 @@ void UDPTransportServer() {
         LOG(ERROR) << "sendto() failed";
       }
     } else {
-      LOG(ERROR) << "Error retrieving key: " << "status.ToString()";
+      LOG(ERROR) << "Error retrieving key: " << key;
     }
   }
 }

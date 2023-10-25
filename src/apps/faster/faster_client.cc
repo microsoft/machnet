@@ -268,12 +268,18 @@ int ClientSendUDP() {
 
   ThreadCtx thread_ctx;
 
-
   int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
   if (udpSocket == -1) {
     perror("Failed to create UDP socket");
     return 1;
   }
+
+  // setting non-blocking socket
+  CHECK_GE(udpSocket, 0) << "socket() failed";
+  int flags = fcntl(udpSocket, F_GETFL, 0);
+  CHECK_GE(flags, 0) << "fcntl() F_GETFL failed";
+  CHECK_GE(fcntl(udpSocket, F_SETFL, flags | O_NONBLOCK), 0)
+      << "fcntl() F_SETFL failed";
 
   // Define the server address (IP and port)
   sockaddr_in serverAddress;
@@ -283,47 +289,91 @@ int ClientSendUDP() {
       FLAGS_remote_ip.c_str());  // Server IP address (change to the actual server's IP)
 
   uint64_t i = 0;
-  while (i < FLAGS_num_keys) {
+  while (true) {
+
+    if (g_keep_running == 0) {
+      LOG(INFO) << "MsgGenLoop: Exiting.";
+      break;
+    }
+
+    if (i == FLAGS_num_keys) {
+      // reset key counter.
+      VLOG(1) << FLAGS_msg_nr;
+      i = 0;
+    }
+
+    // Start sending.
     const msg_hdr_t msg = {0, i, 15};
 
-    // Send the message to the server
+    thread_ctx.RecordRequestStart(0);
+
     ssize_t bytesSent =
         sendto(udpSocket, &msg, sizeof(msg), 0,
                (struct sockaddr*)&serverAddress, sizeof(serverAddress));
 
+
     if (bytesSent == -1) {
       perror("Failed to send data");
-      close(udpSocket);
-      return 1;
+      continue;
+      // close(udpSocket);
+      // return 1;
     }
 
-    // std::cout << "Sent " << bytesSent << " bytes to the server" << std::endl;
+    thread_ctx.stats.current.tx_success++;
+    thread_ctx.stats.current.tx_bytes += bytesSent;
+
+    VLOG(1) << "Client: Sent message for window slot " << 0;
+
+    // Blocking receive
 
     // Receive a response from the server
     char buffer[1024] = {0};
     socklen_t serverAddressLength = sizeof(serverAddress);
-    ssize_t bytesReceived =
-        recvfrom(udpSocket, buffer, sizeof(buffer), 0,
-                 (struct sockaddr*)&serverAddress, &serverAddressLength);
+    size_t bytesReceived = 0;
 
-    if (bytesReceived == -1) {
-      perror("Error while receiving data");
-    } else {
-      buffer[bytesReceived] = '\0';
-      if (FLAGS_verify) {
-        msg_hdr_t* response;
-        CHECK_EQ(bytesReceived, sizeof(msg_hdr_t));
-        response = (msg_hdr_t*)buffer;
-        CHECK_EQ(response->key, i);
-        CHECK_EQ(response->value, i);
-        LOG(INFO) << "key: " << response->key << " value: " << response->value << std::endl;
+    while (true) {
+      ssize_t bytesReceived =
+          recvfrom(udpSocket, buffer, sizeof(buffer), 0,
+                   (struct sockaddr *)&serverAddress, &serverAddressLength);
+
+      if (bytesReceived == -1) {
+        // perror("Error while receiving data");
+        continue;
+      } else {
+        break;
       }
-      i++;
     }
+
+    VLOG(1) << "Client: Received message for window slot " << 0;
+    buffer[bytesReceived] = '\0';
+    thread_ctx.RecordRequestEnd(0);
+    thread_ctx.stats.current.rx_count++;
+    thread_ctx.stats.current.rx_bytes += bytesSent;
+    if (FLAGS_verify) {
+      msg_hdr_t *response;
+      CHECK_EQ(bytesReceived, sizeof(msg_hdr_t));
+      response = (msg_hdr_t *)buffer;
+      CHECK_EQ(response->key, i);
+      CHECK_EQ(response->value, i);
+      LOG(INFO) << "key: " << response->key << " value: " << response->value
+                << std::endl;
+    }
+    i++;
+
+
+    ReportStats(&thread_ctx);
   }
 
   // Close the socket
   close(udpSocket);
+
+
+  auto &stats_cur = thread_ctx.stats.current;
+  LOG(INFO) << "Application Statistics (TOTAL) - [TX] Sent: "
+            << stats_cur.tx_success << " (" << stats_cur.tx_bytes
+            << " Bytes), Drops: " << stats_cur.err_tx_drops
+            << ", [RX] Received: " << stats_cur.rx_count << " ("
+            << stats_cur.rx_bytes << " Bytes)";
 
   return 0;
 }
