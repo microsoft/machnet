@@ -226,7 +226,7 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   msg_hdr->window_slot = window_slot;
 
   const int ret = write(thread_ctx->sock_fd, thread_ctx->tx_message.data(),
-                        thread_ctx->tx_message.size());
+                        FLAGS_tx_msg_size);
   if (ret == static_cast<int>(FLAGS_tx_msg_size)) {
     LOG(INFO) << "Sent out " << ret << " bytes.";
     stats_cur.tx_success++;
@@ -248,9 +248,8 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
 
     std::memset(thread_ctx->rx_message.data(), 0,
                 thread_ctx->rx_message.size());
-    const ssize_t rx_size =
-        read(thread_ctx->sock_fd, thread_ctx->rx_message.data(),
-             thread_ctx->rx_message.size());
+    const ssize_t rx_size = read(
+        thread_ctx->sock_fd, thread_ctx->rx_message.data(), FLAGS_tx_msg_size);
     if (rx_size <= 0) continue;
 
     thread_ctx->stats.current.rx_count++;
