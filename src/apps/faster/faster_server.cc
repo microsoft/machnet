@@ -303,7 +303,6 @@ void UDPTransportServer() {
 
     if (ret < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        usleep(1);
         continue;
       }
       LOG(FATAL) << "recvfrom() failed, error: " << strerror(errno);
@@ -408,10 +407,8 @@ int main(int argc, char* argv[]) {
 
   std::thread datapath_threads[FLAGS_thread_size];
 
-  // Initializing machnet
-
-
   if (FLAGS_transport == "machnet") {
+    // Initializing machnet
     int ret = machnet_init();
     CHECK_EQ(ret, 0) << "machnet_init() failed";
     Populate();
@@ -420,10 +417,8 @@ int main(int argc, char* argv[]) {
   } else if (FLAGS_transport == "udp") {
     Populate();
     datapath_threads[0] = std::thread(&UDPTransportServer);
-    // UDPTransportServer();
   } else if (FLAGS_transport == "test") {
     datapath_threads[0] = std::thread(&run_key_value);
-    // run_key_value();
   } else {
     LOG(FATAL) << "Unknown transport: " << FLAGS_transport;
   }

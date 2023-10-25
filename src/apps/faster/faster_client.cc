@@ -106,6 +106,22 @@ class ThreadCtx {
     msg_latency_info_vec.resize(FLAGS_msg_window);
   }
 
+  ThreadCtx(int sock_fd)
+      : key_start(0), single_key_counter(0), sock_fd(sock_fd), stats() {
+    // Fill-in max-sized messages, we'll send the actual size later
+    rx_message.resize(sizeof(msg_hdr_t));
+    tx_message.resize(sizeof(msg_hdr_t));
+    message_gold.resize(sizeof(msg_hdr_t));
+    std::iota(message_gold.begin(), message_gold.end(), 0);
+    std::memcpy(tx_message.data(), message_gold.data(), tx_message.size());
+
+    int ret = hdr_init(kMinLatencyMicros, kMaxLatencyMicros, kLatencyPrecision,
+                       &latency_hist);
+    CHECK_EQ(ret, 0) << "Failed to initialize latency histogram.";
+
+    msg_latency_info_vec.resize(FLAGS_msg_window);
+  }
+
   ~ThreadCtx() { hdr_close(latency_hist); }
 
   void RecordRequestStart(uint64_t window_slot) {
@@ -135,6 +151,7 @@ class ThreadCtx {
   std::vector<msg_latency_info_t> msg_latency_info_vec;
   size_t key_start;
   size_t single_key_counter;
+  int sock_fd;
 
   struct {
     stats_t current;
@@ -187,8 +204,6 @@ void ReportStats(ThreadCtx *thread_ctx) {
     thread_ctx->stats.prev = thread_ctx->stats.current;
   }
 }
-
-
 void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   VLOG(1) << "Client: Sending message for window slot " << window_slot;
   auto &stats_cur = thread_ctx->stats.current;
@@ -264,14 +279,14 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
   return 0;
 }
 
-int ClientSendUDP() {
+void ClientSendUDP() {
 
   ThreadCtx thread_ctx;
 
   int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
   if (udpSocket == -1) {
     perror("Failed to create UDP socket");
-    return 1;
+    return;
   }
 
   // setting non-blocking socket
@@ -315,8 +330,6 @@ int ClientSendUDP() {
     if (bytesSent == -1) {
       perror("Failed to send data");
       continue;
-      // close(udpSocket);
-      // return 1;
     }
 
     thread_ctx.stats.current.tx_success++;
@@ -375,7 +388,7 @@ int ClientSendUDP() {
             << ", [RX] Received: " << stats_cur.rx_count << " ("
             << stats_cur.rx_bytes << " Bytes)";
 
-  return 0;
+  return;
 }
 
 void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
@@ -438,6 +451,8 @@ int main(int argc, char *argv[]) {
 
       LOG(INFO) << "[CONNECTED] [" << FLAGS_local_ip << ":" << flow.src_port
                 << " <-> " << FLAGS_remote_ip << ":" << flow.dst_port << "]";
+
+      datapath_thread = std::thread(ClientLoop, channel_ctx, &flow);
     } else {
       int ret = machnet_listen(channel_ctx, FLAGS_local_ip.c_str(),
                                FLAGS_remote_port);
@@ -448,12 +463,10 @@ int main(int argc, char *argv[]) {
       LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_remote_port
                 << "]";
     }
+  }
 
-    if (FLAGS_active_generator) {
-      datapath_thread = std::thread(ClientLoop, channel_ctx, &flow);
-    }
-  } else if (FLAGS_transport == "UDP") {
-      datapath_thread = std::thread(ClientSendUDP);
+  if (FLAGS_active_generator && FLAGS_transport == "UDP") {
+    datapath_thread = std::thread(ClientSendUDP);
   }
 
   while (g_keep_running) sleep(5);
