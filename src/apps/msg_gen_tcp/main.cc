@@ -228,7 +228,6 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   const int ret = write(thread_ctx->sock_fd, thread_ctx->tx_message.data(),
                         FLAGS_tx_msg_size);
   if (ret == static_cast<int>(FLAGS_tx_msg_size)) {
-    LOG(INFO) << "Sent out " << ret << " bytes.";
     stats_cur.tx_success++;
     stats_cur.tx_bytes += FLAGS_tx_msg_size;
   } else {
