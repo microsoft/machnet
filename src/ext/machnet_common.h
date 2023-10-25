@@ -22,6 +22,7 @@ extern "C" {
  *     [Ring0: Stack->Application]
  *     [Ring1: Application->Stack]
  *     [Ring2: FreeBuffers]
+ *     [BufferIndexTable]
  *     [HUGE_PAGE_2M_SIZE aligned]
  *     [Buf#0]
  *     [Buf#1]
@@ -36,6 +37,11 @@ extern "C" {
  *     Ring0 is used for communicating received messages from the stack to the
  *     application, and Ring1 for the opposite direction.
  *     Ring2 serves as the global pool of buffers.
+ *
+ *     [BufferIndexTable] is a table of `MachnetRingSlot`-wide objects to be
+ *     used as a temporary/scratch space for the application to allocate
+ * (dequeue) buffers. It is used to avoid the need for the application to
+ * allocate such table on each `send` request.
  */
 
 #include <assert.h>
@@ -60,7 +66,7 @@ extern "C" {
 #endif
 
 #define __DECONST(type, var) ((type)(uintptr_t)(const void *)(var))
-#define ALIGN_TO_PAGE_SIZE(x, _pagesz) (((x) + _pagesz - 1) & ~(_pagesz - 1))
+#define ALIGN_TO_BOUNDARY(x, _pagesz) (((x) + _pagesz - 1) & ~(_pagesz - 1))
 
 typedef unsigned char uchar_t;
 typedef uint32_t MachnetRingSlot_t;
@@ -93,6 +99,7 @@ struct MachnetChannelDataCtx {
   size_t machnet_ring_ofs;
   size_t app_ring_ofs;
   size_t buf_ring_ofs;
+  size_t buffer_index_table_ofs;
   size_t buf_pool_ofs;
   size_t buf_pool_mask;
   uint32_t buf_size;
@@ -290,6 +297,12 @@ __machnet_channel_buf_ring(const MachnetChannelCtx_t *ctx) {
 static inline __attribute__((always_inline)) uchar_t *__machnet_channel_end(
     const MachnetChannelCtx_t *ctx) {
   return __machnet_channel_mem_ofs(ctx, ctx->size);
+}
+
+static inline MachnetRingSlot_t *__machnet_channel_buffer_index_table(
+    const MachnetChannelCtx_t *ctx) {
+  return (MachnetRingSlot_t *)__machnet_channel_mem_ofs(
+      ctx, ctx->data_ctx.buffer_index_table_ofs);
 }
 
 /**

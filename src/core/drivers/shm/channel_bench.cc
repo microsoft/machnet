@@ -140,8 +140,7 @@ void stack_loop(thread_conf *conf) {
     LOG(ERROR) << "Not all messages were sent. Sent: " << conf->messages_sent
                << ", received: " << conf->messages_received
                << " expected: " << conf->messages_to_send << ", "
-               << conf->messages_to_receive << ".";
-    return;
+               << conf->messages_to_receive << ". Stack thread exiting.";
   }
 
   conf->finished = true;
@@ -198,8 +197,7 @@ void application_loop(thread_conf *conf) {
     LOG(ERROR) << "Not all messages were sent. Sent: " << conf->messages_sent
                << ", received: " << conf->messages_received
                << " expected: " << conf->messages_to_send << ", "
-               << conf->messages_to_receive << ".";
-    return;
+               << conf->messages_to_receive << ". App thread exiting.";
   }
 
   conf->finished = true;
@@ -223,6 +221,7 @@ void print_results(const thread_conf &stack_conf, const thread_conf &app_conf) {
                                       stack_conf.tx_message_size)
             << std::endl;
   std::cout << "[Stack]" << std::endl;
+
   std::cout
       << juggler::utils::Format(
              "\t[TX] %lu messages, %lu bytes, %lu ns, %lf ns/msg, %lf msg/s",
@@ -289,47 +288,54 @@ void print_results(const thread_conf &stack_conf, const thread_conf &app_conf) {
 
 int main() {
   google::InitGoogleLogging("channel_bench");
+  FLAGS_logtostderr = 1;
   signal(SIGINT, [](int) { g_should_stop.store(true); });
-  // Create a new channel using the channel manager.
+
+  if (geteuid() != 0) {
+    LOG(ERROR) << "Must be run as root.";
+    return -1;
+  }
+  LOG(INFO) << "Creating channel " << channel_name;
   ChannelManager channel_manager;
   CHECK(channel_manager.AddChannel(channel_name, kRingSlotEntries,
                                    kRingSlotEntries, kBuffersNr, kBufferSize));
 
   const uint64_t kMessagesToSend = 2 * 1e7;
   const uint64_t kTxMessageSize = 64;
-  std::vector<std::pair<uint64_t, uint64_t>> tx_conf;
+  std::vector<std::pair<uint64_t, uint64_t>> exp_config_vec;
 
-  tx_conf.emplace_back(kMessagesToSend,
-                       0);  // Stack sends all messages. Application RX-only.
-  tx_conf.emplace_back(
-      0, kMessagesToSend);  // App sends all messages. Stack RX-only.
-  tx_conf.emplace_back(kMessagesToSend,
-                       kMessagesToSend);  // Both send and receive.
+  exp_config_vec.emplace_back(kMessagesToSend, 0);  // Stack -> app only
+  exp_config_vec.emplace_back(0, kMessagesToSend);  // App -> stack only
+  exp_config_vec.emplace_back(kMessagesToSend, kMessagesToSend);  // Bi-dir
 
-  std::cout << "\nRunning...\n\n";
-  for (const auto &conf : tx_conf) {
+  LOG(INFO) << "Running channel_bench";
+
+  for (const auto &exp_conf : exp_config_vec) {
+    LOG(INFO) << "Running experiment: Stack will send " << exp_conf.first
+              << " messages, App will send " << exp_conf.second << " messages.";
+
     thread_conf stack_conf{channel_manager.GetChannel(channel_name),
-                           kStackCpuCoreId, conf.first, kTxMessageSize,
-                           conf.second};
+                           kStackCpuCoreId, exp_conf.first, kTxMessageSize,
+                           exp_conf.second};
     thread_conf app_conf{channel_manager.GetChannel(channel_name),
-                         kAppCpuCoreId, conf.second, kTxMessageSize,
-                         conf.first};
+                         kAppCpuCoreId, exp_conf.second, kTxMessageSize,
+                         exp_conf.first};
 
     // Launch the threads.
     std::thread(&stack_loop, &stack_conf).detach();
     std::thread(&application_loop, &app_conf).detach();
-
-    // Start the experiment.
     usleep(500000);
     g_start.store(true);
 
-    // Wait for kTimeoutSeconds for the threads to finish, otherwise explicitly
-    // stop them by setting g_should_stop to true.
     const uint32_t kTimeoutSeconds = 30;
     uint32_t seconds_passed = 0;
     while (seconds_passed < kTimeoutSeconds) {
       if (stack_conf.finished && app_conf.finished) {
         break;
+      } else {
+        LOG(INFO) << "Main: Waiting for threads to finish. "
+                  << "Stack finished: " << stack_conf.finished
+                  << ", App finished: " << app_conf.finished;
       }
       seconds_passed++;
       sleep(1);
