@@ -19,11 +19,21 @@
 #include <sstream>
 #include <thread>
 
+#include "core/faster.h"
+#include "device/null_disk.h"
+#include "test_types.h"
+
 #define MSG_MAX_LEN (8 * ((1 << 10) * (1 << 10)))
 
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 using std::chrono::time_point;
+
+using namespace FASTER::core;
+using FASTER::test::FixedSizeKey;
+using FASTER::test::NonCopyable;
+using FASTER::test::NonMovable;
+using FASTER::test::SimpleAtomicValue;
 
 DEFINE_string(local_ip, "", "IP of the local interface");
 DEFINE_string(remote_ip, "", "IP of the remote server's interface");
@@ -32,6 +42,7 @@ DEFINE_uint32(tx_msg_size, 64,
               "Size of the message (request/response) to send.");
 DEFINE_uint32(msg_window, 8, "Maximum number of messages in flight.");
 DEFINE_uint64(msg_nr, UINT64_MAX, "Number of messages to send.");
+DEFINE_uint64(num_keys, 10000, "Number of keys to use.");
 DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
             "bouncing.");
@@ -41,6 +52,8 @@ static volatile int g_keep_running = 1;
 
 struct msg_hdr_t {
   uint64_t window_slot;
+  uint64_t key;
+  uint64_t value;
 };
 
 struct stats_t {
@@ -64,7 +77,7 @@ class ThreadCtx {
   };
 
  public:
-  explicit ThreadCtx(int sock_fd) : sock_fd(sock_fd), stats() {
+  explicit ThreadCtx(int sock_fd) : sock_fd(sock_fd), stats(), key(0) {
     // Fill-in max-sized messages, we'll send the actual size later
     rx_message.resize(MSG_MAX_LEN);
     tx_message.resize(MSG_MAX_LEN);
@@ -110,9 +123,11 @@ class ThreadCtx {
     stats_t prev;
     time_point<high_resolution_clock> last_measure_time;
   } stats;
+
+  uint64_t key;
 };
 
-void SigIntHandler([[maybe_unused]] int signal) { g_keep_running = 0; }
+void SigIntHandler([[maybe_unused]] int signal) { g_keep_running = 0;  }
 
 void ReportStats(ThreadCtx *thread_ctx) {
   auto now = high_resolution_clock::now();
@@ -157,8 +172,122 @@ void ReportStats(ThreadCtx *thread_ctx) {
   }
 }
 
+class Latch {
+ private:
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  bool triggered_ = false;
+
+ public:
+  void Wait() {
+    std::unique_lock<std::mutex> lock{mutex_};
+    while (!triggered_) {
+      cv_.wait(lock);
+    }
+  }
+
+  void Trigger() {
+    std::unique_lock<std::mutex> lock{mutex_};
+    triggered_ = true;
+    cv_.notify_all();
+  }
+
+  void Reset() { triggered_ = false; }
+};
+
+template <typename Callable, typename... Args>
+void run_threads(size_t num_threads, Callable worker, Args... args) {
+  Latch latch;
+  auto run_thread = [&latch, &worker, &args...](size_t idx) {
+    latch.Wait();
+    worker(idx, args...);
+  };
+
+  std::deque<std::thread> threads{};
+  for (size_t idx = 0; idx < num_threads; ++idx) {
+    threads.emplace_back(run_thread, idx);
+  }
+
+  latch.Trigger();
+  for (auto& thread : threads) {
+    thread.join();
+  }
+}
+
+using Key = FixedSizeKey<uint64_t>;
+using Value = SimpleAtomicValue<uint64_t>;
+
+class UpsertContext : public IAsyncContext {
+ public:
+  typedef Key key_t;
+  typedef Value value_t;
+
+  UpsertContext(uint64_t key, uint64_t val) : key_{key}, val_{val} {}
+
+  /// Copy (and deep-copy) constructor.
+  UpsertContext(const UpsertContext& other) : key_{other.key_} {}
+
+  /// The implicit and explicit interfaces require a key() accessor.
+  inline const Key& key() const { return key_; }
+  inline static constexpr uint32_t value_size() { return sizeof(value_t); }
+  /// Non-atomic and atomic Put() methods.
+  inline void Put(Value& value) { value.value = val_.value; }
+  inline bool PutAtomic(Value& value) {
+    value.atomic_value.store(42);
+    return true;
+  }
+
+ protected:
+  /// The explicit interface requires a DeepCopy_Internal() implementation.
+  Status DeepCopy_Internal(IAsyncContext*& context_copy) {
+    return IAsyncContext::DeepCopy_Internal(*this, context_copy);
+  }
+
+ private:
+  Key key_;
+  Value val_;
+};
+
+class ReadContext : public IAsyncContext {
+ public:
+  typedef Key key_t;
+  typedef Value value_t;
+
+  ReadContext(uint64_t key) : key_{key} {}
+
+  /// Copy (and deep-copy) constructor.
+  ReadContext(const ReadContext& other) : key_{other.key_} {}
+
+  /// The implicit and explicit interfaces require a key() accessor.
+  inline const Key& key() const { return key_; }
+
+  inline void Get(const Value& value) {
+    // All reads should be atomic (from the mutable tail).
+    CHECK_EQ(true, false);
+  }
+  inline void GetAtomic(const Value& value) {
+    output = value.atomic_value.load();
+  }
+
+ protected:
+  /// The explicit interface requires a DeepCopy_Internal() implementation.
+  Status DeepCopy_Internal(IAsyncContext*& context_copy) {
+    return IAsyncContext::DeepCopy_Internal(*this, context_copy);
+  }
+
+ private:
+  Key key_;
+
+ public:
+  uint64_t output;
+};
+
+FasterKv<Key, Value, FASTER::device::NullDisk> store{1<<25, 1073741824, ""};
+
 void ServerLoop(void *sock_fd) {
   ThreadCtx thread_ctx(*reinterpret_cast<int *>(sock_fd));
+
+
   LOG(INFO) << "Server Loop: Starting.";
 
   sockaddr_in client_addr;
@@ -170,6 +299,8 @@ void ServerLoop(void *sock_fd) {
   CHECK(client_sock_fd > 0)
       << "Server: Failed to accept connection. accept():  " << strerror(errno);
 
+  store.StartSession();
+
   while (true) {
     if (g_keep_running == 0) {
       LOG(INFO) << "MsgGenLoop: Exiting.";
@@ -180,6 +311,7 @@ void ServerLoop(void *sock_fd) {
 
     const ssize_t rx_size = recv(client_sock_fd, thread_ctx.rx_message.data(),
                                  thread_ctx.rx_message.size(), 0);
+
     if (rx_size == 0) g_keep_running = 0;
     if (rx_size <= 0) continue;
 
@@ -188,12 +320,32 @@ void ServerLoop(void *sock_fd) {
 
     const msg_hdr_t *msg_hdr =
         reinterpret_cast<const msg_hdr_t *>(thread_ctx.rx_message.data());
-    VLOG(1) << "Server: Received msg for window slot " << msg_hdr->window_slot;
+
+    VLOG(1) << "Server: Received msg for window slot " << msg_hdr->window_slot
+            << " key " << msg_hdr->key << " value " << msg_hdr->value;
+
+    auto callback = [](IAsyncContext *ctxt, Status result) {
+      // It is an in-memory store so, we never get here!
+      CHECK_EQ(true, false);
+    };
+
+    uint64_t key = msg_hdr->key;
+
+    ReadContext context{msg_hdr->key};
+    Status result = store.Read(context, callback, 1);
 
     // Send the response
     msg_hdr_t *tx_msg_hdr =
         reinterpret_cast<msg_hdr_t *>(thread_ctx.tx_message.data());
     tx_msg_hdr->window_slot = msg_hdr->window_slot;
+    tx_msg_hdr->key = key;
+
+     if (result == Status::Ok) {
+      tx_msg_hdr->value = context.output;
+    } else {
+      tx_msg_hdr->value = 0;
+      // LOG(WARNING) << "Key not found";
+    }
 
     const int ret = send(client_sock_fd, thread_ctx.tx_message.data(),
                          FLAGS_tx_msg_size, 0);
@@ -206,6 +358,8 @@ void ServerLoop(void *sock_fd) {
 
     ReportStats(&thread_ctx);
   }
+
+  store.StopSession();
 
   auto &stats_cur = thread_ctx.stats.current;
   LOG(INFO) << "Application Statistics (TOTAL) - [TX] Sent: "
@@ -223,7 +377,10 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
 
   msg_hdr_t *msg_hdr =
       reinterpret_cast<msg_hdr_t *>(thread_ctx->tx_message.data());
+
   msg_hdr->window_slot = window_slot;
+  msg_hdr->key = thread_ctx->key++ % FLAGS_num_keys;
+  msg_hdr->value = 0;
 
   const int ret = write(thread_ctx->sock_fd, thread_ctx->tx_message.data(),
                         FLAGS_tx_msg_size);
@@ -313,6 +470,30 @@ void ClientLoop(void *sock_fd) {
             << stats_cur.rx_bytes << " Bytes)";
 }
 
+void Populate() {
+
+  store.StartSession();
+
+  auto callback = [](IAsyncContext* ctxt, Status result) {
+    CHECK_EQ(true, false);
+  };
+
+  LOG(INFO) << "Populating store with " << FLAGS_num_keys << " keys";
+
+  for (size_t idx = 0; idx < FLAGS_num_keys; ++idx) {
+    UpsertContext context{static_cast<uint64_t>(idx), static_cast<uint64_t>(idx)};
+    Status result = store.Upsert(context, callback, 1);
+    CHECK_EQ(Status::Ok, result);
+    if (idx % 500000 == 0) {
+      LOG(INFO) << "Inserted " << idx << " keys";
+    }
+  }
+
+  LOG(INFO) << "Finished populating store";
+
+  store.StopSession();
+}
+
 int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -368,6 +549,7 @@ int main(int argc, char *argv[]) {
   if (FLAGS_active_generator) {
     datapath_thread = std::thread(ClientLoop, &sock_fd);
   } else {
+    Populate();
     datapath_thread = std::thread(ServerLoop, &sock_fd);
   }
 
