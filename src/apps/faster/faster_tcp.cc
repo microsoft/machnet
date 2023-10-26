@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <netinet/tcp.h>
 
 #include <chrono>
 #include <csignal>
@@ -519,11 +520,22 @@ int main(int argc, char *argv[]) {
     int ret =
         inet_pton(AF_INET, FLAGS_remote_ip.c_str(), &server_addr.sin_addr);
     CHECK(ret == 1) << "Failed to resolve the remote ip.";
+
+    // Set TCP no-delay option
+    int enable = 1;
+    if (setsockopt(sock_fd, IPPROTO_TCP, TCP_NODELAY, &enable,
+                   sizeof(int)) == -1) {
+      perror("Error setting TCP no-delay");
+      return 1;
+    }
+
     ret = connect(sock_fd, reinterpret_cast<sockaddr *>(&server_addr),
                   sizeof(server_addr));
     CHECK(ret == 0) << "Failed to connect to remote host. connect() "
                        "error: "
                     << strerror(ret);
+
+
 
     LOG(INFO) << "[CONNECTED] [" << FLAGS_local_ip << " <-> " << FLAGS_remote_ip
               << ":" << FLAGS_port << "]";

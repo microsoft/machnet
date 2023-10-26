@@ -9,6 +9,8 @@
 #include <glog/logging.h>
 #include <hdr/hdr_histogram.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -18,7 +20,6 @@
 #include <numeric>
 #include <sstream>
 #include <thread>
-#include <sys/epoll.h>
 
 #include "core/faster.h"
 #include "device/null_disk.h"
@@ -78,7 +79,8 @@ class ThreadCtx {
   };
 
  public:
-  explicit ThreadCtx(int sock_fd) : sock_fd(sock_fd), stats(), key(0), clientSockets() {
+  explicit ThreadCtx(int sock_fd)
+      : sock_fd(sock_fd), stats(), key(0), clientSockets() {
     // Fill-in max-sized messages, we'll send the actual size later
     rx_message.resize(MSG_MAX_LEN);
     tx_message.resize(MSG_MAX_LEN);
@@ -130,7 +132,7 @@ class ThreadCtx {
   std::vector<int> clientSockets;
 };
 
-void SigIntHandler([[maybe_unused]] int signal) { g_keep_running = 0;  }
+void SigIntHandler([[maybe_unused]] int signal) { g_keep_running = 0; }
 
 void ReportStats(ThreadCtx *thread_ctx) {
   auto now = high_resolution_clock::now();
@@ -212,7 +214,7 @@ void run_threads(size_t num_threads, Callable worker, Args... args) {
   }
 
   latch.Trigger();
-  for (auto& thread : threads) {
+  for (auto &thread : threads) {
     thread.join();
   }
 }
@@ -228,21 +230,21 @@ class UpsertContext : public IAsyncContext {
   UpsertContext(uint64_t key, uint64_t val) : key_{key}, val_{val} {}
 
   /// Copy (and deep-copy) constructor.
-  UpsertContext(const UpsertContext& other) : key_{other.key_} {}
+  UpsertContext(const UpsertContext &other) : key_{other.key_} {}
 
   /// The implicit and explicit interfaces require a key() accessor.
-  inline const Key& key() const { return key_; }
+  inline const Key &key() const { return key_; }
   inline static constexpr uint32_t value_size() { return sizeof(value_t); }
   /// Non-atomic and atomic Put() methods.
-  inline void Put(Value& value) { value.value = val_.value; }
-  inline bool PutAtomic(Value& value) {
+  inline void Put(Value &value) { value.value = val_.value; }
+  inline bool PutAtomic(Value &value) {
     value.atomic_value.store(42);
     return true;
   }
 
  protected:
   /// The explicit interface requires a DeepCopy_Internal() implementation.
-  Status DeepCopy_Internal(IAsyncContext*& context_copy) {
+  Status DeepCopy_Internal(IAsyncContext *&context_copy) {
     return IAsyncContext::DeepCopy_Internal(*this, context_copy);
   }
 
@@ -259,22 +261,22 @@ class ReadContext : public IAsyncContext {
   ReadContext(uint64_t key) : key_{key} {}
 
   /// Copy (and deep-copy) constructor.
-  ReadContext(const ReadContext& other) : key_{other.key_} {}
+  ReadContext(const ReadContext &other) : key_{other.key_} {}
 
   /// The implicit and explicit interfaces require a key() accessor.
-  inline const Key& key() const { return key_; }
+  inline const Key &key() const { return key_; }
 
-  inline void Get(const Value& value) {
+  inline void Get(const Value &value) {
     // All reads should be atomic (from the mutable tail).
     CHECK_EQ(true, false);
   }
-  inline void GetAtomic(const Value& value) {
+  inline void GetAtomic(const Value &value) {
     output = value.atomic_value.load();
   }
 
  protected:
   /// The explicit interface requires a DeepCopy_Internal() implementation.
-  Status DeepCopy_Internal(IAsyncContext*& context_copy) {
+  Status DeepCopy_Internal(IAsyncContext *&context_copy) {
     return IAsyncContext::DeepCopy_Internal(*this, context_copy);
   }
 
@@ -285,11 +287,10 @@ class ReadContext : public IAsyncContext {
   uint64_t output;
 };
 
-FasterKv<Key, Value, FASTER::device::NullDisk> store{1<<25, 1073741824, ""};
+FasterKv<Key, Value, FASTER::device::NullDisk> store{1 << 25, 1073741824, ""};
 
 void ServerLoop(void *sock_fd) {
   ThreadCtx thread_ctx(*reinterpret_cast<int *>(sock_fd));
-
 
   LOG(INFO) << "Server Loop: Starting.";
 
@@ -339,7 +340,8 @@ void ServerLoop(void *sock_fd) {
       } else {
         // Data received from a client
         int clientSocket = events[i].data.fd;
-        int bytesRead = recv(clientSocket, thread_ctx.rx_message.data(), thread_ctx.rx_message.size(), 0);
+        int bytesRead = recv(clientSocket, thread_ctx.rx_message.data(),
+                             thread_ctx.rx_message.size(), 0);
 
         if (bytesRead <= 0) {
           // Connection closed or error
@@ -392,7 +394,6 @@ void ServerLoop(void *sock_fd) {
   }
 
   store.StopSession();
-
 
   close(thread_ctx.sock_fd);
   close(epollFd);
@@ -507,17 +508,17 @@ void ClientLoop(void *sock_fd) {
 }
 
 void Populate() {
-
   store.StartSession();
 
-  auto callback = [](IAsyncContext* ctxt, Status result) {
+  auto callback = [](IAsyncContext *ctxt, Status result) {
     CHECK_EQ(true, false);
   };
 
   LOG(INFO) << "Populating store with " << FLAGS_num_keys << " keys";
 
   for (size_t idx = 0; idx < FLAGS_num_keys; ++idx) {
-    UpsertContext context{static_cast<uint64_t>(idx), static_cast<uint64_t>(idx)};
+    UpsertContext context{static_cast<uint64_t>(idx),
+                          static_cast<uint64_t>(idx)};
     Status result = store.Upsert(context, callback, 1);
     CHECK_EQ(Status::Ok, result);
     if (idx % 500000 == 0) {
@@ -577,6 +578,15 @@ int main(int argc, char *argv[]) {
     int optval = 1;
     setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval,
                sizeof(int));
+
+    // Set TCP no-delay option
+    int enable = 1;
+    if (setsockopt(sock_fd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(int)) ==
+        -1) {
+      perror("Error setting TCP no-delay");
+      return 1;
+    }
+
     server_addr.sin_port = htons(FLAGS_port);
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
@@ -588,7 +598,6 @@ int main(int argc, char *argv[]) {
     CHECK(ret == 0) << "Failed to listen on fd: " << sock_fd
                     << " listen() error: " << strerror(errno);
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_port << "]";
-
 
     Populate();
     datapath_thread = std::thread(ServerLoop, &sock_fd);
