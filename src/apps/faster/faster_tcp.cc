@@ -384,10 +384,10 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   msg_hdr->value = 0;
 
   const int ret = write(thread_ctx->sock_fd, thread_ctx->tx_message.data(),
-                        FLAGS_tx_msg_size);
-  if (ret == static_cast<int>(FLAGS_tx_msg_size)) {
+                        sizeof(msg_hdr_t));
+  if (ret == sizeof(msg_hdr_t)) {
     stats_cur.tx_success++;
-    stats_cur.tx_bytes += FLAGS_tx_msg_size;
+    stats_cur.tx_bytes += ret;
   } else {
     LOG(WARNING) << "Client: Failed to send message for window slot "
                  << window_slot << ". write() error: " << strerror(errno);
@@ -403,10 +403,8 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
       return 0;
     }
 
-    std::memset(thread_ctx->rx_message.data(), 0,
-                thread_ctx->rx_message.size());
     const ssize_t rx_size = read(
-        thread_ctx->sock_fd, thread_ctx->rx_message.data(), FLAGS_tx_msg_size);
+        thread_ctx->sock_fd, thread_ctx->rx_message.data(), thread_ctx->rx_message.size());
     if (rx_size <= 0) continue;
 
     thread_ctx->stats.current.rx_count++;
