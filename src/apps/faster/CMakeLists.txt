@@ -26,3 +26,7 @@ set (target_name faster_tcp)
 add_executable (${target_name} faster_tcp.cc)
 target_link_libraries(${target_name} PUBLIC glog machnet_shim rt hdr_histogram tbb ${LIBDPDK_LIBRARIES} ${CMAKE_PREFIX_PATH}/src/libfaster.a)
 
+set (target_name faster_tcp_epoll)
+add_executable (${target_name} faster_tcp_epoll.cc)
+target_link_libraries(${target_name} PUBLIC glog machnet_shim rt hdr_histogram tbb ${LIBDPDK_LIBRARIES} ${CMAKE_PREFIX_PATH}/src/libfaster.a)
+

@@ -18,6 +18,7 @@
 #include <numeric>
 #include <sstream>
 #include <thread>
+#include <sys/epoll.h>
 
 #include "core/faster.h"
 #include "device/null_disk.h"
@@ -77,7 +78,7 @@ class ThreadCtx {
   };
 
  public:
-  explicit ThreadCtx(int sock_fd) : sock_fd(sock_fd), stats(), key(0) {
+  explicit ThreadCtx(int sock_fd) : sock_fd(sock_fd), stats(), key(0), clientSockets() {
     // Fill-in max-sized messages, we'll send the actual size later
     rx_message.resize(MSG_MAX_LEN);
     tx_message.resize(MSG_MAX_LEN);
@@ -91,6 +92,7 @@ class ThreadCtx {
 
     msg_latency_info_vec.resize(FLAGS_msg_window);
   }
+
   ~ThreadCtx() { hdr_close(latency_hist); }
 
   void RecordRequestStart(uint64_t window_slot) {
@@ -125,6 +127,7 @@ class ThreadCtx {
   } stats;
 
   uint64_t key;
+  std::vector<int> clientSockets;
 };
 
 void SigIntHandler([[maybe_unused]] int signal) { g_keep_running = 0;  }
@@ -290,14 +293,22 @@ void ServerLoop(void *sock_fd) {
 
   LOG(INFO) << "Server Loop: Starting.";
 
-  sockaddr_in client_addr;
+  int epollFd = epoll_create1(0);
+  if (epollFd == -1) {
+    perror("Error creating epoll");
+    return;
+  }
 
-  socklen_t client_addr_size = sizeof(client_addr);
-  int client_sock_fd =
-      accept(thread_ctx.sock_fd, reinterpret_cast<sockaddr *>(&client_addr),
-             &client_addr_size);
-  CHECK(client_sock_fd > 0)
-      << "Server: Failed to accept connection. accept():  " << strerror(errno);
+  epoll_event event;
+  event.data.fd = thread_ctx.sock_fd;
+  event.events = EPOLLIN | EPOLLET;
+
+  if (epoll_ctl(epollFd, EPOLL_CTL_ADD, thread_ctx.sock_fd, &event) == -1) {
+    perror("Error adding server socket to epoll");
+    return;
+  }
+
+  std::vector<epoll_event> events(100);
 
   store.StartSession();
 
@@ -307,59 +318,84 @@ void ServerLoop(void *sock_fd) {
       break;
     }
 
-    auto &stats_cur = thread_ctx.stats.current;
+    int nEvents =
+        epoll_wait(epollFd, events.data(), static_cast<int>(events.size()), -1);
 
-    const ssize_t rx_size = recv(client_sock_fd, thread_ctx.rx_message.data(),
-                                 thread_ctx.rx_message.size(), 0);
+    for (int i = 0; i < nEvents; i++) {
+      if (events[i].data.fd == thread_ctx.sock_fd) {
+        // New connection
+        int clientSocket = accept(thread_ctx.sock_fd, NULL, NULL);
+        if (clientSocket == -1) {
+          if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+            // No more incoming connections
+          } else {
+            perror("Error accepting connection");
+          }
+        } else {
+          event.data.fd = clientSocket;
+          event.events = EPOLLIN | EPOLLET;
+          epoll_ctl(epollFd, EPOLL_CTL_ADD, clientSocket, &event);
+        }
+      } else {
+        // Data received from a client
+        int clientSocket = events[i].data.fd;
+        int bytesRead = recv(clientSocket, thread_ctx.rx_message.data(), thread_ctx.rx_message.size(), 0);
 
-    if (rx_size == 0) g_keep_running = 0;
-    if (rx_size <= 0) continue;
+        if (bytesRead <= 0) {
+          // Connection closed or error
+          close(clientSocket);
+        } else {
+          const msg_hdr_t *msg_hdr =
+              reinterpret_cast<const msg_hdr_t *>(thread_ctx.rx_message.data());
 
-    stats_cur.rx_count++;
-    stats_cur.rx_bytes += rx_size;
+          VLOG(1) << "Server: Received msg for window slot "
+                  << msg_hdr->window_slot << " key " << msg_hdr->key
+                  << " value " << msg_hdr->value;
 
-    const msg_hdr_t *msg_hdr =
-        reinterpret_cast<const msg_hdr_t *>(thread_ctx.rx_message.data());
+          auto callback = [](IAsyncContext *ctxt, Status result) {
+            // It is an in-memory store so, we never get here!
+            CHECK_EQ(true, false);
+          };
 
-    VLOG(1) << "Server: Received msg for window slot " << msg_hdr->window_slot
-            << " key " << msg_hdr->key << " value " << msg_hdr->value;
+          uint64_t key = msg_hdr->key;
 
-    auto callback = [](IAsyncContext *ctxt, Status result) {
-      // It is an in-memory store so, we never get here!
-      CHECK_EQ(true, false);
-    };
+          ReadContext context{msg_hdr->key};
+          Status result = store.Read(context, callback, 1);
+          // Send the response
+          msg_hdr_t *tx_msg_hdr =
+              reinterpret_cast<msg_hdr_t *>(thread_ctx.tx_message.data());
+          tx_msg_hdr->window_slot = msg_hdr->window_slot;
+          tx_msg_hdr->key = key;
 
-    uint64_t key = msg_hdr->key;
+          if (result == Status::Ok) {
+            tx_msg_hdr->value = context.output;
+          } else {
+            tx_msg_hdr->value = 0;
+            // LOG(WARNING) << "Key not found";
+          }
 
-    ReadContext context{msg_hdr->key};
-    Status result = store.Read(context, callback, 1);
+          auto &stats_cur = thread_ctx.stats.current;
 
-    // Send the response
-    msg_hdr_t *tx_msg_hdr =
-        reinterpret_cast<msg_hdr_t *>(thread_ctx.tx_message.data());
-    tx_msg_hdr->window_slot = msg_hdr->window_slot;
-    tx_msg_hdr->key = key;
+          const int ret = send(clientSocket, thread_ctx.tx_message.data(),
+                               sizeof(tx_msg_hdr), 0);
 
-     if (result == Status::Ok) {
-      tx_msg_hdr->value = context.output;
-    } else {
-      tx_msg_hdr->value = 0;
-      // LOG(WARNING) << "Key not found";
+          if (ret >= 0) {
+            stats_cur.tx_success++;
+            stats_cur.tx_bytes += ret;  // FLAGS_tx_msg_size;
+          } else {
+            stats_cur.err_tx_drops++;
+          }
+        }
+      }
     }
-
-    const int ret = send(client_sock_fd, thread_ctx.tx_message.data(),
-                         sizeof(msg_hdr_t), 0);
-    if (ret >= 0) {
-      stats_cur.tx_success++;
-      stats_cur.tx_bytes += ret;  // FLAGS_tx_msg_size;
-    } else {
-      stats_cur.err_tx_drops++;
-    }
-
     ReportStats(&thread_ctx);
   }
 
   store.StopSession();
+
+
+  close(thread_ctx.sock_fd);
+  close(epollFd);
 
   auto &stats_cur = thread_ctx.stats.current;
   LOG(INFO) << "Application Statistics (TOTAL) - [TX] Sent: "
@@ -507,13 +543,14 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Starting in client mode, request size " << FLAGS_tx_msg_size;
   }
 
-  int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
-  CHECK(sock_fd > 0) << "Failed to create a socket. socket() error: "
-                     << strerror(sock_fd);
-  sockaddr_in server_addr;
-  server_addr.sin_family = AF_INET;
+  std::thread datapath_thread;
 
   if (FLAGS_active_generator) {
+    int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    CHECK(sock_fd > 0) << "Failed to create a socket. socket() error: "
+                       << strerror(sock_fd);
+    sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
     // client
     server_addr.sin_port = htons(FLAGS_port);
     int ret =
@@ -527,8 +564,16 @@ int main(int argc, char *argv[]) {
 
     LOG(INFO) << "[CONNECTED] [" << FLAGS_local_ip << " <-> " << FLAGS_remote_ip
               << ":" << FLAGS_port << "]";
+
+    datapath_thread = std::thread(ClientLoop, &sock_fd);
+
   } else {
     // server
+    int sock_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    CHECK(sock_fd > 0) << "Failed to create a socket. socket() error: "
+                       << strerror(sock_fd);
+    sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
     int optval = 1;
     setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval,
                sizeof(int));
@@ -543,17 +588,15 @@ int main(int argc, char *argv[]) {
     CHECK(ret == 0) << "Failed to listen on fd: " << sock_fd
                     << " listen() error: " << strerror(errno);
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_port << "]";
-  }
 
-  std::thread datapath_thread;
-  if (FLAGS_active_generator) {
-    datapath_thread = std::thread(ClientLoop, &sock_fd);
-  } else {
+
     Populate();
     datapath_thread = std::thread(ServerLoop, &sock_fd);
   }
 
   while (g_keep_running) sleep(5);
   datapath_thread.join();
+
+  store.StopSession();
   return 0;
 }
