@@ -24,7 +24,9 @@
 #include "device/null_disk.h"
 #include "test_types.h"
 
-#define MSG_MAX_LEN (8 * ((1 << 10) * (1 << 10)))
+// #define MSG_MAX_LEN (8 * ((1 << 10) * (1 << 10)))
+
+#define MSG_MAX_LEN 1024
 
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
@@ -117,6 +119,7 @@ class ThreadCtx {
   hdr_histogram *latency_hist{};
   int sock_fd;
   size_t num_request_latency_samples{};
+  size_t num_warmup_requests{};
   std::vector<msg_latency_info_t> msg_latency_info_vec;
 
   struct {
@@ -302,6 +305,11 @@ void ServerLoop(void *sock_fd) {
 
   store.StartSession();
 
+  auto callback = [](IAsyncContext *ctxt, Status result) {
+    // It is an in-memory store so, we never get here!
+    CHECK_EQ(true, false);
+  };
+
   while (true) {
     if (g_keep_running == 0) {
       LOG(INFO) << "MsgGenLoop: Exiting.";
@@ -324,11 +332,6 @@ void ServerLoop(void *sock_fd) {
 
     VLOG(1) << "Server: Received msg for window slot " << msg_hdr->window_slot
             << " key " << msg_hdr->key << " value " << msg_hdr->value;
-
-    auto callback = [](IAsyncContext *ctxt, Status result) {
-      // It is an in-memory store so, we never get here!
-      CHECK_EQ(true, false);
-    };
 
     uint64_t key = msg_hdr->key;
 
@@ -395,6 +398,45 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   }
 }
 
+
+// Return the window slot for which a response was received
+uint64_t ClientRecvOneRealBlocking(ThreadCtx *thread_ctx) {
+  const ssize_t rx_size =
+      read(thread_ctx->sock_fd, thread_ctx->rx_message.data(),
+           thread_ctx->rx_message.size());
+
+  thread_ctx->stats.current.rx_count++;
+  thread_ctx->stats.current.rx_bytes += rx_size;
+
+  const auto *msg_hdr =
+      reinterpret_cast<msg_hdr_t *>(thread_ctx->rx_message.data());
+  if (msg_hdr->window_slot >= FLAGS_msg_window) {
+    LOG(ERROR) << "Received invalid window slot: " << msg_hdr->window_slot;
+  }
+
+  if (thread_ctx->num_warmup_requests++ > 10000) {
+    const size_t latency_us =
+        thread_ctx->RecordRequestEnd(msg_hdr->window_slot);
+    VLOG(1) << "Client: Received message for window slot "
+            << msg_hdr->window_slot << " in " << latency_us << " us";
+  }
+
+  if (FLAGS_verify) {
+    for (uint32_t i = sizeof(msg_hdr_t); i < rx_size; i++) {
+      if (thread_ctx->rx_message[i] != thread_ctx->message_gold[i]) {
+        LOG(ERROR) << "Message data mismatch at index " << i << std::hex << " "
+                   << static_cast<uint32_t>(thread_ctx->rx_message[i]) << " "
+                   << static_cast<uint32_t>(thread_ctx->message_gold[i]);
+        break;
+      }
+    }
+  }
+
+  return msg_hdr->window_slot;
+
+  LOG(FATAL) << "Should not reach here";
+}
+
 // Return the window slot for which a response was received
 uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
   while (true) {
@@ -417,10 +459,12 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
       continue;
     }
 
-    const size_t latency_us =
-        thread_ctx->RecordRequestEnd(msg_hdr->window_slot);
-    VLOG(1) << "Client: Received message for window slot "
-            << msg_hdr->window_slot << " in " << latency_us << " us";
+    if (thread_ctx->num_warmup_requests++ > 10000) {
+      const size_t latency_us =
+          thread_ctx->RecordRequestEnd(msg_hdr->window_slot);
+      VLOG(1) << "Client: Received message for window slot "
+              << msg_hdr->window_slot << " in " << latency_us << " us";
+    }
 
     if (FLAGS_verify) {
       for (uint32_t i = sizeof(msg_hdr_t); i < rx_size; i++) {
@@ -438,6 +482,31 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
   }
 
   LOG(FATAL) << "Should not reach here";
+}
+
+void ClientLoopBlockingSemantic(void *sock_fd) {
+  ThreadCtx thread_ctx(*reinterpret_cast<int *>(sock_fd));
+  LOG(INFO) << "Client Loop: Starting.";
+
+  while (true) {
+    if (g_keep_running == 0) {
+      LOG(INFO) << "MsgGenLoop: Exiting.";
+      break;
+    }
+
+    ClientSendOne(&thread_ctx, 0);
+
+    ClientRecvOneRealBlocking(&thread_ctx);
+
+    ReportStats(&thread_ctx);
+  }
+
+  auto &stats_cur = thread_ctx.stats.current;
+  LOG(INFO) << "Application Statistics (TOTAL) - [TX] Sent: "
+            << stats_cur.tx_success << " (" << stats_cur.tx_bytes
+            << " Bytes), Drops: " << stats_cur.err_tx_drops
+            << ", [RX] Received: " << stats_cur.rx_count << " ("
+            << stats_cur.rx_bytes << " Bytes)";
 }
 
 void ClientLoop(void *sock_fd) {
@@ -540,8 +609,20 @@ int main(int argc, char *argv[]) {
   } else {
     // server
     int optval = 1;
-    setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval,
-               sizeof(int));
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval,
+               sizeof(int))) {
+      perror("Error setting TCP port as reusable");
+      return 1;
+    }
+
+    // Set TCP no-delay option
+    int enable = 1;
+    if (setsockopt(sock_fd, IPPROTO_TCP, TCP_NODELAY, &enable,
+                   sizeof(int)) == -1) {
+      perror("Error setting TCP no-delay");
+      return 1;
+    }
+
     server_addr.sin_port = htons(FLAGS_port);
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
@@ -557,7 +638,8 @@ int main(int argc, char *argv[]) {
 
   std::thread datapath_thread;
   if (FLAGS_active_generator) {
-    datapath_thread = std::thread(ClientLoop, &sock_fd);
+    // datapath_thread = std::thread(ClientLoop, &sock_fd);
+    datapath_thread = std::thread(ClientLoopBlockingSemantic, &sock_fd);
   } else {
     Populate();
     datapath_thread = std::thread(ServerLoop, &sock_fd);
