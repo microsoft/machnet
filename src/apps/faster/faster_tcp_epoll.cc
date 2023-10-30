@@ -25,7 +25,8 @@
 #include "device/null_disk.h"
 #include "test_types.h"
 
-#define MSG_MAX_LEN (8 * ((1 << 10) * (1 << 10)))
+// #define MSG_MAX_LEN (8 * ((1 << 10) * (1 << 10)))
+#define MSG_MAX_LEN 1024
 
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
@@ -309,7 +310,7 @@ void ServerLoop(void *sock_fd) {
     return;
   }
 
-  std::vector<epoll_event> events(100);
+  std::vector<epoll_event> events(10);
 
   store.StartSession();
 
@@ -341,7 +342,7 @@ void ServerLoop(void *sock_fd) {
         // Data received from a client
         int clientSocket = events[i].data.fd;
         int bytesRead = recv(clientSocket, thread_ctx.rx_message.data(),
-                             thread_ctx.rx_message.size(), 0);
+                             sizeof(msg_hdr_t), 0);
 
         if (bytesRead <= 0) {
           // Connection closed or error

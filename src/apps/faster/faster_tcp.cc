@@ -50,6 +50,7 @@ DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
             "bouncing.");
 DEFINE_bool(verify, false, "Verify payload of received messages.");
+DEFINE_uint32(num_threads, 1, "Maximum number of threasds to use.");
 
 static volatile int g_keep_running = 1;
 
@@ -291,17 +292,7 @@ FasterKv<Key, Value, FASTER::device::NullDisk> store{1<<25, 1073741824, ""};
 void ServerLoop(void *sock_fd) {
   ThreadCtx thread_ctx(*reinterpret_cast<int *>(sock_fd));
 
-
   LOG(INFO) << "Server Loop: Starting.";
-
-  sockaddr_in client_addr;
-
-  socklen_t client_addr_size = sizeof(client_addr);
-  int client_sock_fd =
-      accept(thread_ctx.sock_fd, reinterpret_cast<sockaddr *>(&client_addr),
-             &client_addr_size);
-  CHECK(client_sock_fd > 0)
-      << "Server: Failed to accept connection. accept():  " << strerror(errno);
 
   store.StartSession();
 
@@ -318,7 +309,7 @@ void ServerLoop(void *sock_fd) {
 
     auto &stats_cur = thread_ctx.stats.current;
 
-    const ssize_t rx_size = recv(client_sock_fd, thread_ctx.rx_message.data(),
+    const ssize_t rx_size = recv(thread_ctx.sock_fd, thread_ctx.rx_message.data(),
                                  thread_ctx.rx_message.size(), 0);
 
     if (rx_size == 0) g_keep_running = 0;
@@ -351,7 +342,7 @@ void ServerLoop(void *sock_fd) {
       // LOG(WARNING) << "Key not found";
     }
 
-    const int ret = send(client_sock_fd, thread_ctx.tx_message.data(),
+    const int ret = send(thread_ctx.sock_fd, thread_ctx.tx_message.data(),
                          sizeof(msg_hdr_t), 0);
     if (ret >= 0) {
       stats_cur.tx_success++;
@@ -636,16 +627,38 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_port << "]";
   }
 
-  std::thread datapath_thread;
+  std::vector<std::thread>datapath_threads;
   if (FLAGS_active_generator) {
-    // datapath_thread = std::thread(ClientLoop, &sock_fd);
-    datapath_thread = std::thread(ClientLoopBlockingSemantic, &sock_fd);
+    datapath_threads.emplace_back(ClientLoopBlockingSemantic, &sock_fd);
   } else {
     Populate();
-    datapath_thread = std::thread(ServerLoop, &sock_fd);
+
+    while (g_keep_running) {
+      // Accept a new client connection
+
+      sockaddr_in client_addr;
+      socklen_t client_addr_size = sizeof(client_addr);
+      int client_sock_fd =
+          accept(sock_fd, reinterpret_cast<sockaddr *>(&client_addr),
+                 &client_addr_size);
+      CHECK(client_sock_fd > 0)
+          << "Server: Failed to accept connection. accept():  "
+          << strerror(errno);
+      if (client_sock_fd == -1) {
+        LOG(WARNING) << "Error accepting connection" << std::endl;
+        continue;
+      }
+
+      LOG(INFO) << "New connection accepted" << std::endl;
+
+      // Create a new thread to handle the client
+      datapath_threads.emplace_back(ServerLoop, &client_sock_fd);
+    }
   }
 
   while (g_keep_running) sleep(5);
-  datapath_thread.join();
+  for (auto& thread : datapath_threads) {
+    thread.join();
+  }
   return 0;
 }
