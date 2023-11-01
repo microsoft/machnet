@@ -154,6 +154,7 @@ static inline int __machnet_channel_dataplane_init(
   MachnetChannelCtx_t *ctx = (MachnetChannelCtx_t *)shm;
   ctx->version = MACHNET_CHANNEL_VERSION;
   ctx->size = total_size;
+  sem_init(&ctx->sem, 0, 0);
   strncpy(ctx->name, name, sizeof(ctx->name));
   ctx->name[sizeof(ctx->name) - 1] = '\0';
 

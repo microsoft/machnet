@@ -46,6 +46,7 @@ extern "C" {
 
 #include <assert.h>
 #include <fcntl.h> /* For O_* constants */
+#include <semaphore.h>
 #include <sys/mman.h>
 #include <sys/stat.h> /* For mode constants */
 
@@ -137,6 +138,7 @@ struct MachnetChannelCtx {
 #define MACHNET_CHANNEL_VERSION 0x01
   uint16_t version;
   uint64_t size;  // Size of the Channel's memory, including this context.
+  sem_t sem;      // to implement blocking recv
 #define MACHNET_CHANNEL_NAME_MAX_LEN 256
   char name[MACHNET_CHANNEL_NAME_MAX_LEN];
   MachnetChannelCtrlCtx_t ctrl_ctx;  // Control channel's specific metadata.

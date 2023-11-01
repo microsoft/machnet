@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <semaphore.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -661,6 +662,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
 
   const uint32_t kBufferBatchSize = 16;
 
+  sem_wait(&ctx->sem);
   // Deque a message from the ring.
   MachnetRingSlot_t buffer_index;
   uint32_t n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);

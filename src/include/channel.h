@@ -174,8 +174,14 @@ class ShmChannel {
    */
   uint32_t EnqueueMessages(MachnetRingSlot_t *msgbuf_indices,
                            uint32_t nb_msgs) {
-    return __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs,
-                                                  msgbuf_indices);
+    auto ret =
+        __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs, msgbuf_indices);
+    if (ret != 0) {
+      if (sem_post(__DECONST(sem_t *, &ctx_->sem)) < 0) {
+        fprintf(stderr, "Couldn't notify app side in case of blocking\n");
+      }
+    }
+    return ret;
   }
 
   /**
@@ -330,8 +336,7 @@ class ShmChannel {
 
     auto ret = MsgBufBulkFree(batch->buf_indices(), batch->GetSize());
 
-    if (ret == 0) [[unlikely]]
-      return false;  // NOLINT
+    if (ret == 0) [[unlikely]] return false;  // NOLINT
     batch->Clear();
     return true;
   }
