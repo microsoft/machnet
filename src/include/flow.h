@@ -47,9 +47,9 @@ class TXTracking {
   const uint32_t NumUnsentMsgbufs() const { return num_unsent_msgbufs_; }
   shm::MsgBuf* GetOldestUnackedMsgBuf() const { return oldest_unacked_msgbuf_; }
 
-  void ReceiveAcks(uint32_t num_acks) {
+  void ReceiveAcks(uint32_t num_acked_pkts) {
     shm::MsgBufBatch to_free;
-    while (num_acks) {
+    while (num_acked_pkts) {
       auto msgbuf = oldest_unacked_msgbuf_;
       DCHECK(msgbuf != nullptr);
       if (msgbuf != last_msgbuf_) {
@@ -65,7 +65,7 @@ class TXTracking {
         num_tracked_msgbufs_ -= to_free.GetSize();
         CHECK(channel_->MsgBufBulkFree(&to_free));
       }
-      num_acks--;
+      num_acked_pkts--;
     }
 
     num_tracked_msgbufs_ -= to_free.GetSize();
