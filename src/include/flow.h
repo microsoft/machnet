@@ -33,28 +33,23 @@ namespace juggler {
 namespace net {
 namespace flow {
 
-class TXQueue {
+class TXTracking {
  public:
-  TXQueue() = delete;
-  explicit TXQueue(shm::Channel* channel)
+  TXTracking() = delete;
+  explicit TXTracking(shm::Channel* channel)
       : channel_(CHECK_NOTNULL(channel)),
         oldest_unacked_msgbuf_(nullptr),
         oldest_unsent_msgbuf_(nullptr),
         last_msgbuf_(nullptr),
         num_unsent_msgbufs_(0),
-        num_msgbufs_(0) {}
+        num_tracked_msgbufs_(0) {}
 
-  const uint32_t PendingMsgBufs() const { return num_unsent_msgbufs_; }
-  const uint32_t TotalMsgBufs() const { return num_msgbufs_; }
-  const shm::MsgBuf* GetOldestUnsentMsgBuf() const {
-    return oldest_unsent_msgbuf_;
-  }
-  const shm::MsgBuf* GetLastMsgBuf() const { return last_msgbuf_; }
+  const uint32_t NumUnsentMsgbufs() const { return num_unsent_msgbufs_; }
   shm::MsgBuf* GetOldestUnackedMsgBuf() const { return oldest_unacked_msgbuf_; }
 
-  void AckMsgBufs(uint32_t nbuffers) {
-    shm::MsgBufBatch batch;
-    while (nbuffers) {
+  void ReceiveAcks(uint32_t num_acks) {
+    shm::MsgBufBatch to_free;
+    while (num_acks) {
       auto msgbuf = oldest_unacked_msgbuf_;
       DCHECK(msgbuf != nullptr);
       if (msgbuf != last_msgbuf_) {
@@ -65,19 +60,19 @@ class TXQueue {
         oldest_unacked_msgbuf_ = nullptr;
         last_msgbuf_ = nullptr;
       }
-      batch.Append(msgbuf, msgbuf->index());
-      if (batch.IsFull()) {
-        num_msgbufs_ -= batch.GetSize();
-        CHECK(channel_->MsgBufBulkFree(&batch));
+      to_free.Append(msgbuf, msgbuf->index());
+      if (to_free.IsFull()) {
+        num_tracked_msgbufs_ -= to_free.GetSize();
+        CHECK(channel_->MsgBufBulkFree(&to_free));
       }
-      nbuffers--;
+      num_acks--;
     }
 
-    num_msgbufs_ -= batch.GetSize();
-    CHECK(channel_->MsgBufBulkFree(&batch));
+    num_tracked_msgbufs_ -= to_free.GetSize();
+    CHECK(channel_->MsgBufBulkFree(&to_free));
   }
 
-  void Push(shm::MsgBuf* msgbuf) {
+  void Append(shm::MsgBuf* msgbuf) {
     DCHECK(msgbuf->is_first());
     // Append the message at the end of the chain of buffers, if any.
     if (last_msgbuf_ == nullptr) {
@@ -102,12 +97,12 @@ class TXQueue {
     const auto msg_buffers_nr =
         (msg_length + effective_buffer_size - 1) / effective_buffer_size;
     num_unsent_msgbufs_ += msg_buffers_nr;
-    num_msgbufs_ += msg_buffers_nr;
+    num_tracked_msgbufs_ += msg_buffers_nr;
   }
 
-  std::optional<shm::MsgBuf*> Pop() {
+  std::optional<shm::MsgBuf*> GetAndUpdateOldestUnsent() {
     if (oldest_unsent_msgbuf_ == nullptr) {
-      DCHECK_EQ(PendingMsgBufs(), 0);
+      DCHECK_EQ(NumUnsentMsgbufs(), 0);
       return std::nullopt;
     }
 
@@ -124,33 +119,40 @@ class TXQueue {
   }
 
  private:
+  const uint32_t NumTrackedMsgbufs() const { return num_tracked_msgbufs_; }
+  const shm::MsgBuf* GetLastMsgBuf() const { return last_msgbuf_; }
+  const shm::MsgBuf* GetOldestUnsentMsgBuf() const {
+    return oldest_unsent_msgbuf_;
+  }
+
   shm::Channel* channel_;
-  // In a flow, we keep three pointers to track the message buffer chains that
-  // are being pumped out to the network.
-  // 1. First buffer: Pointer to the oldest unacknowledged message buffer. This
-  // is a buffer that has been sent previously, but we have not seen an ACK for
-  // it yet.
+
+  /*
+   * For the linked list of shm::MsgBufs in the channel (chain going downwards),
+   * we track 3 pointers
+   *
+   * B   -> oldest sent but unacknowledged MsgBuf
+   * ...
+   * B   -> oldest unsent MsgBuf
+   * ...
+   * B   -> last MsgBuf, among all active messages in this flow
+   */
+
   shm::MsgBuf* oldest_unacked_msgbuf_;
-  // 2. Second buffer: Pointer to the oldest message buffer that has not been
-  // sent yet. This is the buffer that is next in line to be sent.
   shm::MsgBuf* oldest_unsent_msgbuf_;
-  // 3. Last buffer: Pointer to the latest message buffer that is part of the
-  // current chain of buffers in the flow.
   shm::MsgBuf* last_msgbuf_;
-  // Number of unsent MsgBufs in the flow (i.e., the number of buffers between
-  // tx_oldest_unsent_buf_ and tx_last_buf_).
+
   uint32_t num_unsent_msgbufs_;
-  // Total number of buffers in the TX queue.
-  uint32_t num_msgbufs_;
+  uint32_t num_tracked_msgbufs_;
 };
 
 /**
- * @class RXQueue
- * @brief A queue of message buffers that are received from the network. This
+ * @class RXTracking
+ * @brief Tracking for message buffers that are received from the network. This
  * class is handling out-of-order reception of packets, and delivers complete
  * messages to the application.
  */
-class RXQueue {
+class RXTracking {
  public:
   using MachnetPktHdr = net::MachnetPktHdr;
 
@@ -159,9 +161,9 @@ class RXQueue {
       (kReassemblyQueueDefaultSize - 1);
   static_assert(utils::is_power_of_two(kReassemblyQueueDefaultSize),
                 "ReassemblyQueue size must be a power of two.");
-  RXQueue(const RXQueue&) = delete;
-  RXQueue(uint32_t local_ip, uint16_t local_port, uint32_t remote_ip,
-          uint16_t remote_port, shm::Channel* channel)
+  RXTracking(const RXTracking&) = delete;
+  RXTracking(uint32_t local_ip, uint16_t local_port, uint32_t remote_ip,
+             uint16_t remote_port, shm::Channel* channel)
       : local_ip_(local_ip),
         local_port_(local_port),
         remote_ip_(remote_ip),
@@ -201,28 +203,28 @@ class RXQueue {
     const auto expected_seqno = pcb->rcv_nxt;
 
     if (swift::seqno_lt(seqno, expected_seqno)) [[unlikely]] {  // NOLINT
-        // Packet is a duplicate.
-        // LOG(INFO) << "Received old packet: " << seqno << " < " <<
-        // expected_seqno;
-        return;
-      }  // NOLINT
+      // Packet is a duplicate.
+      // LOG(INFO) << "Received old packet: " << seqno << " < " <<
+      // expected_seqno;
+      return;
+    }  // NOLINT
 
     auto distance = seqno - expected_seqno;
     if (distance >= ReassemblyQueueCapacity()) [[unlikely]] {  // NOLINT
-        // Packet is too far ahead; a packet train was dropped?
-        // We cannot buffer this packet's data.
-        LOG(ERROR) << "Packet too far ahead, seqno: " << seqno
-                   << ", expected: " << expected_seqno;
-        return;
-      }  // NOLINT
+      // Packet is too far ahead; a packet train was dropped?
+      // We cannot buffer this packet's data.
+      LOG(ERROR) << "Packet too far ahead, seqno: " << seqno
+                 << ", expected: " << expected_seqno;
+      return;
+    }  // NOLINT
 
     // Check if we need to expand the reassembly queue window.
     auto reass_q_window =
         (reass_q_head_ - reass_q_tail_) & kReassemblyQueueDefaultSizeMask;
     if (distance >= reass_q_window) [[unlikely]] {  // NOLINT
-        reass_q_head_ =
-            (reass_q_tail_ + distance + 1) & kReassemblyQueueDefaultSizeMask;
-      }  // NOLINT
+      reass_q_head_ =
+          (reass_q_tail_ + distance + 1) & kReassemblyQueueDefaultSizeMask;
+    }  // NOLINT
 
     // Packet is in-order or ahead of the next expected sequence number.
     auto pos = (reass_q_tail_ + distance) & kReassemblyQueueDefaultSizeMask;
@@ -390,10 +392,10 @@ class Flow {
         callback_(std::move(callback)),
         channel_(CHECK_NOTNULL(channel)),
         pcb_(),
-        tx_queue_(CHECK_NOTNULL(channel)),
-        rx_queue_(local_addr.address.value(), local_port.port.value(),
-                  remote_addr.address.value(), remote_port.port.value(),
-                  CHECK_NOTNULL(channel)) {
+        tx_tracking_(CHECK_NOTNULL(channel)),
+        rx_tracking_(local_addr.address.value(), local_port.port.value(),
+                     remote_addr.address.value(), remote_port.port.value(),
+                     CHECK_NOTNULL(channel)) {
     CHECK_NOTNULL(txring_->GetPacketPool());
   }
   ~Flow() {}
@@ -426,7 +428,7 @@ class Flow {
         "%u",
         key_.ToString().c_str(), StateToString(state_),
         channel_->GetName().c_str(), pcb_.ToString().c_str(),
-        tx_queue_.PendingMsgBufs());
+        tx_tracking_.NumUnsentMsgbufs());
   }
 
   bool Match(const dpdk::Packet* packet) const {
@@ -529,11 +531,11 @@ class Flow {
         }
 
         if (machneth->ackno.value() != pcb_.snd_nxt) [[unlikely]] {  // NOLINT
-            LOG(ERROR) << "SYN-ACK packet received with invalid ackno: "
-                       << machneth->ackno << " snd_una: " << pcb_.snd_una
-                       << " snd_nxt: " << pcb_.snd_nxt;
-            return;
-          }
+          LOG(ERROR) << "SYN-ACK packet received with invalid ackno: "
+                     << machneth->ackno << " snd_una: " << pcb_.snd_una
+                     << " snd_nxt: " << pcb_.snd_nxt;
+          return;
+        }
 
         if (state_ == State::kSynSent) {
           pcb_.snd_una++;
@@ -564,13 +566,13 @@ class Flow {
       case MachnetPktHdr::MachnetFlags::kData:
         // clang-format off
         if (state_ != State::kEstablished) [[unlikely]] { // NOLINT
-            // clang-format on
-            LOG(ERROR) << "Data packet received for flow in state: "
-                       << static_cast<int>(state_);
-            return;
-          }
+          // clang-format on
+          LOG(ERROR) << "Data packet received for flow in state: "
+                     << static_cast<int>(state_);
+          return;
+        }
         // Data packet, process the payload.
-        rx_queue_.Push(&pcb_, packet);
+        rx_tracking_.Push(&pcb_, packet);
         SendAck();
         break;
     }
@@ -586,7 +588,7 @@ class Flow {
    * aggregating to a partial or a full Message.
    */
   void OutputMessage(shm::MsgBuf* msg) {
-    tx_queue_.Push(msg);
+    tx_tracking_.Append(msg);
 
     // TODO(ilias): We first need to check whether the cwnd is < 1, so that we
     // fallback to rate-based CC.
@@ -793,7 +795,7 @@ class Flow {
   void FastRetransmit() {
     // Retransmit the oldest unacknowledged message buffer.
     auto* packet = CHECK_NOTNULL(txring_->GetPacketPool()->PacketAlloc());
-    PrepareDataPacket<CopyMode::kMemCopy>(tx_queue_.GetOldestUnackedMsgBuf(),
+    PrepareDataPacket<CopyMode::kMemCopy>(tx_tracking_.GetOldestUnackedMsgBuf(),
                                           packet, pcb_.snd_una);
     txring_->SendPackets(&packet, 1);
     pcb_.rto_reset();
@@ -805,8 +807,8 @@ class Flow {
     if (state_ == State::kEstablished) {
       LOG(INFO) << "RTO retransmitting data packet " << pcb_.snd_una;
       auto* packet = CHECK_NOTNULL(txring_->GetPacketPool()->PacketAlloc());
-      PrepareDataPacket<CopyMode::kMemCopy>(tx_queue_.GetOldestUnackedMsgBuf(),
-                                            packet, pcb_.snd_una);
+      PrepareDataPacket<CopyMode::kMemCopy>(
+          tx_tracking_.GetOldestUnackedMsgBuf(), packet, pcb_.snd_una);
       txring_->SendPackets(&packet, 1);
     } else if (state_ == State::kSynReceived) {
       SendSynAck(pcb_.snd_una);
@@ -825,7 +827,7 @@ class Flow {
    */
   void TransmitPackets() {
     auto remaining_packets =
-        std::min(pcb_.effective_wnd(), tx_queue_.PendingMsgBufs());
+        std::min(pcb_.effective_wnd(), tx_tracking_.NumUnsentMsgbufs());
     if (remaining_packets == 0) return;
 
     do {
@@ -840,7 +842,7 @@ class Flow {
 
       // Prepare the packets.
       for (uint16_t i = 0; i < batch.GetSize(); i++) {
-        auto msg = tx_queue_.Pop();
+        auto msg = tx_tracking_.GetAndUpdateOldestUnsent();
         if (!msg.has_value()) break;
         auto* msg_buf = msg.value();
         auto* packet = batch.pkts()[i];
@@ -886,7 +888,7 @@ class Flow {
         // In order to avoid retransmitting multiple times other missing packets
         // in the bitmap, we skip holes: we use the number of duplicate ACKs to
         // skip previous holes.
-        auto* msgbuf = tx_queue_.GetOldestUnackedMsgBuf();
+        auto* msgbuf = tx_tracking_.GetOldestUnackedMsgBuf();
         size_t holes_to_skip =
             pcb_.duplicate_acks - swift::Pcb::kRexmitThreshold;
         size_t index = 0;
@@ -915,24 +917,24 @@ class Flow {
       }
       // clang-format off
     } else if (swift::seqno_gt(ackno, pcb_.snd_nxt)) [[unlikely]] { // NOLINT
-        // clang-format on
-        LOG(ERROR) << "ACK received for untransmitted data.";
-        // clang-format off
+      // clang-format on
+      LOG(ERROR) << "ACK received for untransmitted data.";
+      // clang-format off
     } else [[likely]] { // NOLINT
-        // clang-format on
-        // This is a valid ACK, acknowledging new data.
-        auto acked_packets = ackno - pcb_.snd_una;
-        if (state_ == State::kSynReceived) {
-          state_ = State::kEstablished;
-          acked_packets--;
-        }
-        tx_queue_.AckMsgBufs(acked_packets);
-        pcb_.snd_una = ackno;
-        pcb_.duplicate_acks = 0;
-        pcb_.snd_ooo_acks = 0;
-        pcb_.rto_rexmits = 0;
-        pcb_.rto_maybe_reset();
+      // clang-format on
+      // This is a valid ACK, acknowledging new data.
+      size_t num_acked_packets = ackno - pcb_.snd_una;
+      if (state_ == State::kSynReceived) {
+        state_ = State::kEstablished;
+        num_acked_packets--;
       }
+      tx_tracking_.ReceiveAcks(num_acked_packets);
+      pcb_.snd_una = ackno;
+      pcb_.duplicate_acks = 0;
+      pcb_.snd_ooo_acks = 0;
+      pcb_.rto_rexmits = 0;
+      pcb_.rto_maybe_reset();
+    }
 
     TransmitPackets();
   }
@@ -951,10 +953,8 @@ class Flow {
   shm::Channel* channel_;
   // Swift CC protocol control block.
   swift::Pcb pcb_;
-  // TX queue for the flow.
-  TXQueue tx_queue_;
-  // RX queue for the flow.
-  RXQueue rx_queue_;
+  TXTracking tx_tracking_;
+  RXTracking rx_tracking_;
 };
 
 }  // namespace flow
