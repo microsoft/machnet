@@ -265,6 +265,7 @@ class ShmChannel {
     }
     cached_buf_indices.pop_back();
     MachnetMsgBuf_t *buf = cached_bufs.back();
+    __machnet_channel_buf_init(buf);
     cached_bufs.pop_back();
     return reinterpret_cast<MsgBuf *>(buf);
   }
@@ -279,19 +280,18 @@ class ShmChannel {
     (void)DCHECK_NOTNULL(buf);
     MachnetRingSlot_t index[1] = {__machnet_channel_buf_index(
         ctx_, reinterpret_cast<const MachnetMsgBuf_t *>(buf))};
+    MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, index[0]);
+
+    if (cached_buf_indices.size() < NUM_CACHED_BUFS) {
+      cached_buf_indices.push_back(index[0]);
+      cached_bufs.push_back(msg_buf);
+      return true;
+    }
+
     int retries = 5;
-    int ret;
+    unsigned int ret;
     do {
-      // clear and free buffer
-      MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, index[0]);
-      __machnet_channel_buf_init(msg_buf);
-      if (cached_buf_indices.size() < NUM_CACHED_BUFS) {
-        cached_buf_indices.push_back(index[0]);
-        cached_bufs.push_back(msg_buf);
-        ret = 1;
-      } else {
-        ret = __machnet_channel_buf_free_bulk(ctx_, 1, index);
-      }
+      ret = __machnet_channel_buf_free_bulk(ctx_, 1, index);
     } while (ret == 0 && retries-- > 0);
 
     return ret;
@@ -341,31 +341,23 @@ class ShmChannel {
   bool MsgBufBulkFree(MachnetRingSlot_t *indices, uint32_t cnt) {
     int retries = 5;
     uint32_t freed;
-    do {
-      const uint32_t cache_free_slots =
-          NUM_CACHED_BUFS - cached_buf_indices.size();
-      const uint32_t to_cache =
-          (cnt <= cache_free_slots) ? cnt : cache_free_slots;
+    const uint32_t cache_free_slots =
+        NUM_CACHED_BUFS - cached_buf_indices.size();
+    const uint32_t to_cache =
+        (cnt <= cache_free_slots) ? cnt : cache_free_slots;
 
-      for (freed = 0; freed < to_cache; freed++) {
-        cached_buf_indices.push_back(indices[freed]);
-        MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, indices[freed]);
-        __machnet_channel_buf_init(msg_buf);
-        cached_bufs.push_back(msg_buf);
-      }
-
-      if (cnt > cache_free_slots) {
-        for (uint32_t i = 0; i < cnt - freed; i++) {
-          MachnetMsgBuf_t *msg_buf =
-              __machnet_channel_buf(ctx_, indices[freed + i]);
-          __machnet_channel_buf_init(msg_buf);
-        }
+    for (freed = 0; freed < to_cache; freed++) {
+      cached_buf_indices.push_back(indices[freed]);
+      MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, indices[freed]);
+      cached_bufs.push_back(msg_buf);
+    }
+    if (cnt > cache_free_slots) {
+      do {
         freed +=
             __machnet_channel_buf_free_bulk(ctx_, cnt - freed, indices + freed);
-      }
-      assert(cached_buf_indices.size() == cached_bufs.size());
-    } while (freed == 0 && retries-- > 0);
-
+      } while (freed == 0 && retries-- > 0);
+    }
+    assert(cached_buf_indices.size() == cached_bufs.size());
     if (freed == 0) [[unlikely]]
       return false;  // NOLINT
 
