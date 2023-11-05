@@ -615,7 +615,6 @@ __machnet_channel_buf_free(MachnetChannelCtx_t *ctx, uint32_t cnt,
                                            buffer_indices + available_capacity);
   }
   return ret;
-  return __machnet_channel_buf_free_bulk(ctx, cnt, buffer_indices);
 }
 
 /**
