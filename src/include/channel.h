@@ -264,7 +264,7 @@ class ShmChannel {
       if (ret != CACHED_BUF_SIZE) return nullptr;
     }
     cached_buf_indices.pop_back();
-    auto buf = cached_bufs.back();
+    MachnetMsgBuf_t *buf = cached_bufs.back();
     cached_bufs.pop_back();
     return reinterpret_cast<MsgBuf *>(buf);
   }
