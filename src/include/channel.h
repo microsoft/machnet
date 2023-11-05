@@ -257,11 +257,11 @@ class ShmChannel {
    */
   MsgBuf *MsgBufAlloc() {
     if (cached_buf_indices.empty()) {
-      cached_buf_indices.resize(CACHED_BUF_SIZE);
-      cached_bufs.resize(CACHED_BUF_SIZE);
+      cached_buf_indices.resize(NUM_CACHED_BUFS);
+      cached_bufs.resize(NUM_CACHED_BUFS);
       uint32_t ret = __machnet_channel_buf_alloc_bulk(
-          ctx_, CACHED_BUF_SIZE, cached_buf_indices.data(), cached_bufs.data());
-      if (ret != CACHED_BUF_SIZE) return nullptr;
+          ctx_, NUM_CACHED_BUFS, cached_buf_indices.data(), cached_bufs.data());
+      if (ret != NUM_CACHED_BUFS) return nullptr;
     }
     cached_buf_indices.pop_back();
     MachnetMsgBuf_t *buf = cached_bufs.back();
@@ -285,7 +285,7 @@ class ShmChannel {
       // clear and free buffer
       MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, index[0]);
       __machnet_channel_buf_init(msg_buf);
-      if (cached_buf_indices.size() < CACHED_BUF_SIZE) {
+      if (cached_buf_indices.size() < NUM_CACHED_BUFS) {
         cached_buf_indices.push_back(index[0]);
         cached_bufs.push_back(msg_buf);
         ret = 1;
@@ -343,7 +343,7 @@ class ShmChannel {
     uint32_t freed;
     do {
       const uint32_t cache_free_slots =
-          CACHED_BUF_SIZE - cached_buf_indices.size();
+          NUM_CACHED_BUFS - cached_buf_indices.size();
       const uint32_t to_cache =
           (cnt <= cache_free_slots) ? cnt : cache_free_slots;
 

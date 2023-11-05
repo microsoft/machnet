@@ -57,7 +57,7 @@ extern "C" {
 #define PAGE_SIZE (4 * KB)
 #define HUGE_PAGE_2M_SIZE (2 * MB)
 #define MACHNET_MSG_MAX_LEN (8 * MB)
-#define CACHED_BUF_SIZE 64
+#define NUM_CACHED_BUFS 64
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)
@@ -123,12 +123,12 @@ typedef struct MachnetChannelCtrlCtx MachnetChannelCtrlCtx_t;
 
 /*
  * The `CachedBufs` helps to manage the cached buffer indices array which is
- * CACHED_BUF_SIZE long.
+ * NUM_CACHED_BUFS long.:i
  */
 struct CachedBufs {
   uint32_t available;  // available space
   uint32_t index;      // current position of index
-  MachnetRingSlot_t indices[CACHED_BUF_SIZE];
+  MachnetRingSlot_t indices[NUM_CACHED_BUFS];
 };
 typedef struct CachedBufs CachedBufs_t;
 /**
@@ -605,7 +605,7 @@ static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_buf_free(MachnetChannelCtx_t *ctx, uint32_t cnt,
                            MachnetRingSlot_t *buffer_indices) {
   uint32_t available_capacity, to_free, ret;
-  available_capacity = CACHED_BUF_SIZE - ctx->cached_bufs.available;
+  available_capacity = NUM_CACHED_BUFS - ctx->cached_bufs.available;
   to_free = MIN(cnt, available_capacity);
   ret = (to_free)
             ? __machnet_channel_buf_free_cached(ctx, to_free, buffer_indices)

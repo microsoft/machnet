@@ -440,11 +440,11 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       __machnet_channel_buffer_index_table(ctx);
   // if buffer cache empty fill it
   if (ctx->cached_bufs.available == 0) {
-    if (__machnet_channel_buf_alloc_bulk(ctx, CACHED_BUF_SIZE,
+    if (__machnet_channel_buf_alloc_bulk(ctx, NUM_CACHED_BUFS,
                                          ctx->cached_bufs.indices,
-                                         NULL) == CACHED_BUF_SIZE) {
+                                         NULL) == NUM_CACHED_BUFS) {
       ctx->cached_bufs.index = 0;
-      ctx->cached_bufs.available = CACHED_BUF_SIZE;
+      ctx->cached_bufs.available = NUM_CACHED_BUFS;
     }
   }
 
