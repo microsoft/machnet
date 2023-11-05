@@ -57,7 +57,7 @@ extern "C" {
 #define PAGE_SIZE (4 * KB)
 #define HUGE_PAGE_2M_SIZE (2 * MB)
 #define MACHNET_MSG_MAX_LEN (8 * MB)
-#define CACHED_BUF_SIZE (1 << 6)
+#define CACHED_BUF_SIZE 64
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)
