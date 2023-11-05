@@ -439,24 +439,24 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   MachnetRingSlot_t *buf_index_table =
       __machnet_channel_buffer_index_table(ctx);
   // if buffer cache empty fill it
-  if (ctx->cached_buf_available == 0) {
+  if (ctx->cached_bufs.available == 0) {
     if (__machnet_channel_buf_alloc_bulk(ctx, CACHED_BUF_SIZE,
-                                         ctx->cached_buf_indices,
+                                         ctx->cached_bufs.indices,
                                          NULL) == CACHED_BUF_SIZE) {
-      ctx->cached_buf_index = 0;
-      ctx->cached_buf_available = CACHED_BUF_SIZE;
+      ctx->cached_bufs.index = 0;
+      ctx->cached_bufs.available = CACHED_BUF_SIZE;
     }
   }
 
-  if (buffers_nr <= ctx->cached_buf_available) {
+  if (buffers_nr <= ctx->cached_bufs.available) {
     // get all buffers from cache
     for (uint32_t i = 0; i < buffers_nr; i++) {
-      buf_index_table[i] = ctx->cached_buf_indices[ctx->cached_buf_index];
-      ctx->cached_buf_index++;
-      ctx->cached_buf_available--;
+      buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.index];
+      ctx->cached_bufs.index++;
+      ctx->cached_bufs.available--;
     }
   } else {
-    uint32_t remaining = buffers_nr - ctx->cached_buf_available;
+    uint32_t remaining = buffers_nr - ctx->cached_bufs.available;
     // allocate directly from ring
     if (__machnet_channel_buf_alloc_bulk(ctx, remaining, buf_index_table,
                                          NULL) != remaining) {
@@ -464,9 +464,9 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     }
     // get the rest from cache
     for (uint32_t i = remaining; i < buffers_nr; i++) {
-      buf_index_table[i] = ctx->cached_buf_indices[ctx->cached_buf_index];
-      ctx->cached_buf_index++;
-      ctx->cached_buf_available--;
+      buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.index];
+      ctx->cached_bufs.index++;
+      ctx->cached_bufs.available--;
     }
   }
 

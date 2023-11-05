@@ -339,10 +339,10 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
     // Allocate from ctx->cache
     uint32_t current_buffers_cnt = 0;
     auto ctx = channel->ctx();
-    for (uint32_t i = ctx->cached_buf_index; ctx->cached_buf_available; i++) {
-      buffers.push_back(ctx->cached_buf_indices[i]);
-      ctx->cached_buf_index++;
-      ctx->cached_buf_available--;
+    for (uint32_t i = ctx->cached_bufs.index; ctx->cached_bufs.available; i++) {
+      buffers.push_back(ctx->cached_bufs.indices[i]);
+      ctx->cached_bufs.index++;
+      ctx->cached_bufs.available--;
     }
     current_buffers_cnt = buffers.size();
     // Allocate from shm::channel->cache

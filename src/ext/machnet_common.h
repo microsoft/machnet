@@ -121,6 +121,16 @@ struct MachnetChannelCtrlCtx {
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetChannelCtrlCtx MachnetChannelCtrlCtx_t;
 
+/*
+ * The `CachedBufs` helps to manage the cached buffer indices array which is
+ * CACHED_BUF_SIZE long.
+ */
+struct CachedBufs {
+  uint32_t available;  // available space
+  uint32_t index;      // current position of index
+  MachnetRingSlot_t indices[CACHED_BUF_SIZE];
+};
+typedef struct CachedBufs CachedBufs_t;
 /**
  * The `MachnetChannelCtx' holds all the metadata information (context) of an
  * Machnet Channel.
@@ -137,9 +147,7 @@ struct MachnetChannelCtx {
   char name[MACHNET_CHANNEL_NAME_MAX_LEN];
   MachnetChannelCtrlCtx_t ctrl_ctx;  // Control channel's specific metadata.
   MachnetChannelDataCtx_t data_ctx;  // Dataplane channel's specific metadata.
-  uint32_t cached_buf_available;
-  uint32_t cached_buf_index;
-  MachnetRingSlot_t cached_buf_indices[CACHED_BUF_SIZE];
+  CachedBufs_t cached_bufs;
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetChannelCtx MachnetChannelCtx_t;
 
@@ -554,37 +562,37 @@ __machnet_channel_buf_free_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
 }
 static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx, uint32_t cnt,
-                                  MachnetRingSlot_t *buffer_indices) {
+                                  const MachnetRingSlot_t *buffer_indices) {
   uint32_t ret = 0;
 
-  if (ctx->cached_buf_available == 0) {
+  if (ctx->cached_bufs.available == 0) {
     // If cache is empty, fill the cache directly
     for (ret = 0; ret < cnt; ret++) {
-      ctx->cached_buf_indices[ret] = buffer_indices[ret];
-      ctx->cached_buf_available++;
+      ctx->cached_bufs.indices[ret] = buffer_indices[ret];
+      ctx->cached_bufs.available++;
     }
-    ctx->cached_buf_index = 0;
+    ctx->cached_bufs.index = 0;
   } else {
     // Determine start index and step based on cached buffer's index
-    uint32_t start = (ctx->cached_buf_index == 0) ? ctx->cached_buf_available
-                                                  : ctx->cached_buf_index - 1;
-    int step = (ctx->cached_buf_index == 0) ? 1 : -1;
+    uint32_t start = (ctx->cached_bufs.index == 0) ? ctx->cached_bufs.available
+                                                   : ctx->cached_bufs.index - 1;
+    int step = (ctx->cached_bufs.index == 0) ? 1 : -1;
 
     // Cache is partially filled, so fill it accordingly
     // If pointer is at the beginning, fill forwards, otherwise fill backwards
-    for (uint32_t i = start; ret < cnt && ctx->cached_buf_index;
+    for (uint32_t i = start; ret < cnt && ctx->cached_bufs.index;
          ret++, i += step) {
-      ctx->cached_buf_indices[i] = buffer_indices[ret];
-      ctx->cached_buf_available++;
-      if (step == -1) ctx->cached_buf_index--;
+      ctx->cached_bufs.indices[i] = buffer_indices[ret];
+      ctx->cached_bufs.available++;
+      if (step == -1) ctx->cached_bufs.index--;
     }
 
     // Fill any remaining space at the end of the cache
     uint32_t endPaddingIndex =
-        ctx->cached_buf_index + ctx->cached_buf_available;
+        ctx->cached_bufs.index + ctx->cached_bufs.available;
     for (uint32_t i = endPaddingIndex; ret < cnt; ret++, i++) {
-      ctx->cached_buf_indices[i] = buffer_indices[ret];
-      ctx->cached_buf_available++;
+      ctx->cached_bufs.indices[i] = buffer_indices[ret];
+      ctx->cached_bufs.available++;
     }
   }
 
@@ -597,7 +605,7 @@ static inline __attribute__((always_inline)) uint32_t
 __machnet_channel_buf_free(MachnetChannelCtx_t *ctx, uint32_t cnt,
                            MachnetRingSlot_t *buffer_indices) {
   uint32_t available_capacity, to_free, ret;
-  available_capacity = CACHED_BUF_SIZE - ctx->cached_buf_available;
+  available_capacity = CACHED_BUF_SIZE - ctx->cached_bufs.available;
   to_free = MIN(cnt, available_capacity);
   ret = (to_free)
             ? __machnet_channel_buf_free_cached(ctx, to_free, buffer_indices)
@@ -621,7 +629,7 @@ __machnet_channel_buffers_avail(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
   jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
-  return ctx->cached_buf_available + jring_count(buf_ring);
+  return ctx->cached_bufs.available + jring_count(buf_ring);
 }
 
 /**
