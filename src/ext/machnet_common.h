@@ -119,8 +119,7 @@ typedef struct MachnetChannelCtrlCtx MachnetChannelCtrlCtx_t;
  * NUM_CACHED_BUFS long.:i
  */
 struct CachedBufs {
-  uint32_t available;  // available space
-  uint32_t index;      // current position of index
+  uint32_t count;
   MachnetRingSlot_t indices[NUM_CACHED_BUFS];
 };
 typedef struct CachedBufs CachedBufs_t;
@@ -565,7 +564,7 @@ __machnet_channel_buffers_avail(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
   jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
-  return ctx->cached_bufs.available + jring_count(buf_ring);
+  return ctx->cached_bufs.count + jring_count(buf_ring);
 }
 
 /**

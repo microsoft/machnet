@@ -138,48 +138,22 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
 static inline __attribute__((always_inline)) uint32_t
 _machnet_buf_free_to_cache(MachnetChannelCtx_t *ctx, uint32_t cnt,
                            const MachnetRingSlot_t *buffer_indices) {
-  uint32_t ret = 0;
-
-  if (ctx->cached_bufs.available == 0) {
-    // If cache is empty, fill the cache directly
-    for (ret = 0; ret < cnt; ret++) {
-      ctx->cached_bufs.indices[ret] = buffer_indices[ret];
-      ctx->cached_bufs.available++;
-    }
-    ctx->cached_bufs.index = 0;
-  } else {
-    // Determine start index and step based on cached buffer's index
-    uint32_t start = (ctx->cached_bufs.index == 0) ? ctx->cached_bufs.available
-                                                   : ctx->cached_bufs.index - 1;
-    int step = (ctx->cached_bufs.index == 0) ? 1 : -1;
-
-    // Cache is partially filled, so fill it accordingly
-    // If pointer is at the beginning, fill forwards, otherwise fill backwards
-    for (uint32_t i = start; ret < cnt && ctx->cached_bufs.index;
-         ret++, i += step) {
-      ctx->cached_bufs.indices[i] = buffer_indices[ret];
-      ctx->cached_bufs.available++;
-      if (step == -1) ctx->cached_bufs.index--;
-    }
-
-    // Fill any remaining space at the end of the cache
-    uint32_t endPaddingIndex =
-        ctx->cached_bufs.index + ctx->cached_bufs.available;
-    for (uint32_t i = endPaddingIndex; ret < cnt; ret++, i++) {
-      ctx->cached_bufs.indices[i] = buffer_indices[ret];
-      ctx->cached_bufs.available++;
-    }
+  uint32_t ret;
+  uint32_t idx = ctx->cached_bufs.count;
+  // If cache is empty, fill the cache directly
+  for (ret = 0; ret < cnt; ret++) {
+    ctx->cached_bufs.indices[idx + ret] = buffer_indices[ret];
+    ctx->cached_bufs.count++;
   }
-
   // Ensure that we processed all buffer indices
   assert(ret == cnt);
   return ret;
 }
 
 /**
- * @brief Helper function to free used buffer indices; It first tries to free to
- * cache stored on machnet stack side, then frees the rest back to global buffer
- * ring
+ * @brief Helper function to free used buffer indices; It first tries to free
+ * to cache stored on machnet stack side, then frees the rest back to global
+ * buffer ring
  * @param ctx Pointer to the Machnet Channel context.
  * @param cnt  Number of buffer indices to free
  * @param buffer_indices Pointer to the array of MachnetRingSlot_t entries to
@@ -189,7 +163,7 @@ _machnet_buf_free_to_cache(MachnetChannelCtx_t *ctx, uint32_t cnt,
 static inline __attribute__((always_inline)) uint32_t _machnet_buf_free(
     MachnetChannelCtx_t *ctx, uint32_t cnt, MachnetRingSlot_t *buffer_indices) {
   uint32_t available_capacity, to_free, ret;
-  available_capacity = NUM_CACHED_BUFS - ctx->cached_bufs.available;
+  available_capacity = NUM_CACHED_BUFS - ctx->cached_bufs.count;
   to_free = MIN(cnt, available_capacity);
   ret =
       (to_free) ? _machnet_buf_free_to_cache(ctx, to_free, buffer_indices) : 0;
@@ -276,10 +250,10 @@ int machnet_init() {
   }
 
   // It is important that we do not close the socket here. Closing the socket
-  // will trigger the controller to de-register the application and release all
-  // its allocated resources (shared memory channels, connections etc.). When
-  // this application quits, the controller will detect that the socket was
-  // closed and de-register the application.
+  // will trigger the controller to de-register the application and release
+  // all its allocated resources (shared memory channels, connections etc.).
+  // When this application quits, the controller will detect that the socket
+  // was closed and de-register the application.
 
   return resp.status;
 }
@@ -512,24 +486,22 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   MachnetRingSlot_t *buf_index_table =
       __machnet_channel_buffer_index_table(ctx);
   // if buffer cache empty fill it
-  if (ctx->cached_bufs.available == 0) {
+  if (ctx->cached_bufs.count == 0) {
     if (__machnet_channel_buf_alloc_bulk(ctx, NUM_CACHED_BUFS,
                                          ctx->cached_bufs.indices,
                                          NULL) == NUM_CACHED_BUFS) {
-      ctx->cached_bufs.index = 0;
-      ctx->cached_bufs.available = NUM_CACHED_BUFS;
+      ctx->cached_bufs.count = NUM_CACHED_BUFS;
     }
   }
 
-  if (buffers_nr <= ctx->cached_bufs.available) {
+  if (buffers_nr <= ctx->cached_bufs.count) {
     // get all buffers from cache
     for (uint32_t i = 0; i < buffers_nr; i++) {
-      buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.index];
-      ctx->cached_bufs.index++;
-      ctx->cached_bufs.available--;
+      buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.count - 1];
+      ctx->cached_bufs.count--;
     }
   } else {
-    uint32_t remaining = buffers_nr - ctx->cached_bufs.available;
+    uint32_t remaining = buffers_nr - ctx->cached_bufs.count;
     // allocate directly from ring
     if (__machnet_channel_buf_alloc_bulk(ctx, remaining, buf_index_table,
                                          NULL) != remaining) {
@@ -537,9 +509,8 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     }
     // get the rest from cache
     for (uint32_t i = remaining; i < buffers_nr; i++) {
-      buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.index];
-      ctx->cached_bufs.index++;
-      ctx->cached_bufs.available--;
+      buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.count - 1];
+      ctx->cached_bufs.count--;
     }
   }
 
