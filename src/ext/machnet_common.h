@@ -69,13 +69,6 @@ extern "C" {
 #define __DECONST(type, var) ((type)(uintptr_t)(const void *)(var))
 #define ALIGN_TO_BOUNDARY(x, _pagesz) (((x) + _pagesz - 1) & ~(_pagesz - 1))
 
-#define MIN(a, b)           \
-  ({                        \
-    __typeof__(a) _a = (a); \
-    __typeof__(b) _b = (b); \
-    _a < _b ? _a : _b;      \
-  })
-
 typedef unsigned char uchar_t;
 typedef uint32_t MachnetRingSlot_t;
 static_assert(sizeof(MachnetRingSlot_t) % 4 == 0,
@@ -559,62 +552,6 @@ __machnet_channel_buf_free_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
   // Both sides can release buffers concurrently, so use directly the
   // multi-consumer function.
   return jring_mp_enqueue_bulk(buf_ring, bufs, n, NULL);
-}
-static inline __attribute__((always_inline)) uint32_t
-__machnet_channel_buf_free_cached(MachnetChannelCtx_t *ctx, uint32_t cnt,
-                                  const MachnetRingSlot_t *buffer_indices) {
-  uint32_t ret = 0;
-
-  if (ctx->cached_bufs.available == 0) {
-    // If cache is empty, fill the cache directly
-    for (ret = 0; ret < cnt; ret++) {
-      ctx->cached_bufs.indices[ret] = buffer_indices[ret];
-      ctx->cached_bufs.available++;
-    }
-    ctx->cached_bufs.index = 0;
-  } else {
-    // Determine start index and step based on cached buffer's index
-    uint32_t start = (ctx->cached_bufs.index == 0) ? ctx->cached_bufs.available
-                                                   : ctx->cached_bufs.index - 1;
-    int step = (ctx->cached_bufs.index == 0) ? 1 : -1;
-
-    // Cache is partially filled, so fill it accordingly
-    // If pointer is at the beginning, fill forwards, otherwise fill backwards
-    for (uint32_t i = start; ret < cnt && ctx->cached_bufs.index;
-         ret++, i += step) {
-      ctx->cached_bufs.indices[i] = buffer_indices[ret];
-      ctx->cached_bufs.available++;
-      if (step == -1) ctx->cached_bufs.index--;
-    }
-
-    // Fill any remaining space at the end of the cache
-    uint32_t endPaddingIndex =
-        ctx->cached_bufs.index + ctx->cached_bufs.available;
-    for (uint32_t i = endPaddingIndex; ret < cnt; ret++, i++) {
-      ctx->cached_bufs.indices[i] = buffer_indices[ret];
-      ctx->cached_bufs.available++;
-    }
-  }
-
-  // Ensure that we processed all buffer indices
-  assert(ret == cnt);
-  return ret;
-}
-
-static inline __attribute__((always_inline)) uint32_t
-__machnet_channel_buf_free(MachnetChannelCtx_t *ctx, uint32_t cnt,
-                           MachnetRingSlot_t *buffer_indices) {
-  uint32_t available_capacity, to_free, ret;
-  available_capacity = NUM_CACHED_BUFS - ctx->cached_bufs.available;
-  to_free = MIN(cnt, available_capacity);
-  ret = (to_free)
-            ? __machnet_channel_buf_free_cached(ctx, to_free, buffer_indices)
-            : 0;
-  if (cnt > available_capacity) {
-    ret += __machnet_channel_buf_free_bulk(ctx, cnt - available_capacity,
-                                           buffer_indices + available_capacity);
-  }
-  return ret;
 }
 
 /**

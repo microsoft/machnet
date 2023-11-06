@@ -126,6 +126,79 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
 
   return 0;
 }
+/**
+ * @brief Helper function to free buffer indices to the cache stored on
+ * stack side.
+ * @param ctx Pointer to the Machnet Channel context.
+ * @param cnt Number of buffer indices to free
+ * @param buffer_indices Pointer to the array of MachnetRingSlot_t entries to
+ * free.
+ * @return Number of indices freed to cache; should be equal to cnt
+ */
+static inline __attribute__((always_inline)) uint32_t
+_machnet_buf_free_to_cache(MachnetChannelCtx_t *ctx, uint32_t cnt,
+                           const MachnetRingSlot_t *buffer_indices) {
+  uint32_t ret = 0;
+
+  if (ctx->cached_bufs.available == 0) {
+    // If cache is empty, fill the cache directly
+    for (ret = 0; ret < cnt; ret++) {
+      ctx->cached_bufs.indices[ret] = buffer_indices[ret];
+      ctx->cached_bufs.available++;
+    }
+    ctx->cached_bufs.index = 0;
+  } else {
+    // Determine start index and step based on cached buffer's index
+    uint32_t start = (ctx->cached_bufs.index == 0) ? ctx->cached_bufs.available
+                                                   : ctx->cached_bufs.index - 1;
+    int step = (ctx->cached_bufs.index == 0) ? 1 : -1;
+
+    // Cache is partially filled, so fill it accordingly
+    // If pointer is at the beginning, fill forwards, otherwise fill backwards
+    for (uint32_t i = start; ret < cnt && ctx->cached_bufs.index;
+         ret++, i += step) {
+      ctx->cached_bufs.indices[i] = buffer_indices[ret];
+      ctx->cached_bufs.available++;
+      if (step == -1) ctx->cached_bufs.index--;
+    }
+
+    // Fill any remaining space at the end of the cache
+    uint32_t endPaddingIndex =
+        ctx->cached_bufs.index + ctx->cached_bufs.available;
+    for (uint32_t i = endPaddingIndex; ret < cnt; ret++, i++) {
+      ctx->cached_bufs.indices[i] = buffer_indices[ret];
+      ctx->cached_bufs.available++;
+    }
+  }
+
+  // Ensure that we processed all buffer indices
+  assert(ret == cnt);
+  return ret;
+}
+
+/**
+ * @brief Helper function to free used buffer indices; It first tries to free to
+ * cache stored on machnet stack side, then frees the rest back to global buffer
+ * ring
+ * @param ctx Pointer to the Machnet Channel context.
+ * @param cnt  Number of buffer indices to free
+ * @param buffer_indices Pointer to the array of MachnetRingSlot_t entries to
+ * free
+ * @return Number of freed indices
+ */
+static inline __attribute__((always_inline)) uint32_t _machnet_buf_free(
+    MachnetChannelCtx_t *ctx, uint32_t cnt, MachnetRingSlot_t *buffer_indices) {
+  uint32_t available_capacity, to_free, ret;
+  available_capacity = NUM_CACHED_BUFS - ctx->cached_bufs.available;
+  to_free = MIN(cnt, available_capacity);
+  ret =
+      (to_free) ? _machnet_buf_free_to_cache(ctx, to_free, buffer_indices) : 0;
+  if (cnt > available_capacity) {
+    ret += __machnet_channel_buf_free_bulk(ctx, cnt - available_capacity,
+                                           buffer_indices + available_capacity);
+  }
+  return ret;
+}
 
 int machnet_init() {
   uuid_t zero_uuid;
@@ -644,8 +717,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
       // Do a batch buffer release if we reached the threshold.
       if (buffer_indices_index == kBufferBatchSize) {
         // release to the buf_ring
-        ret = __machnet_channel_buf_free(ctx, buffer_indices_index,
-                                         buffer_indices);
+        ret = _machnet_buf_free(ctx, buffer_indices_index, buffer_indices);
         assert(ret == buffer_indices_index);
         buffer_indices_index = 0;
       }
@@ -663,7 +735,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
   msghdr->flow_info = flow_info;
 
   // Free up any remaining buffers.
-  ret = __machnet_channel_buf_free(ctx, buffer_indices_index, buffer_indices);
+  ret = _machnet_buf_free(ctx, buffer_indices_index, buffer_indices);
   assert(ret == buffer_indices_index);
 
   // Success.
@@ -681,8 +753,7 @@ fail:
       buffer = NULL;
     }
     if (buffer == NULL || buffer_indices_index == kBufferBatchSize) {
-      ret =
-          __machnet_channel_buf_free(ctx, buffer_indices_index, buffer_indices);
+      ret = _machnet_buf_free(ctx, buffer_indices_index, buffer_indices);
       assert(ret == buffer_indices_index);
       buffer_indices_index = 0;
     }
