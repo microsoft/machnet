@@ -498,6 +498,8 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     // get all buffers from cache
     for (uint32_t i = 0; i < buffers_nr; i++) {
       buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.count - 1];
+      __machnet_channel_buf_init(
+          __machnet_channel_buf(ctx, buf_index_table[i]));
       ctx->cached_bufs.count--;
     }
   } else {
@@ -510,6 +512,8 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     // get the rest from cache
     for (uint32_t i = remaining; i < buffers_nr; i++) {
       buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.count - 1];
+      __machnet_channel_buf_init(
+          __machnet_channel_buf(ctx, buf_index_table[i]));
       ctx->cached_bufs.count--;
     }
   }
@@ -678,11 +682,8 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
       if (buffer->flags & MACHNET_MSGBUF_FLAGS_SG) {
         // This is the last buffer of the message.
         buffer_index = buffer->next;
-        __machnet_channel_buf_init(buffer);
         buffer = __machnet_channel_buf(ctx, buffer_index);
         buf_data_ofs = 0;
-      } else {
-        __machnet_channel_buf_init(buffer);
       }
 
       // Do a batch buffer release if we reached the threshold.
@@ -717,10 +718,8 @@ fail:
     buffer_indices[buffer_indices_index++] = buffer_index;
     if (buffer->flags & MACHNET_MSGBUF_FLAGS_SG) {
       buffer_index = buffer->next;
-      __machnet_channel_buf_init(buffer);
       buffer = __machnet_channel_buf(ctx, buffer_index);
     } else {
-      __machnet_channel_buf_init(buffer);
       buffer = NULL;
     }
     if (buffer == NULL || buffer_indices_index == kBufferBatchSize) {
