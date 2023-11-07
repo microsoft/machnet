@@ -57,6 +57,7 @@ extern "C" {
 #define PAGE_SIZE (4 * KB)
 #define HUGE_PAGE_2M_SIZE (2 * MB)
 #define MACHNET_MSG_MAX_LEN (8 * MB)
+#define NUM_CACHED_BUFS 64
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)
@@ -113,6 +114,15 @@ struct MachnetChannelCtrlCtx {
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetChannelCtrlCtx MachnetChannelCtrlCtx_t;
 
+/*
+ * The `CachedBufs` helps to manage the cached buffer indices array which is
+ * NUM_CACHED_BUFS long.:i
+ */
+struct CachedBufs {
+  uint32_t count;
+  MachnetRingSlot_t indices[NUM_CACHED_BUFS];
+};
+typedef struct CachedBufs CachedBufs_t;
 /**
  * The `MachnetChannelCtx' holds all the metadata information (context) of an
  * Machnet Channel.
@@ -129,8 +139,11 @@ struct MachnetChannelCtx {
   char name[MACHNET_CHANNEL_NAME_MAX_LEN];
   MachnetChannelCtrlCtx_t ctrl_ctx;  // Control channel's specific metadata.
   MachnetChannelDataCtx_t data_ctx;  // Dataplane channel's specific metadata.
+  CachedBufs_t cached_bufs;
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetChannelCtx MachnetChannelCtx_t;
+
+static_assert(sizeof(MachnetChannelCtx_t) % CACHE_LINE_SIZE == 0);
 
 struct MachnetChannelAppStats {
   uint64_t tx_msg_drops;
@@ -551,7 +564,7 @@ __machnet_channel_buffers_avail(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
   jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
-  return jring_count(buf_ring);
+  return ctx->cached_bufs.count + jring_count(buf_ring);
 }
 
 /**

@@ -167,6 +167,14 @@ uint32_t bounce_machnet_to_app(const MachnetChannelCtx_t *ctx) {
 // Could be called after each test round, to validate that the buffer pool is in
 // a valid state.
 bool check_buffer_pool(const MachnetChannelCtx_t *ctx) {
+  // Release cached buffers to the pool
+  if (__machnet_channel_buf_free_bulk(ctx, ctx->cached_bufs.count,
+                                      ctx->cached_bufs.indices) !=
+      ctx->cached_bufs.count) {
+    return false;
+  }
+  *__DECONST(uint32_t *, &ctx->cached_bufs.count) = 0;
+
   jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
   auto nbuffers = buf_ring->capacity;
 
@@ -174,13 +182,15 @@ bool check_buffer_pool(const MachnetChannelCtx_t *ctx) {
 
   // Dequeue all the buffers from the pool.
   if (__machnet_channel_buf_alloc_bulk(ctx, buffers.size(), buffers.data(),
-                                       nullptr) != buffers.size())
+                                       nullptr) != buffers.size()) {
     return false;
+  }
 
   // Release all the buffers back to the pool.
   if (__machnet_channel_buf_free_bulk(ctx, buffers.size(), buffers.data()) !=
-      buffers.size())
+      buffers.size()) {
     return false;
+  }
 
   std::unordered_set<MachnetRingSlot_t> s;
 
@@ -360,6 +370,9 @@ TEST(MachnetTest, MultiBufferSGSendRecvMsg) {
     EXPECT_EQ(rx_msg, tx_msg);
     EXPECT_EQ(memcmp(&rx_msghdr.flow_info, &flow, sizeof(flow)), 0);
     EXPECT_TRUE(check_buffer_pool(g_channel_ctx));
+    EXPECT_EQ(jring_full(__machnet_channel_buf_ring(g_channel_ctx)), 1)
+        << "Available buffers: "
+        << jring_count(__machnet_channel_buf_ring(g_channel_ctx));
   }
 }
 

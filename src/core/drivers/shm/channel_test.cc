@@ -332,12 +332,24 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
     std::vector<MachnetRingSlot_t> expected_buffers(
         channel->GetTotalBufCount());
     std::iota(expected_buffers.begin(), expected_buffers.end(), 0);
-    std::vector<MachnetRingSlot_t> buffers(channel->GetTotalBufCount());
+    std::vector<MachnetRingSlot_t> buffers;
+    uint32_t buffers_size = channel->GetTotalBufCount();
 
-    // Allocate all the buffers in the channel.
-    EXPECT_EQ(__machnet_channel_buf_alloc_bulk(channel->ctx(), buffers.size(),
-                                               buffers.data(), nullptr),
-              buffers.size());
+    // Allocate all the buffers in the channel in 3 parts
+    // Allocate from ctx->cache
+    uint32_t current_buffers_cnt;
+    auto ctx = channel->ctx();
+    while (ctx->cached_bufs.count > 0)
+      buffers.push_back(ctx->cached_bufs.indices[--ctx->cached_bufs.count]);
+    current_buffers_cnt = buffers.size();
+    // Allocate from shm::channel->cache
+    current_buffers_cnt += channel->GetAllCachedBufferIndices(&buffers);
+    // Allocate from ring
+    buffers.resize(buffers_size);
+    current_buffers_cnt += __machnet_channel_buf_alloc_bulk(
+        channel->ctx(), buffers.size() - current_buffers_cnt,
+        buffers.data() + current_buffers_cnt, nullptr);
+    EXPECT_EQ(current_buffers_cnt, buffers.size());
     EXPECT_EQ(channel->GetFreeBufCount(), 0);
     sort(buffers.begin(), buffers.end());
     EXPECT_EQ(buffers, expected_buffers);
