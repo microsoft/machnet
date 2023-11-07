@@ -21,9 +21,6 @@
 #define private public
 #include "flow.h"
 
-// Limited by 64-bit SACK bitmask
-static constexpr size_t kTestMaxReassemblyDistance = 64;
-
 namespace juggler {
 namespace net {
 namespace flow {
@@ -338,7 +335,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
   // can test for out-of-order.
   std::uniform_int_distribution<> dist(
       2 * packet_payload_size,
-      kTestMaxReassemblyDistance * packet_payload_size);
+      RXTracking::kReassemblyMaxSeqnoDistance * packet_payload_size);
 
   const size_t kNumTries = 1000;
   for (size_t i = 0; i < kNumTries; i++) {
@@ -436,7 +433,8 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
     // should be flushed because all gaps are filled till this point.
     std::unordered_set<size_t> indices;
     while (index < packets.size()) {
-      std::uniform_int_distribution<size_t> dist(2, kTestMaxReassemblyDistance);
+      std::uniform_int_distribution<size_t> dist(
+          2, juggler::net::flow::RXTracking::kReassemblyMaxSeqnoDistance);
 
       auto ooo_batch_size = std::min(dist(rng_), packets.size() - index);
       std::shuffle(packets.begin() + index,
