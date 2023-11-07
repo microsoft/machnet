@@ -498,8 +498,6 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     // get all buffers from cache
     for (uint32_t i = 0; i < buffers_nr; i++) {
       buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.count - 1];
-      __machnet_channel_buf_init(
-          __machnet_channel_buf(ctx, buf_index_table[i]));
       ctx->cached_bufs.count--;
     }
   } else {
@@ -512,8 +510,6 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
     // get the rest from cache
     for (uint32_t i = remaining; i < buffers_nr; i++) {
       buf_index_table[i] = ctx->cached_bufs.indices[ctx->cached_bufs.count - 1];
-      __machnet_channel_buf_init(
-          __machnet_channel_buf(ctx, buf_index_table[i]));
       ctx->cached_bufs.count--;
     }
   }
@@ -521,6 +517,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   // Gather all message segments.
   uint32_t buffer_cur_index = 0;
   uint32_t total_bytes_copied = 0;
+  uint32_t new_buffer = 1;
   for (size_t iov_index = 0; iov_index < msghdr->msg_iovlen; iov_index++) {
     const MachnetIovec_t *segment_desc = &msghdr->msg_iov[iov_index];
     assert(segment_desc != NULL);
@@ -532,6 +529,10 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       MachnetMsgBuf_t *buffer =
           __machnet_channel_buf(ctx, buf_index_table[buffer_cur_index]);
       if (unlikely(buffer->magic != MACHNET_MSGBUF_MAGIC)) abort();
+      if (new_buffer) {
+        __machnet_channel_buf_init(buffer);
+        new_buffer = 0;
+      }
       // Copy the data.
       uint32_t nbytes_to_copy =
           MIN(seg_bytes, __machnet_channel_buf_tailroom(buffer));
@@ -546,6 +547,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       if ((__machnet_channel_buf_tailroom(buffer) == 0) && seg_bytes) {
         // The buffer is full, and we still have data to copy.
         buffer_cur_index++;  // Get the next buffer index.
+        new_buffer = 1;
         assert(buffer_cur_index < buffers_nr);
         buffer->next = buf_index_table[buffer_cur_index];
       }
