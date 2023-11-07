@@ -348,7 +348,7 @@ int main(int argc, char *argv[]) {
         << "Failed to listen on local port. machnet_listen() error: "
         << strerror(ret);
 
-    LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_remote_port
+    LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_local_port
               << "]";
   }
 
