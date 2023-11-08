@@ -162,11 +162,11 @@ static inline MachnetRingSlot_t *_machnet_buffers_alloc(
   // Try to allocate from the application cache.
   uint32_t index = 0;
   while (index < cnt) {
-    if (ctx->app_buffer_cache.count == 0) {
+    if (unlikely(ctx->app_buffer_cache.count == 0)) {
       // The cache is empty, so we need to allocate from the global pool.
       ctx->app_buffer_cache.count += __machnet_channel_buf_alloc_bulk(
           ctx, NUM_CACHED_BUFS, ctx->app_buffer_cache.indices, NULL);
-      if (ctx->app_buffer_cache.count == 0) {
+      if (unlikely(ctx->app_buffer_cache.count == 0)) {
         // We failed to allocate from the global pool.
         goto fail;
       }
@@ -215,7 +215,7 @@ static inline void _machnet_buffers_release(MachnetChannelCtx_t *ctx,
   uint32_t index = 0;
   while (index < cnt) {
     uint32_t retries = 5;
-    while (ctx->app_buffer_cache.count == NUM_CACHED_BUFS) {
+    while (unlikely(ctx->app_buffer_cache.count == NUM_CACHED_BUFS)) {
       // The cache is full, free to global pool.
       uint32_t elements_to_free = ctx->app_buffer_cache.count / 2;
       MachnetRingSlot_t *indices_to_free =
@@ -223,7 +223,8 @@ static inline void _machnet_buffers_release(MachnetChannelCtx_t *ctx,
       ctx->app_buffer_cache.count -= __machnet_channel_buf_free_bulk(
           ctx, elements_to_free, indices_to_free);
 
-      if (retries-- == 0 && ctx->app_buffer_cache.count == NUM_CACHED_BUFS) {
+      if (unlikely(retries-- == 0 &&
+                   ctx->app_buffer_cache.count == NUM_CACHED_BUFS)) {
         /*
          * XXX (ilias): If we reach here, we have failed to free the buffers to
          * the global pool and we are going to leak them. Terminate execution.
