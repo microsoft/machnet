@@ -161,7 +161,7 @@ static inline int __machnet_channel_dataplane_init(
   ctx->ctrl_ctx.req_id = 0;
 
   // Initialize buffer cache
-  ctx->cached_bufs.count = 0;
+  ctx->app_buffer_cache.count = 0;
 
   // Clear out statatistics.
   ctx->data_ctx.stats_ofs = sizeof(*ctx);

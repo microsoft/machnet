@@ -115,14 +115,16 @@ struct MachnetChannelCtrlCtx {
 typedef struct MachnetChannelCtrlCtx MachnetChannelCtrlCtx_t;
 
 /*
- * The `CachedBufs` helps to manage the cached buffer indices array which is
- * NUM_CACHED_BUFS long.:i
+ * This data structure is used to implement a small cache of buffer indices
+ * used exclusively by the application. This reduces contention on the global
+ * buffer pool (which uses atomic operations for MP-safety).
  */
-struct CachedBufs {
+struct MachnetChannelAppBufferCache {
   uint32_t count;
   MachnetRingSlot_t indices[NUM_CACHED_BUFS];
 };
-typedef struct CachedBufs CachedBufs_t;
+typedef struct MachnetChannelAppBufferCache MachnetChannelAppBufferCache_t;
+
 /**
  * The `MachnetChannelCtx' holds all the metadata information (context) of an
  * Machnet Channel.
@@ -139,7 +141,7 @@ struct MachnetChannelCtx {
   char name[MACHNET_CHANNEL_NAME_MAX_LEN];
   MachnetChannelCtrlCtx_t ctrl_ctx;  // Control channel's specific metadata.
   MachnetChannelDataCtx_t data_ctx;  // Dataplane channel's specific metadata.
-  CachedBufs_t cached_bufs;
+  MachnetChannelAppBufferCache_t app_buffer_cache;
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetChannelCtx MachnetChannelCtx_t;
 
@@ -564,7 +566,7 @@ __machnet_channel_buffers_avail(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
   jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
-  return ctx->cached_bufs.count + jring_count(buf_ring);
+  return ctx->app_buffer_cache.count + jring_count(buf_ring);
 }
 
 /**
