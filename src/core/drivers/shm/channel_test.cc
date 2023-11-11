@@ -212,7 +212,7 @@ TEST(BasicChannelTest, ChannelEnqueue) {
   rx_msghdr.msg_iov = &rx_iov;
   rx_msghdr.msg_iovlen = 1;
 
-  EXPECT_EQ(machnet_recvmsg(channel->ctx(), &rx_msghdr), 1);
+  EXPECT_EQ(machnet_recvmsg(channel->ctx(), &rx_msghdr, NON_BLOCKING), 1);
   EXPECT_EQ(rx_msghdr.msg_size, kMessageSize);
   EXPECT_EQ(rx_msg, tx_msg);
 }
@@ -396,7 +396,7 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
       msghdr.flags = 0;
       msghdr.flow_info = {
           .src_ip = 0, .dst_ip = 0, .src_port = 0, .dst_port = 0};
-      auto ret = machnet_recvmsg(ctx, &msghdr);
+      auto ret = machnet_recvmsg(ctx, &msghdr, NON_BLOCKING);
       if (ret == 1) msg_rx++;
 
       // If already sent the amount of messages needed skip.

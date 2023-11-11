@@ -379,6 +379,9 @@ class ShmChannel {
     return ret;
   }
 
+  [[nodiscard]] uint32_t GetPosted() const { return posted; }
+  void ResetPosted() { posted = 0; }
+
  private:
   const std::string name_;
   const MachnetChannelCtx_t *ctx_;

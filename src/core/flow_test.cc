@@ -124,6 +124,8 @@ class FlowTest : public ::testing::Test {
       num_msgbufs -= msgbuf_nr;
       batch.Clear();
     }
+    CHECK_NOTNULL(head);
+    CHECK_NOTNULL(tail);
     head->set_msg_length(data.size());
     head->set_last(tail->index());
     head->mark_first();
@@ -317,7 +319,7 @@ TEST_F(FlowTest, RXQueue_Push) {
     rx_msghdr.flow_info = {0, 0, 0, 0};
     rx_msghdr.msg_iov = &rx_iov;
     rx_msghdr.msg_iovlen = 1;
-    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr);
+    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr, NON_BLOCKING);
     EXPECT_EQ(ret, 1) << "Failed to deliver message to application";
     EXPECT_EQ(tx_message, rx_message);
     EXPECT_EQ(channel_->GetFreeBufCount(), channel_->GetTotalBufCount());
@@ -397,7 +399,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
     rx_msghdr.flow_info = {0, 0, 0, 0};
     rx_msghdr.msg_iov = &rx_iov;
     rx_msghdr.msg_iovlen = 1;
-    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr);
+    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr, NON_BLOCKING);
     EXPECT_EQ(ret, 1) << "Failed to deliver message to application";
     EXPECT_EQ(tx_message, rx_message);
     EXPECT_EQ(channel_->GetFreeBufCount(), channel_->GetTotalBufCount());
@@ -496,7 +498,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
     rx_msghdr.flow_info = {0, 0, 0, 0};
     rx_msghdr.msg_iov = &rx_iov;
     rx_msghdr.msg_iovlen = 1;
-    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr);
+    auto ret = machnet_recvmsg(channel_->ctx(), &rx_msghdr, NON_BLOCKING);
     EXPECT_EQ(ret, 1) << "Failed to deliver message to application";
     EXPECT_EQ(tx_message, rx_message);
     EXPECT_EQ(channel_->GetFreeBufCount(), channel_->GetTotalBufCount());

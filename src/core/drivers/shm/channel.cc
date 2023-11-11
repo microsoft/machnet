@@ -28,7 +28,6 @@ ShmChannel::~ShmChannel() {
   __machnet_channel_destroy(
       const_cast<void *>(reinterpret_cast<const void *>(ctx_)), mem_size_,
       &channel_fd_, is_posix_shm_, name_.c_str());
-  LOG(INFO) << "Notified application side " << posted << " times";
 }
 
 Channel::Channel(const std::string &channel_name,

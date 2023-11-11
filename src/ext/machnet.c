@@ -640,7 +640,7 @@ int machnet_sendmmsg(const void *channel_ctx,
 }
 
 ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
-                     MachnetFlow_t *flow) {
+                     MachnetFlow_t *flow, uint32_t blocking) {
   MachnetMsgHdr_t msghdr;
   MachnetIovec_t iov;
   iov.base = buf;
@@ -648,14 +648,15 @@ ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
   msghdr.msg_iov = &iov;
   msghdr.msg_iovlen = 1;
 
-  const int ret = machnet_recvmsg(channel_ctx, &msghdr);
+  const int ret = machnet_recvmsg(channel_ctx, &msghdr, blocking);
   if (ret <= 0) return ret;  // No message available, or error code
 
   *flow = msghdr.flow_info;
   return msghdr.msg_size;
 }
 
-int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
+int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr,
+                    uint32_t blocking) {
   assert(channel_ctx != NULL);
   assert(msghdr != NULL);
   MachnetChannelCtx_t *ctx = (MachnetChannelCtx_t *)channel_ctx;
@@ -668,6 +669,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
   uint32_t n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
   //  if (n != 1) return 0;  // No message available.
   if (n == 0) {
+    if (!blocking) return 0;
     __atomic_store_n(&ctx->receiver_active, 0, __ATOMIC_SEQ_CST);
     sem_wait(&ctx->sem);
     n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
