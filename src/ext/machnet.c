@@ -663,11 +663,9 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr,
 
   const uint32_t kBufferBatchSize = 16;
 
-  //  sem_wait(&ctx->sem);
   // Deque a message from the ring.
   MachnetRingSlot_t buffer_index;
   uint32_t n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
-  //  if (n != 1) return 0;  // No message available.
   if (n == 0) {
     if (!blocking) return 0;
     __atomic_store_n(&ctx->receiver_active, 0, __ATOMIC_SEQ_CST);
