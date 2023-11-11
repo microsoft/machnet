@@ -107,29 +107,30 @@ void stack_loop(thread_conf *conf) {
       }
       continue;
     }
+    for (size_t i = 0; i < 100; i++) {
+      buf = channel->MsgBufAlloc();
+      if (buf == nullptr) {
+        continue;
+      }
 
-    buf = channel->MsgBufAlloc();
-    if (buf == nullptr) {
-      continue;
+      CHECK_NOTNULL(buf->append(tx_buffer.size()));
+
+      juggler::utils::Copy(buf->head_data(), tx_buffer.data(), buf->length());
+      buf->set_src_ip(kDummyIp);
+      buf->set_src_port(kDummyPort);
+      buf->set_dst_ip(kDummyIp);
+      buf->set_dst_port(kDummyPort);
+      buf->mark_first();
+      buf->mark_last();
+      // TODO(ilias): Copy some data.
+      // Send the message.
+      ret = channel->EnqueueMessages(&buf, 1);
+      if (ret != 1) {
+        channel->MsgBufFree(buf);
+      }
+      conf->messages_sent += ret;
     }
-
-    CHECK_NOTNULL(buf->append(tx_buffer.size()));
-
-    juggler::utils::Copy(buf->head_data(), tx_buffer.data(), buf->length());
-    buf->set_src_ip(kDummyIp);
-    buf->set_src_port(kDummyPort);
-    buf->set_dst_ip(kDummyIp);
-    buf->set_dst_port(kDummyPort);
-    buf->mark_first();
-    buf->mark_last();
-    // TODO(ilias): Copy some data.
-    // Send the message.
-    ret = channel->EnqueueMessages(&buf, 1);
-    if (ret != 1) {
-      LOG(ERROR) << "Couldn't enqueue message. ret: " << ret;
-      channel->MsgBufFree(buf);
-    }
-    conf->messages_sent += ret;
+    fprintf(stderr, "Msgs_sent: %lu\n", conf->messages_sent);
   }
   // Calculate the duration in nanoseconds.
   auto end = std::chrono::high_resolution_clock::now();
