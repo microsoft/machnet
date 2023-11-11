@@ -21,12 +21,14 @@ ShmChannel::ShmChannel(const std::string channel_name,
       channel_fd_(channel_fd),
       cached_buf_indices(),
       cached_bufs(),
-      cached_buf_count(0) {}
+      cached_buf_count(0),
+      posted(0) {}
 
 ShmChannel::~ShmChannel() {
   __machnet_channel_destroy(
       const_cast<void *>(reinterpret_cast<const void *>(ctx_)), mem_size_,
       &channel_fd_, is_posix_shm_, name_.c_str());
+  LOG(INFO) << "Notified application side " << posted << " times";
 }
 
 Channel::Channel(const std::string &channel_name,

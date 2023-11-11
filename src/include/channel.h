@@ -177,11 +177,12 @@ class ShmChannel {
     auto ret =
         __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs, msgbuf_indices);
     if (ret != 0) {
-      if (!ctx_->receiver_active) {
-        fprintf(stderr, "Notify app side\n");
+      if (!__atomic_load_n(&ctx_->receiver_active, __ATOMIC_SEQ_CST)) {
+        *__DECONST(uint32_t *, &ctx_->receiver_active) = 1;
         if (sem_post(__DECONST(sem_t *, &ctx_->sem)) < 0) {
           fprintf(stderr, "Couldn't notify app side in case of blocking\n");
         }
+        posted++;
       }
     }
     return ret;
@@ -339,7 +340,8 @@ class ShmChannel {
 
     auto ret = MsgBufBulkFree(batch->buf_indices(), batch->GetSize());
 
-    if (ret == 0) [[unlikely]] return false;  // NOLINT
+    if (ret == 0) [[unlikely]]
+      return false;  // NOLINT
     batch->Clear();
     return true;
   }
@@ -386,6 +388,7 @@ class ShmChannel {
   std::array<MachnetRingSlot_t, NUM_CACHED_BUFS> cached_buf_indices;
   std::array<MachnetMsgBuf_t *, NUM_CACHED_BUFS> cached_bufs;
   uint32_t cached_buf_count;
+  uint32_t posted;
 };
 
 /**

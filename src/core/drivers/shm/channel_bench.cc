@@ -107,30 +107,27 @@ void stack_loop(thread_conf *conf) {
       }
       continue;
     }
-    for (size_t i = 0; i < 100; i++) {
-      buf = channel->MsgBufAlloc();
-      if (buf == nullptr) {
-        continue;
-      }
-
-      CHECK_NOTNULL(buf->append(tx_buffer.size()));
-
-      juggler::utils::Copy(buf->head_data(), tx_buffer.data(), buf->length());
-      buf->set_src_ip(kDummyIp);
-      buf->set_src_port(kDummyPort);
-      buf->set_dst_ip(kDummyIp);
-      buf->set_dst_port(kDummyPort);
-      buf->mark_first();
-      buf->mark_last();
-      // TODO(ilias): Copy some data.
-      // Send the message.
-      ret = channel->EnqueueMessages(&buf, 1);
-      if (ret != 1) {
-        channel->MsgBufFree(buf);
-      }
-      conf->messages_sent += ret;
+    buf = channel->MsgBufAlloc();
+    if (buf == nullptr) {
+      continue;
     }
-    fprintf(stderr, "Msgs_sent: %lu\n", conf->messages_sent);
+
+    CHECK_NOTNULL(buf->append(tx_buffer.size()));
+
+    juggler::utils::Copy(buf->head_data(), tx_buffer.data(), buf->length());
+    buf->set_src_ip(kDummyIp);
+    buf->set_src_port(kDummyPort);
+    buf->set_dst_ip(kDummyIp);
+    buf->set_dst_port(kDummyPort);
+    buf->mark_first();
+    buf->mark_last();
+    // TODO(ilias): Copy some data.
+    // Send the message.
+    ret = channel->EnqueueMessages(&buf, 1);
+    if (ret != 1) {
+      channel->MsgBufFree(buf);
+    }
+    conf->messages_sent += ret;
   }
   // Calculate the duration in nanoseconds.
   auto end = std::chrono::high_resolution_clock::now();
@@ -160,7 +157,6 @@ void application_loop(thread_conf *conf) {
   while (!g_start.load()) {
     __asm__ volatile("pause" ::: "memory");
   }
-
   // Now start receiving messages.
   auto start = std::chrono::high_resolution_clock::now();
   while (!g_should_stop.load()) {
@@ -306,8 +302,8 @@ int main() {
   const uint64_t kTxMessageSize = 64;
   std::vector<std::pair<uint64_t, uint64_t>> exp_config_vec;
 
-  exp_config_vec.emplace_back(kMessagesToSend, 0);  // Stack -> app only
-  exp_config_vec.emplace_back(0, kMessagesToSend);  // App -> stack only
+  //  exp_config_vec.emplace_back(kMessagesToSend, 0);  // Stack -> app only
+  //  exp_config_vec.emplace_back(0, kMessagesToSend);  // App -> stack only
   exp_config_vec.emplace_back(kMessagesToSend, kMessagesToSend);  // Bi-dir
 
   LOG(INFO) << "Running channel_bench";

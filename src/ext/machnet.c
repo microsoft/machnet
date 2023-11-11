@@ -668,12 +668,10 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
   uint32_t n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
   //  if (n != 1) return 0;  // No message available.
   if (n == 0) {
-    ctx->receiver_active = 0;
-    fprintf(stderr, "No msgs in ring. sleeping...\n");
+    __atomic_store_n(&ctx->receiver_active, 0, __ATOMIC_SEQ_CST);
     sem_wait(&ctx->sem);
     n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
     assert(n == 1);
-    ctx->receiver_active = 1;
   }
   MachnetMsgBuf_t *buffer;
   buffer = __machnet_channel_buf(ctx, buffer_index);
