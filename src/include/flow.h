@@ -997,10 +997,10 @@ class Flow {
   shm::Channel* channel_;
   // Swift CC protocol control block.
   swift::Pcb pcb_;
-  // TX queue for the flow.
-  TXQueue tx_queue_;
-  // RX queue for the flow.
-  RXQueue rx_queue_;
+  // // TX queue for the flow.
+  // TXQueue tx_queue_;
+  // // RX queue for the flow.
+  // RXQueue rx_queue_;
   // desired rx queue for this flow at the receiver machine.
   uint16_t remote_desired_rx_queue_;
   // key size for RSS
