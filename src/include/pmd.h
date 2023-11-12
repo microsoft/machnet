@@ -397,6 +397,10 @@ class PmdPort {
    * @brief Updates the statistics for this port.
    */
   void UpdatePortStats();
+  /**
+   * @brief Gets the reta_size from devinfo.
+   */
+  uint16_t GetRetaSize() const { return devinfo_.reta_size; }
 
   uint64_t GetPortRxPkts() const { return port_stats_.ipackets; }
 

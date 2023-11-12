@@ -532,6 +532,7 @@ class Flow {
         state_ = State::kRetryForRss;
         remote_desired_rx_queue_ = machneth->rss_retry_hdr.target_rx_queue_id;
         remote_rss_key_len_ = machneth->rss_retry_hdr.rss_key_len;
+        remote_nr_queue_ = machneth->rss_retry_hdr.nr_queues;
         process_krtry_for_rss(machneth);
         return;
         break;
@@ -665,6 +666,8 @@ class Flow {
   size_t getDesiredRemoteQueue() { return remote_desired_rx_queue_; }
 
   std::vector<uint8_t> getRemoteRSS() { return remote_rss_hash_key_; }
+
+  size_t getRemoteNrQueue() { return remote_nr_queue_; }
 
  private:
   void PrepareL2Header(dpdk::Packet* packet) {
@@ -1000,6 +1003,8 @@ class Flow {
   uint16_t remote_desired_rx_queue_;
   // key size for RSS
   uint16_t remote_rss_key_len_;
+  // number of queues at the receiver machine.
+  uint16_t remote_nr_queue_;
   // remote RSS key
   std::vector<uint8_t> remote_rss_hash_key_;
 };

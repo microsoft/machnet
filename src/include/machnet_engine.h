@@ -890,7 +890,9 @@ class MachnetEngine {
           auto rss_lambda = [src_addr, dst_addr, dst_port,
                              rss_key = (*flow_it)->getRemoteRSS(),
                              pmd_port = pmd_port_,
-                             rx_queue_id = (*flow_it)->getDesiredRemoteQueue()](
+                             remote_rx_queue_id = (*flow_it)->getDesiredRemoteQueue(),
+                             local_rx_queue_id = rxring_->GetRingId(),
+                             remote_nr_queueus = (*flow_it)->getRemoteNrQueue()](
                                 uint16_t port) -> bool {
             rte_thash_tuple ipv4_l3_l4_tuple;
             ipv4_l3_l4_tuple.v4.src_addr = src_addr.address.value();
@@ -911,18 +913,24 @@ class MachnetEngine {
                 reinterpret_cast<uint32_t *>(&reversed_ipv4_l3_l4_tuple),
                 RTE_THASH_V4_L4_LEN, rss_key.data());
 
-            if (pmd_port->GetRSSRxQueue(reversed_rss_hash) != rx_queue_id) {
-              LOG(WARNING) << "Reverse RSS queue does not match "
-                           << pmd_port->GetRSSRxQueue(reversed_rss_hash)
-                           << " vs " << rx_queue_id;
+            if ((rss_hash % pmd_port->GetRetaSize()) %
+                    remote_nr_queueus !=  remote_rx_queue_id) {
+              LOG(WARNING) << "RSS queue does not match "
+                           << pmd_port->GetRSSRxQueue(rss_hash) << " vs important "
+                           << (rss_hash % pmd_port->GetRetaSize()) % remote_nr_queueus << " vs "
+                           << remote_rx_queue_id;
               return false;
             }
 
-            if (pmd_port->GetRSSRxQueue(__builtin_bswap32(reversed_rss_hash)) !=
-                rx_queue_id) {
-              LOG(WARNING) << "RSS queue does not match"
-                           << __builtin_bswap32(reversed_rss_hash) << " vs "
-                           << rx_queue_id;
+            // what about the current queue?
+            if ((reversed_rss_hash % pmd_port->GetRetaSize()) %
+                    pmd_port->GetRxQueuesNr() !=
+                local_rx_queue_id) {
+              LOG(WARNING) << "Reverse RSS queue does not match "
+                           << pmd_port->GetRSSRxQueue(reversed_rss_hash)
+                           << " vs local important " << local_rx_queue_id << " vs val "
+                           << (reversed_rss_hash % pmd_port->GetRetaSize()) %
+                                  pmd_port->GetRxQueuesNr();
               return false;
             }
 
@@ -930,7 +938,8 @@ class MachnetEngine {
                       << " -> " << dst_addr.ToString() << ":"
                       << dst_port.port.value() << " is " << rss_hash
                       << " and reversed " << reversed_rss_hash
-                      << " (queue: " << rx_queue_id << ")";
+                      << " local queue: " << local_rx_queue_id
+                      << " remote queue: " << remote_rx_queue_id <<")";
 
             return true;
           };
@@ -1160,6 +1169,7 @@ class MachnetEngine {
       response_mach->magic = be16_t(net::MachnetPktHdr::kMagic);
       response_mach->rss_retry_hdr.rss_key_len = sizeofrss;
       response_mach->rss_retry_hdr.target_rx_queue_id = qid.value();
+      response_mach->rss_retry_hdr.nr_queues = pmd_port_->GetRxQueuesNr();
       response_mach->net_flags = net::MachnetPktHdr::MachnetFlags::kRetryForRss;
       response_mach->msg_flags = 0;
       response_mach->seqno = be32_t(0);

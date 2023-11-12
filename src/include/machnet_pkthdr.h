@@ -17,6 +17,7 @@ namespace net {
 struct __attribute__((packed)) MachnetRetryForRSSPktHdr {
   uint16_t target_rx_queue_id;
   uint16_t rss_key_len;
+  uint16_t nr_queues;
 };
 
 /**
@@ -44,7 +45,7 @@ struct __attribute__((packed)) MachnetPktHdr {
   be16_t sack_bitmap_count;  // Length of the SACK bitmap [0-64].
   be64_t timestamp1;         // Timestamp of the packet before sending.
 };
-static_assert(sizeof(MachnetPktHdr) == 34, "MachnetPktHdr size mismatch");
+static_assert(sizeof(MachnetPktHdr) == 36, "MachnetPktHdr size mismatch");
 
 inline MachnetPktHdr::MachnetFlags operator|(MachnetPktHdr::MachnetFlags lhs,
                                              MachnetPktHdr::MachnetFlags rhs) {
