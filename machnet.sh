@@ -4,10 +4,12 @@
 #  - mac: MAC address of the local DPDK interface
 #  - ip: IP address of the local DPDK interface
 #  - bare_metal: if set, will use local binary instead of Docker image
+#  - debug: if set, will spawn a DEBUG stack instance instead of a prod one
 
 LOCAL_MAC=""
 LOCAL_IP=""
 BARE_METAL=0
+DEBUG=0
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
@@ -23,6 +25,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -b|--bare_metal)
             BARE_METAL=1
+            shift
+            ;;
+        -d|--debug)
+            DEBUG=1
             shift
             ;;
         *)
@@ -91,9 +97,15 @@ echo "Created config for local Machnet, in /var/run/machnet/local_config.json. C
 sudo cat /var/run/machnet/local_config.json
 
 if [ $BARE_METAL -eq 1 ]; then
-    echo "Starting Machnet in bare metal mode"
+    echo "Starting Machnet in bare-metal mode"
     THIS_SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-    machnet_bin="$THIS_SCRIPT_DIR/build/src/apps/machnet/machnet"
+    BUILD_DIR=="$THIS_SCRIPT_DIR/"
+    if [ $DEBUG -eq 1 ]; then
+        BUILD_DIR="$THIS_SCRIPT_DIR/build/debug_build"
+    else
+        BUILD_DIR="$THIS_SCRIPT_DIR/build/release_build"
+    fi
+    machnet_bin="${BUILD_DIR}/src/apps/machnet/machnet"
 
     if [ ! -f ${machnet_bin} ]; then
         echo "${machnet_bin} not found, please build Machnet first"
@@ -120,11 +132,23 @@ else
         echo "See Machnet README for instructions on how to get access"
     fi
 
-    sudo docker run --privileged --net=host \
-        -v /dev/hugepages:/dev/hugepages \
-        -v /var/run/machnet:/var/run/machnet \
-        ghcr.io/microsoft/machnet/machnet:latest \
-        /root/machnet/build/src/apps/machnet/machnet \
-        --config_json /var/run/machnet/local_config.json \
-        --logtostderr=1
+    if [ $DEBUG -eq 1 ]; then
+        echo "Starting Machnet in DEBUG mode"
+        sudo docker run --privileged --net=host \
+            -v /dev/hugepages:/dev/hugepages \
+            -v /var/run/machnet:/var/run/machnet \
+            ghcr.io/microsoft/machnet/machnet:latest \
+            /root/machnet/debug_build/src/apps/machnet/machnet \
+            --config_json /var/run/machnet/local_config.json \
+            --logtostderr=1
+    else
+        echo "Starting Machnet in RELEASE mode"
+        sudo docker run --privileged --net=host \
+            -v /dev/hugepages:/dev/hugepages \
+            -v /var/run/machnet:/var/run/machnet \
+            ghcr.io/microsoft/machnet/machnet:latest \
+            /root/machnet/release_build/src/apps/machnet/machnet \
+            --config_json /var/run/machnet/local_config.json \
+            --logtostderr=1
+    fi
 fi

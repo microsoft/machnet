@@ -3,21 +3,23 @@
  *
  * Unit tests for the flow abstraction.
  */
-#include <channel.h>
-#include <flow.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <machnet.h>
-#include <packet_pool.h>
-#include <pmd.h>
 
 #include <algorithm>
 #include <random>
 #include <unordered_set>
 #include <vector>
 
+#include "channel.h"
+#include "machnet.h"
 #include "machnet_pkthdr.h"
+#include "packet_pool.h"
+#include "pmd.h"
+
+#define private public
+#include "flow.h"
 
 namespace juggler {
 namespace net {
@@ -53,7 +55,7 @@ class FlowTest : public ::testing::Test {
       : rng_(std::random_device{}()),  // NOLINT
         channel_mgr_(),
         channel_(nullptr),
-        tx_queue_(nullptr) {
+        tx_tracking_(nullptr) {
     local_addr_.FromString(kLocalIp);
     local_port_.port = be16_t(kLocalPort);
     remote_addr_.FromString(kRemoteIp);
@@ -65,8 +67,8 @@ class FlowTest : public ::testing::Test {
                                      kBufferRingSize, kBufferSize),
              true);
     channel_ = channel_mgr_.GetChannel(fname);
-    tx_queue_ = std::make_unique<TXQueue>(CHECK_NOTNULL(channel_.get()));
-    rx_queue_ = std::make_unique<RXQueue>(
+    tx_tracking_ = std::make_unique<TXTracking>(CHECK_NOTNULL(channel_.get()));
+    rx_tracking_ = std::make_unique<RXTracking>(
         local_addr_.address.value(), local_port_.port.value(),
         remote_addr_.address.value(), remote_port_.port.value(),
         CHECK_NOTNULL(channel_.get()));
@@ -77,8 +79,8 @@ class FlowTest : public ::testing::Test {
 
   void TearDown() override {
     pkt_pool_.reset();
-    rx_queue_.reset();
-    tx_queue_.reset();
+    rx_tracking_.reset();
+    tx_tracking_.reset();
     channel_.reset();
     channel_mgr_.DestroyChannel(fname);
   }
@@ -198,17 +200,17 @@ class FlowTest : public ::testing::Test {
   std::mt19937 rng_;
   shm::ChannelManager<shm::Channel> channel_mgr_;
   std::shared_ptr<shm::Channel> channel_;
-  std::unique_ptr<TXQueue> tx_queue_;
-  std::unique_ptr<RXQueue> rx_queue_;
+  std::unique_ptr<TXTracking> tx_tracking_;
+  std::unique_ptr<RXTracking> rx_tracking_;
   std::unique_ptr<dpdk::PacketPool> pkt_pool_;
 };
 
 TEST_F(FlowTest, TXQueue_init) {
-  EXPECT_EQ(tx_queue_->PendingMsgBufs(), 0);
-  EXPECT_EQ(tx_queue_->TotalMsgBufs(), 0);
-  EXPECT_EQ(tx_queue_->GetOldestUnackedMsgBuf(), nullptr);
-  EXPECT_EQ(tx_queue_->GetOldestUnsentMsgBuf(), nullptr);
-  EXPECT_EQ(tx_queue_->GetLastMsgBuf(), nullptr);
+  EXPECT_EQ(tx_tracking_->NumUnsentMsgbufs(), 0);
+  EXPECT_EQ(tx_tracking_->NumTrackedMsgbufs(), 0);
+  EXPECT_EQ(tx_tracking_->GetOldestUnackedMsgBuf(), nullptr);
+  EXPECT_EQ(tx_tracking_->GetOldestUnsentMsgBuf(), nullptr);
+  EXPECT_EQ(tx_tracking_->GetLastMsgBuf(), nullptr);
 }
 
 TEST_F(FlowTest, TXQueue_PushPop) {
@@ -227,12 +229,13 @@ TEST_F(FlowTest, TXQueue_PushPop) {
     auto *msgbuf = CreateMsg(data);
     if (first == nullptr) first = msgbuf;
     last = channel_->GetMsgBuf(msgbuf->last());
-    tx_queue_->Push(msgbuf);
+    tx_tracking_->Append(msgbuf);
     total_buffers_nr += buffers_nr;
-    EXPECT_EQ(tx_queue_->PendingMsgBufs(), total_buffers_nr);
-    EXPECT_EQ(tx_queue_->TotalMsgBufs(), total_buffers_nr);
-    EXPECT_EQ(tx_queue_->GetOldestUnackedMsgBuf(), first);
-    EXPECT_EQ(tx_queue_->GetLastMsgBuf(), channel_->GetMsgBuf(msgbuf->last()));
+    EXPECT_EQ(tx_tracking_->NumUnsentMsgbufs(), total_buffers_nr);
+    EXPECT_EQ(tx_tracking_->NumTrackedMsgbufs(), total_buffers_nr);
+    EXPECT_EQ(tx_tracking_->GetOldestUnackedMsgBuf(), first);
+    EXPECT_EQ(tx_tracking_->GetLastMsgBuf(),
+              channel_->GetMsgBuf(msgbuf->last()));
 
     msg_len = dist(rng_);
     buffers_nr = (msg_len + channel_->GetUsableBufSize() - 1) /
@@ -241,35 +244,35 @@ TEST_F(FlowTest, TXQueue_PushPop) {
 
   auto msgbuf = first;
   for (uint32_t i = 0; i < total_buffers_nr; i++) {
-    EXPECT_EQ(tx_queue_->TotalMsgBufs(), total_buffers_nr);
-    EXPECT_EQ(tx_queue_->PendingMsgBufs(), total_buffers_nr - i);
-    auto buf = tx_queue_->Pop();
+    EXPECT_EQ(tx_tracking_->NumTrackedMsgbufs(), total_buffers_nr);
+    EXPECT_EQ(tx_tracking_->NumUnsentMsgbufs(), total_buffers_nr - i);
+    auto buf = tx_tracking_->GetAndUpdateOldestUnsent();
     EXPECT_TRUE(buf.has_value());
     EXPECT_EQ(buf.value(), msgbuf);
     if (msgbuf->has_next() || msgbuf->has_chain())
       msgbuf = channel_->GetMsgBuf(msgbuf->next());
     else
       msgbuf = nullptr;
-    EXPECT_EQ(tx_queue_->GetOldestUnackedMsgBuf(), first);
-    EXPECT_EQ(tx_queue_->GetOldestUnsentMsgBuf(), msgbuf);
-    EXPECT_EQ(tx_queue_->GetLastMsgBuf(), last);
-    EXPECT_EQ(tx_queue_->PendingMsgBufs(), total_buffers_nr - i - 1);
-    EXPECT_EQ(tx_queue_->TotalMsgBufs(), total_buffers_nr);
+    EXPECT_EQ(tx_tracking_->GetOldestUnackedMsgBuf(), first);
+    EXPECT_EQ(tx_tracking_->GetOldestUnsentMsgBuf(), msgbuf);
+    EXPECT_EQ(tx_tracking_->GetLastMsgBuf(), last);
+    EXPECT_EQ(tx_tracking_->NumUnsentMsgbufs(), total_buffers_nr - i - 1);
+    EXPECT_EQ(tx_tracking_->NumTrackedMsgbufs(), total_buffers_nr);
   }
 
-  auto buf = tx_queue_->Pop();
+  auto buf = tx_tracking_->GetAndUpdateOldestUnsent();
   EXPECT_EQ(buf.has_value(), false);
-  EXPECT_EQ(tx_queue_->GetOldestUnsentMsgBuf(), nullptr);
+  EXPECT_EQ(tx_tracking_->GetOldestUnsentMsgBuf(), nullptr);
 
-  tx_queue_->AckMsgBufs(total_buffers_nr);
-  EXPECT_EQ(tx_queue_->PendingMsgBufs(), 0);
-  EXPECT_EQ(tx_queue_->TotalMsgBufs(), 0);
+  tx_tracking_->ReceiveAcks(total_buffers_nr);
+  EXPECT_EQ(tx_tracking_->NumUnsentMsgbufs(), 0);
+  EXPECT_EQ(tx_tracking_->NumTrackedMsgbufs(), 0);
   EXPECT_EQ(channel_->GetFreeBufCount(), channel_->GetTotalBufCount());
 }
 
 TEST_F(FlowTest, RXQueue_init) {
-  EXPECT_EQ(rx_queue_->ReassemblyQueueCapacity(),
-            RXQueue::kReassemblyQueueDefaultSize - 1);
+  EXPECT_EQ(rx_tracking_->ReassemblyQueueCapacity(),
+            RXTracking::kReassemblyQueueDefaultSize - 1);
 }
 
 TEST_F(FlowTest, RXQueue_Push) {
@@ -294,13 +297,13 @@ TEST_F(FlowTest, RXQueue_Push) {
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
       auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
-      rx_queue_->Push(&rx_pcb, pkt);
+      rx_tracking_->Push(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
                 channel_->GetTotalBufCount() - buffers_used);
       // All packets are in order so the reassembly queue should be empty.
-      EXPECT_TRUE(rx_queue_->IsReassemblyQueueEmpty());
+      EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
       EXPECT_EQ(rx_pcb.get_rcv_nxt(), prev_rcv_nxt + 1);
     }
 
@@ -337,7 +340,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
   // can test for out-of-order.
   std::uniform_int_distribution<> dist(
       2 * packet_payload_size,
-      rx_queue_->ReassemblyQueueCapacity() * packet_payload_size);
+      rx_tracking_->ReassemblyQueueCapacity() * packet_payload_size);
 
   const size_t kNumTries = 1000;
   for (size_t i = 0; i < kNumTries; i++) {
@@ -360,23 +363,23 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
       auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
-      rx_queue_->Push(&rx_pcb, pkt);
+      rx_tracking_->Push(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
                 channel_->GetTotalBufCount() - buffers_used);
       // All packets are in order so the reassembly queue should be empty.
       if (pkt == packets.back()) {
-        EXPECT_TRUE(rx_queue_->IsReassemblyQueueEmpty());
+        EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
         // `rcv_nxt` should now be updated; the last packet fills the final gap.
         EXPECT_EQ(prev_rcv_nxt + buffers_used, rx_pcb.get_rcv_nxt());
         // The message should have now been delivered to the application, and
         // the reassembly queue should be empty.
-        EXPECT_TRUE(rx_queue_->IsReassemblyQueueEmpty());
+        EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
         EXPECT_EQ(rx_pcb.sack_bitmap_count, 0);
       } else {
         // All packets are pushed to the rassembly queue out-of-order.
-        EXPECT_FALSE(rx_queue_->IsReassemblyQueueEmpty());
+        EXPECT_FALSE(rx_tracking_->IsReassemblyQueueEmpty());
         // rcv_nxt should not be updated.
         EXPECT_EQ(prev_rcv_nxt, rx_pcb.get_rcv_nxt());
         // The reassembly queue size should increase with each packet pushed.
@@ -436,7 +439,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
     std::unordered_set<size_t> indices;
     while (index < packets.size()) {
       std::uniform_int_distribution<size_t> dist(
-          2, rx_queue_->ReassemblyQueueCapacity());
+          2, rx_tracking_->ReassemblyQueueCapacity());
 
       auto ooo_batch_size = std::min(dist(rng_), packets.size() - index);
       std::shuffle(packets.begin() + index,
@@ -451,25 +454,25 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
     auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
-      rx_queue_->Push(&rx_pcb, pkt);
+      rx_tracking_->Push(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
                 channel_->GetTotalBufCount() - buffers_used);
       if (pkt == packets.back()) {
         // For the last packet, the reassembly queue should be empty.
-        EXPECT_TRUE(rx_queue_->IsReassemblyQueueEmpty());
+        EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
         // rcv_nxt should now be updated; the last packet fills the final gap.
         EXPECT_EQ(prev_rcv_nxt + buffers_used, rx_pcb.get_rcv_nxt());
         // The message should have now been delivered to the application, and
         // the reassembly queue should be empty.
-        EXPECT_TRUE(rx_queue_->IsReassemblyQueueEmpty());
+        EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
         EXPECT_EQ(rx_pcb.sack_bitmap_count, 0);
       } else {
         if (indices.find(buffers_used) != indices.end()) {
           // For the last packet in an out-of-order batch, the reassembly queue
           // should be flushed, and `rcv_nxt` should be updated.
-          EXPECT_TRUE(rx_queue_->IsReassemblyQueueEmpty());
+          EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
           // `rcv_nxt` should be updated here.
           EXPECT_EQ(prev_rcv_nxt + buffers_used, rx_pcb.get_rcv_nxt());
           EXPECT_EQ(rx_pcb.sack_bitmap_count, 0);

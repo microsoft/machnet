@@ -12,6 +12,9 @@ namespace juggler {
 
 static std::optional<std::string> GetPCIeAddressSysfs(
     const juggler::net::Ethernet::Address &l2_addr) {
+  // Note: This works on Azure even after we unbind the NIC (e.g., `eth1`)
+  // because a "fake" sibling interface with the same MAC and PCIe address
+  // remains in sysfs.
   LOG(INFO) << "Walking /sys/class/net to find PCIe address for L2 address "
             << l2_addr.ToString();
 

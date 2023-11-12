@@ -22,6 +22,7 @@ extern "C" {
  *     [Ring0: Stack->Application]
  *     [Ring1: Application->Stack]
  *     [Ring2: FreeBuffers]
+ *     [BufferIndexTable]
  *     [HUGE_PAGE_2M_SIZE aligned]
  *     [Buf#0]
  *     [Buf#1]
@@ -36,6 +37,11 @@ extern "C" {
  *     Ring0 is used for communicating received messages from the stack to the
  *     application, and Ring1 for the opposite direction.
  *     Ring2 serves as the global pool of buffers.
+ *
+ *     [BufferIndexTable] is a table of `MachnetRingSlot`-wide objects to be
+ *     used as a temporary/scratch space for the application to allocate
+ * (dequeue) buffers. It is used to avoid the need for the application to
+ * allocate such table on each `send` request.
  */
 
 #include <assert.h>
@@ -51,6 +57,7 @@ extern "C" {
 #define PAGE_SIZE (4 * KB)
 #define HUGE_PAGE_2M_SIZE (2 * MB)
 #define MACHNET_MSG_MAX_LEN (8 * MB)
+#define NUM_CACHED_BUFS 64
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)
@@ -60,7 +67,7 @@ extern "C" {
 #endif
 
 #define __DECONST(type, var) ((type)(uintptr_t)(const void *)(var))
-#define ALIGN_TO_PAGE_SIZE(x, _pagesz) (((x) + _pagesz - 1) & ~(_pagesz - 1))
+#define ALIGN_TO_BOUNDARY(x, _pagesz) (((x) + _pagesz - 1) & ~(_pagesz - 1))
 
 typedef unsigned char uchar_t;
 typedef uint32_t MachnetRingSlot_t;
@@ -93,6 +100,7 @@ struct MachnetChannelDataCtx {
   size_t machnet_ring_ofs;
   size_t app_ring_ofs;
   size_t buf_ring_ofs;
+  size_t buffer_index_table_ofs;
   size_t buf_pool_ofs;
   size_t buf_pool_mask;
   uint32_t buf_size;
@@ -105,6 +113,17 @@ struct MachnetChannelCtrlCtx {
   size_t req_id;
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetChannelCtrlCtx MachnetChannelCtrlCtx_t;
+
+/*
+ * This data structure is used to implement a small cache of buffer indices
+ * used exclusively by the application. This reduces contention on the global
+ * buffer pool (which uses atomic operations for MP-safety).
+ */
+struct MachnetChannelAppBufferCache {
+  uint32_t count;
+  MachnetRingSlot_t indices[NUM_CACHED_BUFS];
+};
+typedef struct MachnetChannelAppBufferCache MachnetChannelAppBufferCache_t;
 
 /**
  * The `MachnetChannelCtx' holds all the metadata information (context) of an
@@ -122,8 +141,11 @@ struct MachnetChannelCtx {
   char name[MACHNET_CHANNEL_NAME_MAX_LEN];
   MachnetChannelCtrlCtx_t ctrl_ctx;  // Control channel's specific metadata.
   MachnetChannelDataCtx_t data_ctx;  // Dataplane channel's specific metadata.
+  MachnetChannelAppBufferCache_t app_buffer_cache;
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetChannelCtx MachnetChannelCtx_t;
+
+static_assert(sizeof(MachnetChannelCtx_t) % CACHE_LINE_SIZE == 0);
 
 struct MachnetChannelAppStats {
   uint64_t tx_msg_drops;
@@ -290,6 +312,12 @@ __machnet_channel_buf_ring(const MachnetChannelCtx_t *ctx) {
 static inline __attribute__((always_inline)) uchar_t *__machnet_channel_end(
     const MachnetChannelCtx_t *ctx) {
   return __machnet_channel_mem_ofs(ctx, ctx->size);
+}
+
+static inline MachnetRingSlot_t *__machnet_channel_buffer_index_table(
+    const MachnetChannelCtx_t *ctx) {
+  return (MachnetRingSlot_t *)__machnet_channel_mem_ofs(
+      ctx, ctx->data_ctx.buffer_index_table_ofs);
 }
 
 /**
@@ -538,7 +566,7 @@ __machnet_channel_buffers_avail(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
   jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
-  return jring_count(buf_ring);
+  return ctx->app_buffer_cache.count + jring_count(buf_ring);
 }
 
 /**

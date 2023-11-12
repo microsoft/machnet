@@ -1,43 +1,36 @@
-name: Build Machnet and Run CodeQL Analysis
+name: Build and Register Machnet as Latest
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
-  build:
+  build_and_push_machnet:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/${{ github.repository }}/machnet_build_base:latest
-      credentials:
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    strategy:
-      fail-fast: false
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
         with:
-          submodules: recursive
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+      - name: Build and push Machnet Docker image
+        uses: docker/build-push-action@v2
         with:
-          languages: c++
-          config-file: ./.github/codeql-config.yml
-
-
-      - name: Build machnet
-        run: |
-          mkdir -p ${GITHUB_WORKSPACE}/build
-          cd ${GITHUB_WORKSPACE}/build
-          RTE_SDK=/root/dpdk cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
-          ninja
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}/machnet:latest
+          target: machnet
+          file: ./Dockerfile
+          cache-from: type=gha,ref=ghcr.io/${{ github.repository }}/machnet_build_base:latest
+          cache-to: type=gha,mode=max

@@ -57,9 +57,19 @@ WORKDIR /root/machnet
 # Copy Machnet files
 COPY . .
 
-# Build Machnet
+# Submodule update
+RUN git submodule update --init --recursive
+
+# Do a Release build
 RUN ldconfig && \
-    mkdir build && \
-    cd build && \
+    mkdir release_build && \
+    cd release_build && \
     cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../ && \
+    ninja
+
+# Do a Debug build
+RUN ldconfig && \
+    mkdir debug_build && \
+    cd debug_build && \
+    cmake -DCMAKE_BUILD_TYPE=Debug -GNinja ../ && \
     ninja

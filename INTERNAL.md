@@ -10,7 +10,7 @@ Dockerfile.
 
 ```bash
 # On latest Ubuntu:
-sudo apt -y install cmake libgflags-dev pkg-config nlohmann-json3-dev ninja-build gcc-10 g++-10 doxygen graphviz python3-pip meson libhugetlbfs-dev
+sudo apt -y install cmake libgflags-dev pkg-config nlohmann-json3-dev ninja-build gcc-10 g++-10 doxygen graphviz python3-pip meson libhugetlbfs-dev libnl-3-dev libnl-route-3-dev
 pip3 install pyelftools
 ```
 
@@ -34,7 +34,7 @@ export RDMA_CORE=/path/to/rdma-core
 git clone -b 'stable-v40' --single-branch --depth 1 https://github.com/linux-rdma/rdma-core.git ${RDMA_CORE}
 cd ${RDMA_CORE}
 mkdir -p build && cd build
-cmake -GNinja -DNO_PYVERBS=1 ..
+cmake -GNinja -DNO_PYVERBS=1 -DNO_MAN_PAGES=1 ..
 ninja install # as root
 ldconfig
 ```

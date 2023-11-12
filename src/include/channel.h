@@ -113,7 +113,7 @@ class ShmChannel {
 
   // Get the number of buffers that are currently available (i.e., not in use).
   uint32_t GetFreeBufCount() const {
-    return __machnet_channel_buffers_avail(ctx_);
+    return cached_buf_count + __machnet_channel_buffers_avail(ctx_);
   }
 
   /**
@@ -256,11 +256,15 @@ class ShmChannel {
    * @return - pointer to the buffer on success, nullptr otherwise.
    */
   MsgBuf *MsgBufAlloc() {
-    MachnetRingSlot_t indices[1];
-    MachnetMsgBuf_t *buf[1];
-    auto ret = __machnet_channel_buf_alloc_bulk(ctx_, 1, indices, buf);
-    if (ret == 1) [[likely]] return reinterpret_cast<MsgBuf *>(buf[0]);
-    return nullptr;
+    if (cached_buf_count == 0) {
+      uint32_t ret = __machnet_channel_buf_alloc_bulk(
+          ctx_, NUM_CACHED_BUFS, cached_buf_indices.data(), cached_bufs.data());
+      if (ret != NUM_CACHED_BUFS) return nullptr;
+      cached_buf_count += NUM_CACHED_BUFS;
+    }
+    MachnetMsgBuf_t *buf = cached_bufs[--cached_buf_count];
+    __machnet_channel_buf_init(buf);
+    return reinterpret_cast<MsgBuf *>(buf);
   }
 
   /**
@@ -273,8 +277,17 @@ class ShmChannel {
     (void)DCHECK_NOTNULL(buf);
     MachnetRingSlot_t index[1] = {__machnet_channel_buf_index(
         ctx_, reinterpret_cast<const MachnetMsgBuf_t *>(buf))};
+    MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, index[0]);
+
+    if (cached_buf_count < NUM_CACHED_BUFS) {
+      cached_buf_indices[cached_buf_count] = index[0];
+      cached_bufs[cached_buf_count] = msg_buf;
+      cached_buf_count++;
+      return true;
+    }
+
     int retries = 5;
-    int ret;
+    unsigned int ret;
     do {
       ret = __machnet_channel_buf_free_bulk(ctx_, 1, index);
     } while (ret == 0 && retries-- > 0);
@@ -298,7 +311,8 @@ class ShmChannel {
         batch->buf_indices(),
         reinterpret_cast<MachnetMsgBuf_t **>(batch->bufs()));
     batch->IncrCount(ret);
-    if (ret == 0) [[unlikely]] return false;
+    if (ret == 0) [[unlikely]]
+      return false;
     return true;
   }
 
@@ -311,26 +325,48 @@ class ShmChannel {
   bool MsgBufBulkFree(MsgBufBatch *batch) {
     (void)DCHECK_NOTNULL(batch);
 
-    if (batch->GetSize() == 0) [[unlikely]] return true;  // NOLINT
+    if (batch->GetSize() == 0) [[unlikely]]
+      return true;  // NOLINT
 
     auto ret = MsgBufBulkFree(batch->buf_indices(), batch->GetSize());
 
-    if (ret == 0) [[unlikely]] return false;  // NOLINT
+    if (ret == 0) [[unlikely]]
+      return false;  // NOLINT
     batch->Clear();
     return true;
   }
 
   bool MsgBufBulkFree(MachnetRingSlot_t *indices, uint32_t cnt) {
     int retries = 5;
-    int ret;
-    do {
-      // Attempt to release the buffers.
-      ret = __machnet_channel_buf_free_bulk(ctx_, cnt, indices);
-    } while (ret == 0 && retries-- > 0);
+    uint32_t freed;
+    const uint32_t cache_free_slots = NUM_CACHED_BUFS - cached_buf_count;
+    const uint32_t to_cache =
+        (cnt <= cache_free_slots) ? cnt : cache_free_slots;
 
-    if (ret == 0) [[unlikely]] return false;  // NOLINT
+    for (freed = 0; freed < to_cache; freed++) {
+      cached_buf_indices[cached_buf_count] = indices[freed];
+      MachnetMsgBuf_t *msg_buf = __machnet_channel_buf(ctx_, indices[freed]);
+      cached_bufs[cached_buf_count] = msg_buf;
+      cached_buf_count++;
+    }
+    if (cnt > cache_free_slots) {
+      do {
+        freed +=
+            __machnet_channel_buf_free_bulk(ctx_, cnt - freed, indices + freed);
+      } while (freed == 0 && retries-- > 0);
+    }
+    if (freed == 0) [[unlikely]]
+      return false;  // NOLINT
 
     return true;
+  }
+
+  uint32_t GetAllCachedBufferIndices(std::vector<MachnetRingSlot_t> *indices) {
+    indices->insert(indices->end(), cached_buf_indices.begin(),
+                    cached_buf_indices.begin() + cached_buf_count);
+    uint32_t ret = cached_buf_count;
+    cached_buf_count = 0;
+    return ret;
   }
 
  private:
@@ -339,6 +375,9 @@ class ShmChannel {
   const size_t mem_size_;
   const bool is_posix_shm_;
   int channel_fd_;
+  std::array<MachnetRingSlot_t, NUM_CACHED_BUFS> cached_buf_indices;
+  std::array<MachnetMsgBuf_t *, NUM_CACHED_BUFS> cached_bufs;
+  uint32_t cached_buf_count;
 };
 
 /**
@@ -406,7 +445,7 @@ class Channel : public ShmChannel {
    * @return A const iterator to the newly created flow.
    */
   const std::list<std::unique_ptr<Flow>>::const_iterator CreateFlow(
-      auto &&... params) {
+      auto &&...params) {
     active_flows_.emplace_back(std::make_unique<Flow>(
         std::forward<decltype(params)>(params)..., this));
     return std::prev(active_flows_.end());
@@ -420,7 +459,7 @@ class Channel : public ShmChannel {
    * @param params The parameters pack to be forwarded to the constructor of the
    *               Listener.
    */
-  void AddListener(auto &&... params) {
+  void AddListener(auto &&...params) {
     Listener listener{std::forward<decltype(params)>(params)...};
     CHECK(listeners_.find(listener) == listeners_.end())
         << "Listener already exists for channel " << GetName();

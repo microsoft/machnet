@@ -1,0 +1,43 @@
+name: Build Machnet and Run CodeQL Analysis
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository }}/machnet_build_base:latest
+      credentials:
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: c++
+          config-file: ./.github/codeql-config.yml
+
+
+      - name: Build machnet
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/build
+          cd ${GITHUB_WORKSPACE}/build
+          RTE_SDK=/root/dpdk cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../
+          ninja
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
