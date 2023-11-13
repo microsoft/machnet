@@ -676,6 +676,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr,
       fprintf(stderr, "semaphore's value %d\n", value);
       fprintf(stderr, "recv: machnet_ring empty, going to sleep....\n");
       sem_wait(&ctx->sem);
+      fprintf(stderr, "recv: woken up ...\n");
       n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
       assert(n == 1);
     }
