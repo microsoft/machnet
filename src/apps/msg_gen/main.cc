@@ -32,6 +32,7 @@ DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
             "bouncing.");
 DEFINE_bool(verify, false, "Verify payload of received messages.");
+DEFINE_uint32(blocking, 0, "Blocking receive");
 
 static volatile int g_keep_running = 1;
 
@@ -171,7 +172,7 @@ void ServerLoop(void *channel_ctx) {
     MachnetFlow_t rx_flow;
     const ssize_t rx_size =
         machnet_recv(channel_ctx, thread_ctx.rx_message.data(),
-                     thread_ctx.rx_message.size(), &rx_flow, NON_BLOCKING);
+                     thread_ctx.rx_message.size(), &rx_flow, FLAGS_blocking);
     if (rx_size <= 0) continue;
     stats_cur.rx_count++;
     stats_cur.rx_bytes += rx_size;
@@ -247,7 +248,7 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
     MachnetFlow_t rx_flow;
     const ssize_t rx_size =
         machnet_recv(channel_ctx, thread_ctx->rx_message.data(),
-                     thread_ctx->rx_message.size(), &rx_flow, NON_BLOCKING);
+                     thread_ctx->rx_message.size(), &rx_flow, FLAGS_blocking);
     if (rx_size <= 0) continue;
 
     thread_ctx->stats.current.rx_count++;
