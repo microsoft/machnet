@@ -180,15 +180,9 @@ class ShmChannel {
       if (!__atomic_load_n(&ctx_->receiver_active, __ATOMIC_SEQ_CST)) {
         __atomic_store_n(__DECONST(uint32_t *, &ctx_->receiver_active), 1,
                          __ATOMIC_SEQ_CST);
-        int value;
-        sem_getvalue(__DECONST(sem_t *, &ctx_->sem), &value);
-        fprintf(stderr, "semaphore's prev value %d\n", value);
         if (sem_post(__DECONST(sem_t *, &ctx_->sem)) < 0) {
           fprintf(stderr, "Couldn't notify app side in case of blocking\n");
         }
-        fprintf(stderr, "enqueue: notified app side ...\n");
-        sem_getvalue(__DECONST(sem_t *, &ctx_->sem), &value);
-        fprintf(stderr, "semaphore's next value %d\n", value);
         posted++;
       }
     }

@@ -669,18 +669,14 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr,
   while (n == 0) {
     if (!blocking) return 0;
     __atomic_store_n(&ctx->receiver_active, 0, __ATOMIC_SEQ_CST);
+    //    n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
+    //    if (n == 0) {
+    sem_wait(&ctx->sem);
     n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
-    if (n == 0) {
-      int value;
-      sem_getvalue(&ctx->sem, &value);
-      fprintf(stderr, "semaphore's value %d\n", value);
-      fprintf(stderr, "recv: machnet_ring empty, going to sleep....\n");
-      sem_wait(&ctx->sem);
-      fprintf(stderr, "recv: woken up ...\n");
-      n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
-      assert(n == 1);
-    }
+    //    assert(n == 1);
+    //    }
   }
+  assert(n == 1);
   MachnetMsgBuf_t *buffer;
   buffer = __machnet_channel_buf(ctx, buffer_index);
   MachnetFlow_t flow_info = buffer->flow;
