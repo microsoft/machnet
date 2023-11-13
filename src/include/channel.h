@@ -178,7 +178,8 @@ class ShmChannel {
         __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs, msgbuf_indices);
     if (ret != 0) {
       if (!__atomic_load_n(&ctx_->receiver_active, __ATOMIC_SEQ_CST)) {
-        *__DECONST(uint32_t *, &ctx_->receiver_active) = 1;
+        __atomic_store_n(__DECONST(uint32_t *, &ctx_->receiver_active), 1,
+                         __ATOMIC_SEQ_CST);
         if (sem_post(__DECONST(sem_t *, &ctx_->sem)) < 0) {
           fprintf(stderr, "Couldn't notify app side in case of blocking\n");
         }
