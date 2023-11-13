@@ -183,6 +183,7 @@ class ShmChannel {
         if (sem_post(__DECONST(sem_t *, &ctx_->sem)) < 0) {
           fprintf(stderr, "Couldn't notify app side in case of blocking\n");
         }
+        fprintf(stderr, "enqueue: notified app side ...\n");
         posted++;
       }
     }

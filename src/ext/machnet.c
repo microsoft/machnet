@@ -671,6 +671,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr,
     __atomic_store_n(&ctx->receiver_active, 0, __ATOMIC_SEQ_CST);
     n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
     if (n == 0) {
+      fprintf(stderr, "recv: machnet_ring empty, going to sleep....\n");
       sem_wait(&ctx->sem);
       n = __machnet_channel_machnet_ring_dequeue(ctx, 1, &buffer_index);
       assert(n == 1);
