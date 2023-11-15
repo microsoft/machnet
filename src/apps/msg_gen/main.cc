@@ -304,8 +304,8 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
     if (rx_window_slot < 0) {
       std::this_thread::sleep_for(std::chrono::microseconds(500));
       rx_window_slot = ++FLAGS_msg_window;
-      LOG(INFO) << "Server busy ... increasing window size to "
-                << rx_window_slot;
+      //      LOG(INFO) << "Server busy ... increasing window size to "
+      //                << rx_window_slot;
       thread_ctx.msg_latency_info_vec.resize(rx_window_slot);
     }
     ClientSendOne(&thread_ctx, rx_window_slot);
