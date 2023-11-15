@@ -322,6 +322,7 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
           backlog.pop_front();
           next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
         }
+        if (g_keep_running == 0) continue;
       }
     }
     // msg received, if time limit passed send next msg from backlog
