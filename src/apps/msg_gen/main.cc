@@ -292,6 +292,7 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
   thread_ctx.time_limit = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::seconds(1) / (FLAGS_load * 1000));
   LOG(INFO) << "Client Loop: Starting.";
+  LOG(INFO) << "Time limit is: " << thread_ctx.time_limit.count();
 
   // Send a full window of messages
   for (uint32_t i = 0; i < FLAGS_msg_window; i++) {
