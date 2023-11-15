@@ -236,7 +236,7 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
 }
 
 // Return the window slot for which a response was received
-uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
+int64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
   const auto *channel_ctx = thread_ctx->channel_ctx;
 
   while (true) {
@@ -249,7 +249,7 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
     const ssize_t rx_size =
         machnet_recv(channel_ctx, thread_ctx->rx_message.data(),
                      thread_ctx->rx_message.size(), &rx_flow, FLAGS_blocking);
-    if (rx_size <= 0) continue;
+    if (rx_size <= 0) return -1;
 
     thread_ctx->stats.current.rx_count++;
     thread_ctx->stats.current.rx_bytes += rx_size;
@@ -300,7 +300,11 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
       break;
     }
 
-    const uint64_t rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
+    int64_t rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
+    if (rx_window_slot < 0) {
+      rx_window_slot = ++FLAGS_msg_window;
+      thread_ctx.msg_latency_info_vec.resize(rx_window_slot);
+    }
     ClientSendOne(&thread_ctx, rx_window_slot);
 
     ReportStats(&thread_ctx);
