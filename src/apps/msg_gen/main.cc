@@ -303,7 +303,7 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
     int64_t rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
     if (rx_window_slot < 0) {
       auto next =
-          std::chrono::steady_clock::now() + std::chrono::milliseconds(150);
+          std::chrono::steady_clock::now() + std::chrono::milliseconds(70);
       while (true) {
         rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
         if (rx_window_slot > 0) break;
