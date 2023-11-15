@@ -33,6 +33,7 @@ DEFINE_bool(active_generator, false,
             "bouncing.");
 DEFINE_bool(verify, false, "Verify payload of received messages.");
 DEFINE_uint32(blocking, 0, "Blocking receive");
+DEFINE_uint32(load, 100, "kRPS load");
 
 static volatile int g_keep_running = 1;
 
@@ -103,6 +104,7 @@ class ThreadCtx {
   hdr_histogram *latency_hist;
   size_t num_request_latency_samples;
   std::vector<msg_latency_info_t> msg_latency_info_vec;
+  std::chrono::milliseconds time_limit;
 
   struct {
     stats_t current;
@@ -287,6 +289,8 @@ int64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
 
 void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
   ThreadCtx thread_ctx(channel_ctx, flow);
+  thread_ctx.time_limit = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::seconds(1) / (FLAGS_load * 1000));
   LOG(INFO) << "Client Loop: Starting.";
 
   // Send a full window of messages
@@ -302,8 +306,7 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
 
     int64_t rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
     if (rx_window_slot < 0) {
-      auto next =
-          std::chrono::steady_clock::now() + std::chrono::milliseconds(70);
+      auto next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
       while (true) {
         rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
         if (rx_window_slot > 0) break;
