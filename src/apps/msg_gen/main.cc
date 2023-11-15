@@ -105,7 +105,7 @@ class ThreadCtx {
   hdr_histogram *latency_hist;
   size_t num_request_latency_samples;
   std::vector<msg_latency_info_t> msg_latency_info_vec;
-  std::chrono::milliseconds time_limit;
+  std::chrono::microseconds time_limit;
 
   struct {
     stats_t current;
@@ -290,8 +290,8 @@ int64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
 
 void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
   ThreadCtx thread_ctx(channel_ctx, flow);
-  thread_ctx.time_limit = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::seconds(1) / (FLAGS_load * 1000));
+  thread_ctx.time_limit = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::microseconds(1000) / (FLAGS_load));
   LOG(INFO) << "Client Loop: Starting.";
   LOG(INFO) << "Time limit is: " << thread_ctx.time_limit.count();
 
