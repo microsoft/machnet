@@ -256,7 +256,7 @@ int64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
 
     const auto *msg_hdr =
         reinterpret_cast<msg_hdr_t *>(thread_ctx->rx_message.data());
-    if (msg_hdr->window_slot >= FLAGS_msg_window) {
+    if (msg_hdr->window_slot > FLAGS_msg_window) {
       LOG(ERROR) << "Received invalid window slot: " << msg_hdr->window_slot;
       continue;
     }
