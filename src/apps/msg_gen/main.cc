@@ -12,6 +12,7 @@
 #include <chrono>
 #include <csignal>
 #include <cstdint>
+#include <deque>
 #include <numeric>
 #include <sstream>
 #include <thread>
@@ -299,6 +300,8 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
     ClientSendOne(&thread_ctx, i /* window slot */);
   }
 
+  auto next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
+  std::deque<uint32_t> backlog;
   while (true) {
     if (g_keep_running == 0) {
       LOG(INFO) << "MsgGenLoop: Exiting.";
@@ -307,23 +310,27 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
 
     int64_t rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
     if (rx_window_slot < 0) {
-      auto next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
       while (true) {
         rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
         if (rx_window_slot > 0) break;
         if (std::chrono::steady_clock::now() > next) {
-          rx_window_slot = ++FLAGS_msg_window;
-          thread_ctx.msg_latency_info_vec.resize(rx_window_slot);
-          break;
+          // timeout but no message received yet --> increase window
+          auto next_window = ++FLAGS_msg_window;
+          thread_ctx.msg_latency_info_vec.resize(next_window);
+          backlog.push_back(next_window);
+          ClientSendOne(&thread_ctx, backlog.front());
+          backlog.pop_front();
+          next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
         }
       }
-      //      std::this_thread::sleep_for(std::chrono::microseconds(150));
-
-      //      LOG(INFO) << "Server busy ... increasing window size to "
-      //                << rx_window_slot;
     }
-    ClientSendOne(&thread_ctx, rx_window_slot);
-
+    // msg received, if time limit passed send next msg from backlog
+    if (std::chrono::steady_clock::now() > next) {
+      ClientSendOne(&thread_ctx, backlog.front());
+      backlog.pop_front();
+      next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
+    }
+    backlog.push_back(rx_window_slot);
     ReportStats(&thread_ctx);
   }
 
