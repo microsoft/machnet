@@ -302,30 +302,29 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
 
   auto next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
   std::deque<uint32_t> backlog;
-  while (true) {
-    if (g_keep_running == 0) {
-      LOG(INFO) << "MsgGenLoop: Exiting.";
-      break;
-    }
 
-    int64_t rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
-    if (rx_window_slot < 0) {
-      while (true) {
+  while (g_keep_running) {
+    auto rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
+
+    if (rx_window_slot <= 0) {
+      // Inner loop to handle the case where no message is received
+      while (g_keep_running) {
         rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
         if (rx_window_slot > 0) break;
+
         if (std::chrono::steady_clock::now() > next) {
-          // timeout but no message received yet --> increase window
+          // Handle timeout scenario
+          next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
           auto next_window = ++FLAGS_msg_window;
           thread_ctx.msg_latency_info_vec.resize(next_window);
           backlog.push_back(next_window);
           ClientSendOne(&thread_ctx, backlog.front());
           backlog.pop_front();
-          next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
         }
-        if (g_keep_running == 0) continue;
       }
     }
-    // msg received, if time limit passed send next msg from backlog
+    if (g_keep_running == 0) break;
+    // Check if the time limit has passed and a message is received
     if (std::chrono::steady_clock::now() > next) {
       ClientSendOne(&thread_ctx, backlog.front());
       backlog.pop_front();
@@ -334,6 +333,7 @@ void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
     backlog.push_back(rx_window_slot);
     ReportStats(&thread_ctx);
   }
+  LOG(INFO) << "MsgGenLoop: Exiting.";
 
   auto &stats_cur = thread_ctx.stats.current;
   LOG(INFO) << "Application Statistics (TOTAL) - [TX] Sent: "
