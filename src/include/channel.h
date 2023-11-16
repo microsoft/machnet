@@ -527,7 +527,7 @@ template <class T = Channel,
 class ChannelManager {
  public:
   static constexpr size_t kMaxChannelNr = 32;
-  static constexpr size_t kDefaultRingSize = 256;
+  static constexpr size_t kDefaultRingSize = 4096;
   static constexpr size_t kDefaultBufferCount = 4096;
   ChannelManager() {}
   ChannelManager(const ChannelManager &) = delete;
