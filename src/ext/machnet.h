@@ -18,6 +18,9 @@ extern "C" {
 
 #include "machnet_common.h"
 
+#define BLOCKING 1
+#define NON_BLOCKING 0
+
 /**
  * @brief Descriptor for SG data that constitute a message.
  *
@@ -158,12 +161,13 @@ int machnet_sendmmsg(const void *channel_ctx,
  * @param[out] buf The data buffer to receive the message
  * @param[in] len The length of \p buf in bytes
  * @param[out] flow The flow information of the sender
+ * @param blocking The flag to block and wait for a message to arrive
  *
  * @return 0 if no message is available, -1 on failure, otherwise the number of
  * bytes received.
  */
 ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
-                     MachnetFlow_t *flow);
+                     MachnetFlow_t *flow, uint32_t blocking);
 
 /**
  * This function receives a pending message (destined to the application) from
@@ -182,7 +186,8 @@ ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
  * @return                       0 if no pending message, 1 if a message is
  *                               received, -1 on failure
  */
-int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr);
+int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr,
+                    uint32_t blocking);
 
 #ifdef __cplusplus
 }

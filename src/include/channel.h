@@ -174,8 +174,19 @@ class ShmChannel {
    */
   uint32_t EnqueueMessages(MachnetRingSlot_t *msgbuf_indices,
                            uint32_t nb_msgs) {
-    return __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs,
-                                                  msgbuf_indices);
+    auto ret =
+        __machnet_channel_machnet_ring_enqueue(ctx_, nb_msgs, msgbuf_indices);
+    if (ret != 0) {
+      if (!__atomic_load_n(&ctx_->receiver_active, __ATOMIC_SEQ_CST)) {
+        __atomic_store_n(__DECONST(uint32_t *, &ctx_->receiver_active), 1,
+                         __ATOMIC_SEQ_CST);
+        if (sem_post(__DECONST(sem_t *, &ctx_->sem)) < 0) {
+          fprintf(stderr, "Couldn't notify app side in case of blocking\n");
+        }
+        posted++;
+      }
+    }
+    return ret;
   }
 
   /**
@@ -369,6 +380,9 @@ class ShmChannel {
     return ret;
   }
 
+  [[nodiscard]] uint32_t GetPosted() const { return posted; }
+  void ResetPosted() { posted = 0; }
+
  private:
   const std::string name_;
   const MachnetChannelCtx_t *ctx_;
@@ -378,6 +392,7 @@ class ShmChannel {
   std::array<MachnetRingSlot_t, NUM_CACHED_BUFS> cached_buf_indices;
   std::array<MachnetMsgBuf_t *, NUM_CACHED_BUFS> cached_bufs;
   uint32_t cached_buf_count;
+  uint32_t posted;
 };
 
 /**
@@ -512,7 +527,7 @@ template <class T = Channel,
 class ChannelManager {
  public:
   static constexpr size_t kMaxChannelNr = 32;
-  static constexpr size_t kDefaultRingSize = 256;
+  static constexpr size_t kDefaultRingSize = 4096;
   static constexpr size_t kDefaultBufferCount = 4096;
   ChannelManager() {}
   ChannelManager(const ChannelManager &) = delete;

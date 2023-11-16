@@ -270,7 +270,7 @@ TEST(MachnetTest, SimpleSendRecvMsg) {
   iov.len = recv_data.size();
   msghdr.msg_size = 0;
   msghdr.flow_info = {.src_ip = 0, .dst_ip = 0, .src_port = 0, .dst_port = 0};
-  EXPECT_EQ(machnet_recvmsg(g_channel_ctx, &msghdr), 1);
+  EXPECT_EQ(machnet_recvmsg(g_channel_ctx, &msghdr, NON_BLOCKING), 1);
   EXPECT_EQ(msghdr.msg_size, orig_data.size());
   EXPECT_EQ(recv_data, orig_data);
   EXPECT_EQ(msghdr.flow_info.src_ip, UINT32_MAX);
@@ -310,7 +310,7 @@ TEST(MachnetTest, MultiBufferSendRecvMsg) {
 
     prepare_segments(msg_size, 1, &rx_msg_data);
     prepare_rx_msg(&rx_iov, &rx_msghdr, &rx_msg_data, msg_size);
-    ret = machnet_recvmsg(g_channel_ctx, &rx_msghdr);
+    ret = machnet_recvmsg(g_channel_ctx, &rx_msghdr, NON_BLOCKING);
     EXPECT_EQ(ret, 1) << "Msg size: " << msg_size;
     EXPECT_EQ(rx_msg_data, tx_msg_data) << "Msg size: " << msg_size;
     EXPECT_EQ(memcmp(&rx_msghdr.flow_info, &flow, sizeof(flow)), 0);
@@ -353,7 +353,7 @@ TEST(MachnetTest, MultiBufferSGSendRecvMsg) {
     MachnetMsgHdr_t rx_msghdr;
 
     prepare_rx_msg(&rx_iov, &rx_msghdr, &rx_segments, msg_size);
-    ret = machnet_recvmsg(g_channel_ctx, &rx_msghdr);
+    ret = machnet_recvmsg(g_channel_ctx, &rx_msghdr, NON_BLOCKING);
     EXPECT_EQ(ret, 1) << "Msg size: " << msg_size;
 
     auto flatten_msg = [](std::vector<std::vector<uint8_t>> *segments) {
@@ -431,7 +431,7 @@ TEST(MachnetTest, InvalidSendRecv) {
     MachnetMsgHdr_t rx_msghdr;
 
     prepare_rx_msg(&rx_iov, &rx_msghdr, &rx_segments, msg_size / 2);
-    ret = machnet_recvmsg(g_channel_ctx, &rx_msghdr);
+    ret = machnet_recvmsg(g_channel_ctx, &rx_msghdr, NON_BLOCKING);
     EXPECT_EQ(ret, -1) << "Msg size: " << msg_size;
     EXPECT_TRUE(check_buffer_pool(g_channel_ctx));
   }

@@ -12,6 +12,7 @@
 #include <chrono>
 #include <csignal>
 #include <cstdint>
+#include <deque>
 #include <numeric>
 #include <sstream>
 #include <thread>
@@ -32,6 +33,8 @@ DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
             "bouncing.");
 DEFINE_bool(verify, false, "Verify payload of received messages.");
+DEFINE_uint32(blocking, 0, "Blocking receive");
+DEFINE_uint32(load, 100, "kRPS load");
 
 static volatile int g_keep_running = 1;
 
@@ -102,6 +105,7 @@ class ThreadCtx {
   hdr_histogram *latency_hist;
   size_t num_request_latency_samples;
   std::vector<msg_latency_info_t> msg_latency_info_vec;
+  std::chrono::microseconds time_limit;
 
   struct {
     stats_t current;
@@ -171,7 +175,7 @@ void ServerLoop(void *channel_ctx) {
     MachnetFlow_t rx_flow;
     const ssize_t rx_size =
         machnet_recv(channel_ctx, thread_ctx.rx_message.data(),
-                     thread_ctx.rx_message.size(), &rx_flow);
+                     thread_ctx.rx_message.size(), &rx_flow, FLAGS_blocking);
     if (rx_size <= 0) continue;
     stats_cur.rx_count++;
     stats_cur.rx_bytes += rx_size;
@@ -235,75 +239,88 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
 }
 
 // Return the window slot for which a response was received
-uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
+int64_t ClientRecvOne(ThreadCtx *thread_ctx) {
   const auto *channel_ctx = thread_ctx->channel_ctx;
 
-  while (true) {
-    if (g_keep_running == 0) {
-      LOG(INFO) << "ClientRecvOneBlocking: Exiting.";
-      return 0;
-    }
+  MachnetFlow_t rx_flow;
+  const ssize_t rx_size =
+      machnet_recv(channel_ctx, thread_ctx->rx_message.data(),
+                   thread_ctx->rx_message.size(), &rx_flow, FLAGS_blocking);
+  if (rx_size <= 0) return -1;
 
-    MachnetFlow_t rx_flow;
-    const ssize_t rx_size =
-        machnet_recv(channel_ctx, thread_ctx->rx_message.data(),
-                     thread_ctx->rx_message.size(), &rx_flow);
-    if (rx_size <= 0) continue;
+  thread_ctx->stats.current.rx_count++;
+  thread_ctx->stats.current.rx_bytes += rx_size;
 
-    thread_ctx->stats.current.rx_count++;
-    thread_ctx->stats.current.rx_bytes += rx_size;
-
-    const auto *msg_hdr =
-        reinterpret_cast<msg_hdr_t *>(thread_ctx->rx_message.data());
-    if (msg_hdr->window_slot >= FLAGS_msg_window) {
-      LOG(ERROR) << "Received invalid window slot: " << msg_hdr->window_slot;
-      continue;
-    }
-
-    const size_t latency_us =
-        thread_ctx->RecordRequestEnd(msg_hdr->window_slot);
-    VLOG(1) << "Client: Received message for window slot "
-            << msg_hdr->window_slot << " in " << latency_us << " us";
-
-    if (FLAGS_verify) {
-      for (uint32_t i = sizeof(msg_hdr_t); i < rx_size; i++) {
-        if (thread_ctx->rx_message[i] != thread_ctx->message_gold[i]) {
-          LOG(ERROR) << "Message data mismatch at index " << i << std::hex
-                     << " " << static_cast<uint32_t>(thread_ctx->rx_message[i])
-                     << " "
-                     << static_cast<uint32_t>(thread_ctx->message_gold[i]);
-          break;
-        }
-      }
-    }
-
-    return msg_hdr->window_slot;
+  const auto *msg_hdr =
+      reinterpret_cast<msg_hdr_t *>(thread_ctx->rx_message.data());
+  if (msg_hdr->window_slot > FLAGS_msg_window) {
+    LOG(ERROR) << "Received invalid window slot: " << msg_hdr->window_slot;
+    abort();
   }
 
-  LOG(FATAL) << "Should not reach here";
-  return 0;
+  const size_t latency_us = thread_ctx->RecordRequestEnd(msg_hdr->window_slot);
+  VLOG(1) << "Client: Received message for window slot " << msg_hdr->window_slot
+          << " in " << latency_us << " us";
+
+  if (FLAGS_verify) {
+    for (uint32_t i = sizeof(msg_hdr_t); i < rx_size; i++) {
+      if (thread_ctx->rx_message[i] != thread_ctx->message_gold[i]) {
+        LOG(ERROR) << "Message data mismatch at index " << i << std::hex << " "
+                   << static_cast<uint32_t>(thread_ctx->rx_message[i]) << " "
+                   << static_cast<uint32_t>(thread_ctx->message_gold[i]);
+        break;
+      }
+    }
+  }
+  return msg_hdr->window_slot;
 }
 
 void ClientLoop(void *channel_ctx, MachnetFlow *flow) {
   ThreadCtx thread_ctx(channel_ctx, flow);
+  thread_ctx.time_limit = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::microseconds(1000) / (FLAGS_load));
   LOG(INFO) << "Client Loop: Starting.";
+  LOG(INFO) << "Time limit is: " << thread_ctx.time_limit.count();
 
   // Send a full window of messages
   for (uint32_t i = 0; i < FLAGS_msg_window; i++) {
     ClientSendOne(&thread_ctx, i /* window slot */);
   }
 
-  while (true) {
-    if (g_keep_running == 0) {
-      LOG(INFO) << "MsgGenLoop: Exiting.";
-      break;
+  auto next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
+  std::deque<uint32_t> backlog;
+
+  while (g_keep_running) {
+    auto rx_window_slot = ClientRecvOne(&thread_ctx);
+
+    if (rx_window_slot <= 0) {
+      // Inner loop to handle the case where no message is received
+      while (g_keep_running) {
+        rx_window_slot = ClientRecvOne(&thread_ctx);
+        if (rx_window_slot > 0) break;
+
+        if (std::chrono::steady_clock::now() > next) {
+          // Handle timeout scenario
+          next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
+          auto next_window = ++FLAGS_msg_window;
+          thread_ctx.msg_latency_info_vec.resize(next_window);
+          backlog.push_back(next_window);
+          ClientSendOne(&thread_ctx, backlog.front());
+          backlog.pop_front();
+        }
+      }
     }
-
-    const uint64_t rx_window_slot = ClientRecvOneBlocking(&thread_ctx);
-    ClientSendOne(&thread_ctx, rx_window_slot);
-
+    if (g_keep_running == 0) break;
+    // Check if the time limit has passed and a message is received
+    if (std::chrono::steady_clock::now() > next) {
+      ClientSendOne(&thread_ctx, backlog.front());
+      backlog.pop_front();
+      next = std::chrono::steady_clock::now() + thread_ctx.time_limit;
+    }
+    backlog.push_back(rx_window_slot);
     ReportStats(&thread_ctx);
   }
+  LOG(INFO) << "MsgGenLoop: Exiting.";
 
   auto &stats_cur = thread_ctx.stats.current;
   LOG(INFO) << "Application Statistics (TOTAL) - [TX] Sent: "
