@@ -14,7 +14,7 @@ import (
 )
 
 // TODO: Check Path here.
-var configJson = "../../servers.json"
+var configJson = "../servers.json"
 
 var localHostname = ""
 var remoteHostname = ""
