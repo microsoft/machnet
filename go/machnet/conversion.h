@@ -18,7 +18,7 @@ int __machnet_sendmsg_go(const MachnetChannelCtx_t* ctx, MachnetIovec_t msg_iov,
   msghdr.msg_iov = &msg_iov;
   msghdr.msg_iovlen = msg_iovlen;
 
-  return machcnet_sendmsg(ctx, &msghdr);
+  return machnet_sendmsg(ctx, &msghdr);
 }
 
 MachnetFlow_t __machnet_recvmsg_go(const MachnetChannelCtx_t* ctx,
