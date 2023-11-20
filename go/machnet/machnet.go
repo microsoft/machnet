@@ -1,6 +1,6 @@
 package machnet
 
-// #cgo LDFLAGS: -L${SRCDIR}/../../build/src/core -lcore -L${SRCDIR}/../../build/src/ext -lmachnet_shim -lrt -Wl,-rpath=${SRCDIR}/../../build/src/core:${SRCDIR}/../../build/src/ext -fsanitize=address
+// #cgo LDFLAGS: -L${SRCDIR}/../../build/release_build/src/core -lcore -L${SRCDIR}/../../build/release_build/src/ext -lmachnet_shim -lrt -Wl,-rpath=${SRCDIR}/../../build/release_build/src/core:${SRCDIR}/../../build/release_build/src/ext -fsanitize=address
 // #cgo CFLAGS: -I${SRCDIR}/../../src/ext -I${SRCDIR}/../../src/include -fsanitize=address
 // #include <stdlib.h>
 // #include "conversion.h"
