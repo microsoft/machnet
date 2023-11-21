@@ -390,6 +390,7 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 	dummyPayload := make([]byte, 1)
 	_, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
 	if err != nil {
+		glog.Errorf("AppendEntriesPipeline not functioning properly")
 		cancel()
 		return nil, err
 	}
