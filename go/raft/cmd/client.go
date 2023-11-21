@@ -17,7 +17,7 @@ var (
 	localHostname  = flag.String("local_hostname", "", "Local hostname in the hosts JSON file.")
 	remoteHostname = flag.String("remote_hostname", "", "Local hostname in the hosts JSON file.")
 	appPort        = flag.Int("app_port", 888, "Port to listen on for application traffic.")
-	configJson     = flag.String("config_json", "../../../../servers.json", "Path to the JSON file containing the hosts config.")
+	configJson     = flag.String("config_json", "../../servers.json", "Path to the JSON file containing the hosts config.")
 	cpuProfile     = flag.String("cpuProfile", "", "write cpu profile to file")
 )
 

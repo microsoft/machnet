@@ -20,7 +20,7 @@ var (
 	appPort       = flag.Int("app_port", 888, "Port to listen on for application traffic.")
 	serverPort    = flag.Int("server_port", 777, "Port to listen on for Raft traffic.")
 	numPeers      = flag.Int("num_peers", 2, "Number of peers in the cluster.")
-	configJson    = flag.String("config_json", "../../servers.json", "Path to the JSON file containing the hosts config.")
+	configJson    = flag.String("config_json", "../servers.json", "Path to the JSON file containing the hosts config.")
 	raftDir       = flag.String("raft_data_dir", "data/", "Raft data dir")
 	leader        = flag.Bool("leader", false, "Whether to start the node as a leader")
 )
