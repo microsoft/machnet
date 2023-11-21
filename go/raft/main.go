@@ -63,7 +63,7 @@ func main() {
 			glog.Fatal("Failed to read config file.")
 		}
 
-		for i := 0; i < *numPeers; i++ {
+		for i := 1; i < *numPeers; i++ {
 			peerId := fmt.Sprintf("node%d", i)
 			peerIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", peerId, "ipv4_addr")
 			glog.Info("[RAFT Peer] [", peerIp, ":", *serverPort, "]")
