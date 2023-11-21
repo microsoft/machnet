@@ -233,6 +233,7 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 	reqBytes := buff.Bytes()
 
 	// Send Machnet RPC to remote host.
+	glog.Infof("Sending AppendEntries request: %v to %v", args, target)
 	recvBytes, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
 	if err != nil {
 		glog.Errorf("AppendEntries: Failed to SendMachnetRPC")
@@ -248,7 +249,7 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 	if err := dec.Decode(resp); err != nil {
 		return err
 	}
-
+	glog.Infof("AppendEntries successful ... returning response: %v", resp)
 	return nil
 }
 
