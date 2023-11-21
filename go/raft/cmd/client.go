@@ -100,7 +100,7 @@ func main() {
 
 		elapsed := time.Since(start)
 		// glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]")
-		err := histogram.RecordValue(elapsed.Nanoseconds())
+		err := histogram.RecordValue(elapsed.Microseconds())
 		if err != nil {
 			glog.Errorf("couldn't record value to histogram: %v", err)
 		}
@@ -108,8 +108,8 @@ func main() {
 		if time.Since(lastRecordedTime) > 1*time.Second {
 			percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
 			glog.Infof("[RTT: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us, Words added: %d]",
-				float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
-				float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000,
+				float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+				float64(percentileValues[99.0]), float64(percentileValues[99.9]),
 				histogram.TotalCount())
 			histogram.Reset()
 			lastRecordedTime = time.Now()
