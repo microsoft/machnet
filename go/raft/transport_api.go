@@ -122,11 +122,11 @@ func (t *TransportApi) BootstrapPeers(numPeers int) {
 
 		// Parse the json file to get the remote_ip.
 		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", id, "ipv4_addr")
-
+		glog.Infof("%s connecting to %s", t.localIp, remoteIp)
 		// Initiate connection to the remote host.
 		ret, f := machnet.Connect(t.sendChannelCtx, string(t.localIp), remoteIp, uint(t.raftPort))
 		if ret != 0 {
-			glog.Fatal("Failed to connect to remote host")
+			glog.Fatalf("Failed to connect to remote host: %s->%s", t.localIp, remoteIp)
 		}
 		t.flows[raft.ServerID(id)] = &f
 	}
