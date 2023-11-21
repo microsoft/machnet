@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"golang.org/x/sys/unix"
+	"runtime"
 
 	"io"
 	"sync"
@@ -434,6 +436,20 @@ func (s *Server) HandleAppendEntriesPipelineClose(flow flow, start time.Time) er
 }
 
 func (s *Server) HandleRPCs() {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	// Define CPU set to the desired CPU (e.g., pin to CPU 0).
+	var cpuSet unix.CPUSet
+	cpuSet.Zero() // Initialize the set to be empty.
+	cpuSet.Set(1) // Add CPU 0 to the set.
+
+	// Apply the CPU set to the current thread.
+	err := unix.SchedSetaffinity(0, &cpuSet)
+	if err != nil {
+		panic(err)
+	}
+
 	for {
 		// Receive Message from the Machnet Channel
 		requestBuff := make([]byte, maxMessageLength)

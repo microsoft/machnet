@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
@@ -184,6 +186,20 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 
 func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	// Define a pointer variable channel_ctx to store the output of C.machnet_attach()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	// Define CPU set to the desired CPU (e.g., pin to CPU 0).
+	var cpuSet unix.CPUSet
+	cpuSet.Zero() // Initialize the set to be empty.
+	cpuSet.Set(0) // Add CPU 0 to the set.
+
+	// Apply the CPU set to the current thread.
+	err := unix.SchedSetaffinity(0, &cpuSet)
+	if err != nil {
+		panic(err)
+	}
+
 	var channelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 	if channelCtx == nil {
 		glog.Fatal("Failed to attach to the channel.")
