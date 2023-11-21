@@ -235,6 +235,7 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 	// Send Machnet RPC to remote host.
 	recvBytes, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
 	if err != nil {
+		glog.Errorf("AppendEntries: Failed to SendMachnetRPC")
 		return err
 	}
 
