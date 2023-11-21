@@ -115,6 +115,7 @@ func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.
 	enc := gob.NewEncoder(&buff)
 
 	if err := enc.Encode(response); err != nil {
+		glog.Errorf("SendMachnetResponse: failed to encode response: %v", err)
 		return err
 	}
 
@@ -132,12 +133,12 @@ func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.
 	// glog.Info("Sending response to Machnet Channel: ", response.MsgType, " with length: ", responseLen)
 
 	elapsed := time.Since(start)
-	glog.Info("Total RPC took: ", elapsed.Microseconds(), " us")
-
+	glog.Info("SendMachnetResponse: Total Rpc took: ", elapsed.Microseconds(), " us")
+	glog.Infof("SendMachnetResponse: putting response on wire: %+v", responseBytes)
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(s.transport.receiveChannelCtx, flow, &responseBytes[0], uint(responseLen))
 	if ret != 0 {
-		return errors.New("failed to send message to remote host")
+		return errors.New("SendMachnetResponse: failed to send message to remote host")
 	}
 
 	return nil
@@ -145,10 +146,10 @@ func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.
 
 func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, msgType uint8, start time.Time) error {
 	raftStart := time.Now()
-	glog.Info("Waiting for response from Raft channel...")
+	glog.Info("GetResponseFromChannel: waiting for response from Raft channel...")
 	resp := <-ch
 	if resp.Error != nil {
-		glog.Error("Error in RPC: ", resp.Error)
+		glog.Error("GetResponseFromChannel: couldn't handle Rpc; error: ", resp.Error)
 		return resp.Error
 	}
 
@@ -195,7 +196,7 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 		}
 
 	default:
-		return errors.New("unknown message type")
+		return errors.New("GetResponseFromChannel: Unknown message type")
 	}
 
 	// Construct the rpcMessage response.
@@ -203,13 +204,14 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 		MsgType: Response,
 		Payload: buff.Bytes(),
 	}
-
+	glog.Infof("GetResponseFromChannel: MsgType: %v Payload: %+v", response.MsgType, response.Payload)
 	if err := s.SendMachnetResponse(response, flow, start); err != nil {
+		glog.Errorf("GetResponseFromChannel: failed to SendMachnetResponse: %v", err)
 		return err
 	}
 
 	raftElapsed := time.Since(raftStart)
-	glog.Info("Raft RPC took: ", raftElapsed.Microseconds(), " us")
+	glog.Info("GetResponseFromChannel: Raft Rpc took: ", raftElapsed.Microseconds(), " us")
 
 	return nil
 }
@@ -238,6 +240,7 @@ func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flo
 		Payload: []byte{},
 	}
 
+	glog.Infof("HandleRaftCommand: sent dummy response: %v msgType was: %v", response, msgType)
 	return s.SendMachnetResponse(response, flow, start)
 }
 
@@ -252,6 +255,7 @@ func (s *Server) HandleAppendEntriesRequest(payload []byte, flow flow, start tim
 	}
 
 	if err := dec.Decode(&appendEntriesRequest); err != nil {
+		glog.Errorf("HandleAppendEntriesRequest: failed to decode payload: %v", err)
 		return err
 	}
 
@@ -370,6 +374,7 @@ func (s *Server) HandleAppendEntriesPipelineStart(flow flow, start time.Time) er
 		Payload: []byte{},
 	}
 
+	glog.Infof("HandleAppendEntriesPipelineStart: send dummy response: %+v", response)
 	return s.SendMachnetResponse(response, flow, start)
 }
 
@@ -407,6 +412,7 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, flow flow, star
 		MsgType: Response,
 		Payload: []byte{},
 	}
+	glog.Infof("HandleAppendEntriesPipelineSend: send dummy response: %+v", response)
 	return s.SendMachnetResponse(response, flow, start)
 }
 
@@ -429,6 +435,7 @@ func (s *Server) HandleAppendEntriesPipelineClose(flow flow, start time.Time) er
 		MsgType: Response,
 		Payload: []byte{},
 	}
+	glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
 	return s.SendMachnetResponse(response, flow, start)
 }
 
@@ -453,8 +460,6 @@ func (s *Server) HandleRPCs() {
 			glog.Errorf("Failed to decode rpcMessage.")
 			continue
 		}
-
-		// glog.Info("Received message from Machnet Channel: ", request.MsgType)
 
 		// Depending on the type of message, handle it accordingly
 		switch request.MsgType {
