@@ -108,7 +108,7 @@ func (t *TransportApi) LocalAddr() raft.ServerAddress {
 
 func (t *TransportApi) BootstrapPeers(numPeers int) {
 	t.flowsMtx.Lock()
-	for i := 0; i <= numPeers; i++ {
+	for i := 0; i < numPeers; i++ {
 		id := fmt.Sprintf("node%d", i)
 
 		if id == t.hostname {
