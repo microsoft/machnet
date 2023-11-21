@@ -442,7 +442,7 @@ func (s *Server) HandleRPCs() {
 	// Define CPU set to the desired CPU (e.g., pin to CPU 0).
 	var cpuSet unix.CPUSet
 	cpuSet.Zero() // Initialize the set to be empty.
-	cpuSet.Set(1) // Add CPU 0 to the set.
+	cpuSet.Set(2) // Add CPU 0 to the set.
 
 	// Apply the CPU set to the current thread.
 	err := unix.SchedSetaffinity(0, &cpuSet)
