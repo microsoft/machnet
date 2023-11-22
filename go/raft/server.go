@@ -408,12 +408,12 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, flow flow, star
 	s.transport.rpcChan <- rpc
 
 	// Send a dummy response back to the Machnet Channel
-	_ = RpcMessage{
+	response := RpcMessage{
 		MsgType: Response,
 		Payload: []byte{},
 	}
 	//glog.Infof("HandleAppendEntriesPipelineSend: send dummy response: %+v", response)
-	return nil //s.SendMachnetResponse(response, flow, start)
+	return s.SendMachnetResponse(response, flow, start)
 }
 
 func (s *Server) HandleAppendEntriesPipelineRecv(flow flow, start time.Time) error {
