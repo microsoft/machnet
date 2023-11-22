@@ -156,7 +156,6 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 	// Encode the response
 	var buff bytes.Buffer
 	enc := gob.NewEncoder(&buff)
-
 	// Based on MsgType, construct the rpcMessage payload
 	switch msgType {
 	case AppendEntriesRequest:
@@ -164,44 +163,46 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 		if err := enc.Encode(*payload); err != nil {
 			return err
 		}
+		msgType = AppendEntriesRequestResponse
 
 	case RequestVoteRequest:
 		payload := resp.Response.(*raft.RequestVoteResponse)
 		if err := enc.Encode(*payload); err != nil {
 			return err
 		}
+		msgType = RequestVoteRequestResponse
 
 	case TimeoutNowRequest:
 		payload := resp.Response.(*raft.TimeoutNowResponse)
 		if err := enc.Encode(*payload); err != nil {
 			return err
 		}
-
+		msgType = TimeoutNowRequestResponse
 	case InstallSnapshotRequestStart:
 		payload := resp.Response.(*raft.InstallSnapshotResponse)
 		if err := enc.Encode(*payload); err != nil {
 			return err
 		}
-
+		msgType = InstallSnapshotRequestStartResponse
 	case InstallSnapshotRequestClose:
 		payload := resp.Response.(*raft.InstallSnapshotResponse)
 		if err := enc.Encode(*payload); err != nil {
 			return err
 		}
-
+		msgType = InstallSnapshotRequestCloseResponse
 	case AppendEntriesPipelineRecv:
 		payload := resp.Response.(*raft.AppendEntriesResponse)
 		if err := enc.Encode(*payload); err != nil {
 			return err
 		}
-
+		msgType = AppendEntriesPipelineRecvResponse
 	default:
 		return errors.New("GetResponseFromChannel: Unknown message type")
 	}
 
 	// Construct the rpcMessage response.
 	response := RpcMessage{
-		MsgType: Response,
+		MsgType: msgType,
 		Payload: buff.Bytes(),
 	}
 	//glog.Infof("GetResponseFromChannel: MsgType: %v Payload: %+v", response.MsgType, response.Payload)
@@ -236,7 +237,7 @@ func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flo
 
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
-		MsgType: Response,
+		MsgType: DummyResponse,
 		Payload: []byte{},
 	}
 
@@ -339,7 +340,7 @@ func (s *Server) HandleInstallSnapshotRequestBuffer(payload []byte, flow flow, s
 
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
-		MsgType: Response,
+		MsgType: InstallSnapshotRequestBufferResponse,
 		Payload: []byte{},
 	}
 
@@ -370,7 +371,7 @@ func (s *Server) HandleAppendEntriesPipelineStart(flow flow, start time.Time) er
 
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
-		MsgType: Response,
+		MsgType: AppendEntriesPipelineStartResponse,
 		Payload: []byte{},
 	}
 
@@ -409,7 +410,7 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, flow flow, star
 
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
-		MsgType: Response,
+		MsgType: AppendEntriesPipelineSendResponse,
 		Payload: []byte{},
 	}
 	//glog.Infof("HandleAppendEntriesPipelineSend: send dummy response: %+v", response)
@@ -432,7 +433,7 @@ func (s *Server) HandleAppendEntriesPipelineClose(flow flow, start time.Time) er
 
 	// Send a dummy response back to the Machnet Channel
 	_ = RpcMessage{
-		MsgType: Response,
+		MsgType: AppendEntriesPipelineCloseResponse,
 		Payload: []byte{},
 	}
 	//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)

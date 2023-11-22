@@ -31,7 +31,17 @@ const (
 	AppendEntriesPipelineSend
 	AppendEntriesPipelineRecv
 	AppendEntriesPipelineClose
-	Response
+	AppendEntriesRequestResponse
+	RequestVoteRequestResponse
+	TimeoutNowRequestResponse
+	InstallSnapshotRequestStartResponse
+	InstallSnapshotRequestBufferResponse
+	InstallSnapshotRequestCloseResponse
+	AppendEntriesPipelineStartResponse
+	AppendEntriesPipelineSendResponse
+	AppendEntriesPipelineCloseResponse
+	AppendEntriesPipelineRecvResponse
+	DummyResponse
 	DummyMsg
 )
 
