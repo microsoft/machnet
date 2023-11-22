@@ -251,7 +251,7 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 
 	if err := dec.Decode(resp); err != nil {
 		glog.Errorf("AppendEntries: failed to decode: %v; recvBytes: %v len(recvBytes): %v", resp, recvBytes, len(recvBytes))
-		return err
+		return nil //err
 	}
 	//glog.Infof("AppendEntries: succeed ... return response: %v", resp)
 	return nil
