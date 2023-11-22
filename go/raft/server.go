@@ -369,13 +369,13 @@ func (s *Server) HandleAppendEntriesPipelineStart(flow flow, start time.Time) er
 	s.pipelineMutex.Unlock()
 
 	// Send a dummy response back to the Machnet Channel
-	_ = RpcMessage{
+	response := RpcMessage{
 		MsgType: Response,
 		Payload: []byte{},
 	}
 
 	//glog.Infof("HandleAppendEntriesPipelineStart: send dummy response: %+v", response)
-	return nil //s.SendMachnetResponse(response, flow, start)
+	return s.SendMachnetResponse(response, flow, start)
 }
 
 func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, flow flow, start time.Time) error {
