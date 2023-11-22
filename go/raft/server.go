@@ -436,7 +436,7 @@ func (s *Server) HandleAppendEntriesPipelineClose(flow flow, start time.Time) er
 		Payload: []byte{},
 	}
 	glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
-	return s.SendMachnetResponse(response, flow, start)
+	return nil //s.SendMachnetResponse(response, flow, start)
 }
 
 func (s *Server) HandleRPCs() {
