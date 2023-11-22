@@ -432,12 +432,12 @@ func (s *Server) HandleAppendEntriesPipelineClose(flow flow, start time.Time) er
 	close(ch)
 
 	// Send a dummy response back to the Machnet Channel
-	_ = RpcMessage{
+	response := RpcMessage{
 		MsgType: AppendEntriesPipelineCloseResponse,
 		Payload: []byte{},
 	}
 	//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
-	return nil //s.SendMachnetResponse(response, flow, start)
+	return s.SendMachnetResponse(response, flow, start)
 }
 
 func (s *Server) HandleRPCs() {
