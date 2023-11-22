@@ -68,7 +68,7 @@ type TransportApi struct {
 
 type RpcMessage struct {
 	MsgType uint8
-	rpcId   uint64
+	RpcId   uint64
 	Payload []byte
 }
 
@@ -186,7 +186,8 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	dec := gob.NewDecoder(&buff)
 
 	// Enclose the payload into a rpcMessage and then encode into byte array.
-	msg := RpcMessage{MsgType: rpcType, Payload: payload, rpcId: t.rpcId}
+	var rpcId = t.rpcId
+	msg := RpcMessage{MsgType: rpcType, RpcId: rpcId, Payload: payload}
 	t.rpcId = 1 + t.rpcId
 	if err := enc.Encode(msg); err != nil {
 		return nil, err
@@ -194,9 +195,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
-
 	glog.Infof("SendMachnetRpc: sent: %+v", msg)
-
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
@@ -229,7 +228,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	}
 
 	// glog.Info("Received RPC response from ", id, " of type ", response.MsgType)
-	glog.Infof("SendMachnetRpc: received response: %v", response)
+	glog.Infof("SendMachnetRpc: received: %+v", response)
 	// Return the payload of the response.
 	return response.Payload, nil
 }
@@ -474,8 +473,10 @@ func (r *raftPipelineAPI) Close() error {
 	// Send Machnet RPC to remote host. We don't care about the response as this is just to close AppendEntriesPipeline request.
 	// Send a dummy payload.
 	dummyPayload := make([]byte, 1)
-	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineClose, dummyPayload)
+	res, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineClose, dummyPayload)
+	glog.Infof("Close: received: %+v", res)
 	if err != nil {
+		glog.Infof("Close: failed to send AppendEntriesPipelineClose")
 		return err
 	}
 

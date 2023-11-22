@@ -89,7 +89,6 @@ func (s *Server) StartServer() {
 func DecodeRPCMessage(data []byte) (RpcMessage, error) {
 	var buff bytes.Buffer
 	dec := gob.NewDecoder(&buff)
-
 	// Decode the message
 	if n, _ := buff.Write(data); n != len(data) {
 		return RpcMessage{}, errors.New("failed to write response into buffer")
@@ -99,7 +98,6 @@ func DecodeRPCMessage(data []byte) (RpcMessage, error) {
 	if err := dec.Decode(&request); err != nil {
 		return RpcMessage{}, err
 	}
-
 	return request, nil
 }
 
@@ -203,7 +201,7 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 	// Construct the rpcMessage response.
 	response := RpcMessage{
 		MsgType: msgType,
-		rpcId:   rpcId,
+		RpcId:   rpcId,
 		Payload: buff.Bytes(),
 	}
 	//glog.Infof("GetResponseFromChannel: MsgType: %v Payload: %+v", response.MsgType, response.Payload)
@@ -239,7 +237,7 @@ func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flo
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
 		MsgType: DummyResponse,
-		rpcId:   rpcId,
+		RpcId:   rpcId,
 		Payload: []byte{},
 	}
 
@@ -343,7 +341,7 @@ func (s *Server) HandleInstallSnapshotRequestBuffer(payload []byte, rpcId uint64
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
 		MsgType: InstallSnapshotRequestBufferResponse,
-		rpcId:   rpcId,
+		RpcId:   rpcId,
 		Payload: []byte{},
 	}
 
@@ -375,7 +373,7 @@ func (s *Server) HandleAppendEntriesPipelineStart(rpcId uint64, flow flow, start
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
 		MsgType: AppendEntriesPipelineStartResponse,
-		rpcId:   rpcId,
+		RpcId:   rpcId,
 		Payload: []byte{},
 	}
 
@@ -415,7 +413,7 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
 		MsgType: AppendEntriesPipelineSendResponse,
-		rpcId:   rpcId,
+		RpcId:   rpcId,
 		Payload: []byte{},
 	}
 	//glog.Infof("HandleAppendEntriesPipelineSend: send dummy response: %+v", response)
@@ -439,7 +437,7 @@ func (s *Server) HandleAppendEntriesPipelineClose(rpcId uint64, flow flow, start
 	// Send a dummy response back to the Machnet Channel
 	response := RpcMessage{
 		MsgType: AppendEntriesPipelineCloseResponse,
-		rpcId:   rpcId,
+		RpcId:   rpcId,
 		Payload: []byte{},
 	}
 	//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
@@ -469,63 +467,64 @@ func (s *Server) HandleRPCs() {
 		}
 
 		// Depending on the type of message, handle it accordingly
+		glog.Infof("HandleRpc: MsgType: %v RpcId:%v", request.MsgType, request.RpcId)
 		switch request.MsgType {
 		case AppendEntriesRequest:
-			err := s.HandleAppendEntriesRequest(request.Payload, request.rpcId, flow, start)
+			err := s.HandleAppendEntriesRequest(request.Payload, request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleAppendEntriesRequest failed: %v", err)
 			}
 
 		case RequestVoteRequest:
-			err := s.HandleRequestVoteRequest(request.Payload, request.rpcId, flow, start)
+			err := s.HandleRequestVoteRequest(request.Payload, request.RpcId, flow, start)
 			if err != nil {
 				glog.Error("HandleRequestVoteRequest failed: %v", err)
 			}
 
 		case TimeoutNowRequest:
-			err := s.HandleTimeoutNowRequest(request.Payload, request.rpcId, flow, start)
+			err := s.HandleTimeoutNowRequest(request.Payload, request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleTimeoutNowRequest failed: %v", err)
 			}
 
 		case InstallSnapshotRequestStart:
-			err := s.HandleInstallSnapshotRequestStart(request.Payload, request.rpcId, flow, start)
+			err := s.HandleInstallSnapshotRequestStart(request.Payload, request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleInstallSnapshotRequestStart failed: %v", err)
 			}
 
 		case InstallSnapshotRequestBuffer:
-			err := s.HandleInstallSnapshotRequestBuffer(request.Payload, request.rpcId, flow, start)
+			err := s.HandleInstallSnapshotRequestBuffer(request.Payload, request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleInstallSnapshotRequestBuffer failed: %v", err)
 			}
 
 		case InstallSnapshotRequestClose:
-			err := s.HandleInstallSnapshotRequestClose(request.rpcId, flow, start)
+			err := s.HandleInstallSnapshotRequestClose(request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleInstallSnapshotRequestClose failed: %v", err)
 			}
 
 		case AppendEntriesPipelineStart:
-			err := s.HandleAppendEntriesPipelineStart(request.rpcId, flow, start)
+			err := s.HandleAppendEntriesPipelineStart(request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleAppendEntriesPipelineStart failed: %v", err)
 			}
 
 		case AppendEntriesPipelineSend:
-			err := s.HandleAppendEntriesPipelineSend(request.Payload, request.rpcId, flow, start)
+			err := s.HandleAppendEntriesPipelineSend(request.Payload, request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleAppendEntriesPipelineSend failed: %v", err)
 			}
 
 		case AppendEntriesPipelineRecv:
-			err := s.HandleAppendEntriesPipelineRecv(request.rpcId, flow, start)
+			err := s.HandleAppendEntriesPipelineRecv(request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleAppendEntriesPipelineRecv failed: %v", err)
 			}
 
 		case AppendEntriesPipelineClose:
-			err := s.HandleAppendEntriesPipelineClose(request.rpcId, flow, start)
+			err := s.HandleAppendEntriesPipelineClose(request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleAppendEntriesPipelineClose failed: %v", err)
 			}
