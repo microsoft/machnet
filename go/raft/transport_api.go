@@ -39,8 +39,8 @@ const (
 	InstallSnapshotRequestCloseResponse
 	AppendEntriesPipelineStartResponse
 	AppendEntriesPipelineSendResponse
-	AppendEntriesPipelineCloseResponse
 	AppendEntriesPipelineRecvResponse
+	AppendEntriesPipelineCloseResponse
 	DummyResponse
 	DummyMsg
 )
