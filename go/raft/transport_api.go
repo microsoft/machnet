@@ -63,10 +63,12 @@ type TransportApi struct {
 
 	flowsMtx sync.Mutex
 	flows    map[raft.ServerID]*flow
+	rpcId    uint64
 }
 
 type RpcMessage struct {
 	MsgType uint8
+	rpcId   uint64
 	Payload []byte
 }
 
@@ -102,6 +104,7 @@ func NewTransport(localIp raft.ServerAddress, sendChannelCtx *machnet.MachnetCha
 	trans.flows = make(map[raft.ServerID]*flow)
 	trans.rpcChan = make(chan raft.RPC, 100)
 	trans.hostname = hostname
+	trans.rpcId = 0
 
 	return trans
 }
@@ -183,7 +186,8 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	dec := gob.NewDecoder(&buff)
 
 	// Enclose the payload into a rpcMessage and then encode into byte array.
-	msg := RpcMessage{MsgType: rpcType, Payload: payload}
+	msg := RpcMessage{MsgType: rpcType, Payload: payload, rpcId: t.rpcId}
+	t.rpcId = 1 + t.rpcId
 	if err := enc.Encode(msg); err != nil {
 		return nil, err
 	}
