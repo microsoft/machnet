@@ -134,7 +134,7 @@ func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.
 
 	elapsed := time.Since(start)
 	glog.Info("SendMachnetResponse: Total Rpc took: ", elapsed.Microseconds(), " us")
-	glog.Infof("SendMachnetResponse: putting response on wire: %+v", responseBytes)
+	//glog.Infof("SendMachnetResponse: putting response on wire: %+v", responseBytes)
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(s.transport.receiveChannelCtx, flow, &responseBytes[0], uint(responseLen))
 	if ret != 0 {
@@ -204,7 +204,7 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 		MsgType: Response,
 		Payload: buff.Bytes(),
 	}
-	glog.Infof("GetResponseFromChannel: MsgType: %v Payload: %+v", response.MsgType, response.Payload)
+	//glog.Infof("GetResponseFromChannel: MsgType: %v Payload: %+v", response.MsgType, response.Payload)
 	if err := s.SendMachnetResponse(response, flow, start); err != nil {
 		glog.Errorf("GetResponseFromChannel: failed to SendMachnetResponse: %v", err)
 		return err
@@ -240,7 +240,7 @@ func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flo
 		Payload: []byte{},
 	}
 
-	glog.Infof("HandleRaftCommand: sent dummy response: %v msgType was: %v", response, msgType)
+	//glog.Infof("HandleRaftCommand: sent dummy response: %v msgType was: %v", response, msgType)
 	return s.SendMachnetResponse(response, flow, start)
 }
 
@@ -374,7 +374,7 @@ func (s *Server) HandleAppendEntriesPipelineStart(flow flow, start time.Time) er
 		Payload: []byte{},
 	}
 
-	glog.Infof("HandleAppendEntriesPipelineStart: send dummy response: %+v", response)
+	//glog.Infof("HandleAppendEntriesPipelineStart: send dummy response: %+v", response)
 	return s.SendMachnetResponse(response, flow, start)
 }
 
@@ -412,7 +412,7 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, flow flow, star
 		MsgType: Response,
 		Payload: []byte{},
 	}
-	glog.Infof("HandleAppendEntriesPipelineSend: send dummy response: %+v", response)
+	//glog.Infof("HandleAppendEntriesPipelineSend: send dummy response: %+v", response)
 	return s.SendMachnetResponse(response, flow, start)
 }
 
@@ -431,11 +431,11 @@ func (s *Server) HandleAppendEntriesPipelineClose(flow flow, start time.Time) er
 	close(ch)
 
 	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
+	_ = RpcMessage{
 		MsgType: Response,
 		Payload: []byte{},
 	}
-	glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
+	//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
 	return nil //s.SendMachnetResponse(response, flow, start)
 }
 

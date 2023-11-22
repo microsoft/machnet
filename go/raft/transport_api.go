@@ -181,7 +181,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
 
-	glog.Info("Sending message type ", rpcType, " payload: ", payload)
+	//glog.Info("Sending message type ", rpcType, " payload: ", payload)
 
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
@@ -215,7 +215,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	}
 
 	// glog.Info("Received RPC response from ", id, " of type ", response.MsgType)
-	glog.Infof("SendMachnetRpc: received response: %v", response)
+	//glog.Infof("SendMachnetRpc: received response: %v", response)
 	// Return the payload of the response.
 	return response.Payload, nil
 }
@@ -233,7 +233,7 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 	reqBytes := buff.Bytes()
 
 	// Send Machnet RPC to remote host.
-	glog.Infof("AppendEntries: sent request: %v to %v", args, target)
+	//glog.Infof("AppendEntries: sent request: %v to %v", args, target)
 	recvBytes, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
 	if err != nil {
 		glog.Errorf("AppendEntries: failed to SendMachnetRPC")
@@ -253,7 +253,7 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 		glog.Errorf("AppendEntries: failed to decode: %v; recvBytes: %v len(recvBytes): %v", resp, recvBytes, len(recvBytes))
 		return err
 	}
-	glog.Infof("AppendEntries: succeed ... return response: %v", resp)
+	//glog.Infof("AppendEntries: succeed ... return response: %v", resp)
 	return nil
 }
 
