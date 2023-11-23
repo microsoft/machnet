@@ -64,6 +64,7 @@ type TransportApi struct {
 	flowsMtx sync.Mutex
 	flows    map[raft.ServerID]*flow
 	rpcId    uint64
+	mu       sync.Mutex
 }
 
 type RpcMessage struct {
@@ -176,6 +177,8 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 // Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using Machnet library functions.
 func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp RpcMessage, err error) {
 	// Get the flow to the remote host.
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	flow, err := t.getPeer(id)
 	if err != nil {
 		return RpcMessage{}, err
