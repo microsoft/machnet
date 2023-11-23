@@ -203,7 +203,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	if ret != 0 {
 		glog.Fatal("Failed to listen for incoming connections.")
 	}
-	glog.Info("[APP SERVER LISTENING] [", localIp, ":", *appPort, "]")
+	glog.Warningf("[APP SERVER LISTENING] [", localIp, ":", *appPort, "]")
 
 	// Create the rpcInterface object.
 	rpcInterface := rpcInterface{wt, raftNode}
@@ -250,7 +250,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 			if time.Since(lastRecordedTime) > 1*time.Second {
 				percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-				glog.Infof("[Processing Time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
+				glog.Warningf("[Processing Time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
 					float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
 					float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000)
 				histogram.Reset()
