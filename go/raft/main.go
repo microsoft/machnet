@@ -225,7 +225,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 		if recvBytes > 0 {
 			start := time.Now()
 			index, _ := rpcInterface.AddWord(string(request[:recvBytes]))
-			elapsed := time.Since(start)
+			//elapsed := time.Since(start)
 
 			// Swap the source and destination IP addresses.
 			tmpFlow := flow
@@ -245,7 +245,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			if ret != 0 {
 				glog.Error("Failed to send data to client.")
 			}
-
+			elapsed := time.Since(start)
 			_ = histogram.RecordValue(elapsed.Nanoseconds())
 
 			if time.Since(lastRecordedTime) > 1*time.Second {
