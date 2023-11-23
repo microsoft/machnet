@@ -422,8 +422,10 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 
 func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start time.Time) error {
 	// Get the channel corresponding to the flow
-	ch := s.pendingPipelineResponses[flow]
-
+	ch, exists := s.pendingPipelineResponses[flow]
+	if !exists {
+		glog.Infof("HandleAppendEntriesPipelineRecv: ch doesn't exist for flow: %+v ... default value: %+v", flow, ch)
+	}
 	// Send response back to the Machnet Channel
 	return s.GetResponseFromChannel(ch, flow, AppendEntriesPipelineRecv, rpcId, start)
 }
