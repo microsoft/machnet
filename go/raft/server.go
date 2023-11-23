@@ -424,7 +424,16 @@ func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start 
 	// Get the channel corresponding to the flow
 	ch, exists := s.pendingPipelineResponses[flow]
 	if !exists {
-		glog.Infof("HandleAppendEntriesPipelineRecv: ch doesn't exist for flow: %+v ... default value: %+v", flow, ch)
+		// pipeline closed
+		glog.Info("HandleAppendEntriesPipelineRecv: receive on closed pipeline! ")
+		response := RpcMessage{
+			MsgType: AppendEntriesPipelineCloseResponse,
+			RpcId:   rpcId,
+			Payload: []byte{},
+		}
+		//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
+		return s.SendMachnetResponse(response, flow, start)
+
 	}
 	// Send response back to the Machnet Channel
 	return s.GetResponseFromChannel(ch, flow, AppendEntriesPipelineRecv, rpcId, start)
