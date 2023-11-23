@@ -248,6 +248,7 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 	// Send Machnet RPC to remote host.
 	//glog.Infof("AppendEntries: sent request: %v to %v", args, target)
 	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
+	glog.Infof("AppendEntries: rpc response: %+v", rpcResponse)
 	payloadBytes := rpcResponse.Payload
 	if err != nil {
 		glog.Errorf("AppendEntries: failed to SendMachnetRPC")
@@ -285,6 +286,7 @@ func (t *TransportApi) RequestVote(id raft.ServerID, target raft.ServerAddress, 
 
 	// Send Machnet RPC to remote host.
 	rpcResponse, err := t.SendMachnetRpc(id, RequestVoteRequest, reqBytes)
+	glog.Infof("RequestVote: rpc response: %+v", rpcResponse)
 	recvBytes := rpcResponse.Payload
 	if err != nil {
 		return err
@@ -317,6 +319,7 @@ func (t *TransportApi) TimeoutNow(id raft.ServerID, target raft.ServerAddress, a
 
 	// Send Machnet RPC to remote host.
 	rpcResponse, err := t.SendMachnetRpc(id, TimeoutNowRequest, reqBytes)
+	glog.Infof("TimeoutNow: rpc response: %+v", rpcResponse)
 	recvBytes := rpcResponse.Payload
 	if err != nil {
 		return err
@@ -349,7 +352,8 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 	reqBytes := buff.Bytes()
 
 	// Send Machnet RPC to remote host. We don't care about the response as this is just to register the InstallSnapshot request.
-	_, err := t.SendMachnetRpc(id, InstallSnapshotRequestStart, reqBytes)
+	rpcResponse, err := t.SendMachnetRpc(id, InstallSnapshotRequestStart, reqBytes)
+	glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
 	if err != nil {
 		return err
 	}
@@ -365,7 +369,8 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 		}
 
 		// Send Machnet RPC to remote host.
-		_, err = t.SendMachnetRpc(id, InstallSnapshotRequestBuffer, buf[:n])
+		rpcResponse, err = t.SendMachnetRpc(id, InstallSnapshotRequestBuffer, buf[:n])
+		glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
 		if err != nil {
 			return err
 		}
@@ -373,7 +378,8 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 
 	// Send Machnet RPC to remote host to close the InstallSnapshot stream. Use a dummy payload.
 	dummyPayload := make([]byte, 1)
-	rpcResponse, err := t.SendMachnetRpc(id, InstallSnapshotRequestClose, dummyPayload)
+	rpcResponse, err = t.SendMachnetRpc(id, InstallSnapshotRequestClose, dummyPayload)
+	glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
 	recvBytes := rpcResponse.Payload
 	if err != nil {
 		return err
@@ -411,7 +417,8 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 	// Send Machnet RPC to remote host. Send a dummy payload.
 	// We don't care about the response as this is just to register the AppendEntriesPipeline request.
 	dummyPayload := make([]byte, 1)
-	_, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
+	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
+	glog.Infof("AppendEntriesPipeline: rpc response: %+v", rpcResponse)
 	if err != nil {
 		glog.Errorf("AppendEntriesPipeline not functioning properly")
 		cancel()
@@ -449,7 +456,8 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	reqBytes := buff.Bytes()
 
 	// Send Machnet RPC to remote host. The response will be saved as a Future object.
-	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
+	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
+	glog.Infof("AppendEntries: rpc response: %+v", rpcResponse)
 	if err != nil {
 		return nil, err
 	}
@@ -500,6 +508,7 @@ func (r *raftPipelineAPI) receiver() {
 		// Send Machnet RPC to remote host. Send a dummy payload.
 		dummyPayload := make([]byte, 1)
 		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
+		glog.Infof("receiver: rpc response: %+v", rpcResponse)
 		recvBytes := rpcResponse.Payload
 		if err != nil {
 			// Decode the AppendEntriesResponse from the received payload.
