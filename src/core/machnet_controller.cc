@@ -264,7 +264,7 @@ bool MachnetController::CreateChannel(
   // static size_t engine_index =
   //     utils::hash<size_t>(channel_uuid_str.c_str(), channel_uuid_str.size()) %
   //     engines_.size();
-  static size_t engine_index = index_;
+  size_t engine_index = index_;
   index_++;
   index_ = index_ % engines_.size();
   const auto &engine = engines_[engine_index];
