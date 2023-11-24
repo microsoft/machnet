@@ -163,6 +163,7 @@ class MachnetController {
   dpdk::Dpdk dpdk_{};
   std::vector<std::shared_ptr<dpdk::PmdPort>> pmd_ports_{};
   std::vector<std::shared_ptr<MachnetEngine>> engines_{};
+  uint64_t index_ = 0; 
   std::unique_ptr<UDServer> server_{nullptr};
   std::unordered_map<std::string, std::unordered_set<std::string>>
       applications_registered_{};
