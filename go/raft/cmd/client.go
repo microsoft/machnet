@@ -85,6 +85,7 @@ func main() {
 		// Time the SendMsg() call.
 		start := time.Now()
 		ret := machnet.SendMsg(channelCtx, flow, &wordBytes[0], uint(wordLen))
+		glog.Infof("Sent %s at %+v", word, time.Now())
 		if ret != 0 {
 			glog.Fatal("Failed to send word.")
 		}

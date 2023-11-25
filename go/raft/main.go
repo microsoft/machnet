@@ -226,6 +226,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 		// Handle the request.
 		if recvBytes > 0 {
+			glog.Warningf("Received %s at %+v", string(request[:recvBytes]), time.Now())
 			//start := time.Now()
 			index, _ := rpcInterface.AddWord(string(request[:recvBytes]))
 			//elapsed := time.Since(start)
