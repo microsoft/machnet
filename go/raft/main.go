@@ -216,8 +216,9 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
 	for {
-		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxWordLength)
 		start := time.Now()
+		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxWordLength)
+		//start := time.Now()
 		if recvBytes < 0 {
 			glog.Fatal("Failed to receive data from client.")
 		}
