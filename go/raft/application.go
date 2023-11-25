@@ -96,7 +96,7 @@ func (r rpcInterface) AddWord(word string) (uint64, error) {
 	// start := time.Now()
 	start := time.Now()
 	glog.Warningf("AddWord: started raft Apply at %+v", start)
-	f := r.raft.Apply([]byte(word), -1) // 10*time.Microsecond)
+	f := r.raft.Apply([]byte(word), 0) // 10*time.Microsecond)
 	glog.Warningf("AddWord: Apply took: %+v returned future: %+v", time.Since(start), f)
 	start = time.Now()
 	glog.Warningf("AddWord: block on future at %+v", start)
