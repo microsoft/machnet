@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -91,10 +93,10 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	// c.LogLevel = "WARN"
 
 	// Increase the timeouts.
-	c.CommitTimeout = 1 * time.Millisecond
-	c.LeaderLeaseTimeout = 5 * time.Second
-	c.HeartbeatTimeout = 5 * time.Second
-	c.ElectionTimeout = 60 * time.Second
+	//c.CommitTimeout = 1 * time.Millisecond
+	//c.LeaderLeaseTimeout = 5 * time.Second
+	//c.HeartbeatTimeout = 5 * time.Second
+	//c.ElectionTimeout = 60 * time.Second
 
 	baseDir := filepath.Join(*raftDir, id)
 	err := os.MkdirAll(baseDir, os.ModePerm)
@@ -210,22 +212,22 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 	// Buffers to store the request and response.
 	request := make([]byte, maxWordLength)
-	response := make([]byte, 4)
-
+	response := new(bytes.Buffer)
 	// Continuously accept incoming requests from client, and handle them.
 	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxWordLength)
-		start := time.Now()
 		if recvBytes < 0 {
 			glog.Fatal("Failed to receive data from client.")
 		}
 
 		// Handle the request.
 		if recvBytes > 0 {
-			//start := time.Now()
+			glog.Warningf("Received %s at %+v", string(request[:recvBytes]), time.Now())
+			start := time.Now()
 			index, _ := rpcInterface.AddWord(string(request[:recvBytes]))
+			glog.Warningf("Replicated %s in %d us", string(request[:recvBytes]), time.Since(start).Microseconds())
 			//elapsed := time.Since(start)
 
 			// Swap the source and destination IP addresses.
@@ -236,16 +238,23 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			flow.DstPort = tmpFlow.SrcPort
 
 			// Send the index of the word to the client.
-			// Make a byte array payload of 4 bytes.
-			response[0] = byte(index >> 24)
-			response[1] = byte(index >> 16)
-			response[2] = byte(index >> 8)
-			response[3] = byte(index)
+			// Make a byte array payload of 64  bytes.
+			response.Reset()
+			response.Grow(64)
+			err := binary.Write(response, binary.LittleEndian, index)
+			if err != nil {
+				// handle error
+				glog.Errorf("Failed to create response:", err)
+				continue
+			}
 
-			ret := machnet.SendMsg(channelCtx, flow, &response[0], 4)
+			payload := response.Bytes()
+
+			ret := machnet.SendMsg(channelCtx, flow, &payload[0], 64)
 			if ret != 0 {
 				glog.Error("Failed to send data to client.")
 			}
+			glog.Warningf("Sent %s 's index [%d] at %+v", string(request[:recvBytes]), index, time.Now())
 			elapsed := time.Since(start)
 			_ = histogram.RecordValue(elapsed.Nanoseconds())
 

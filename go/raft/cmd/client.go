@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"flag"
 	"os"
 	"runtime/pprof"
@@ -83,23 +84,23 @@ func main() {
 
 		// Time the SendMsg() call.
 		start := time.Now()
-
 		ret := machnet.SendMsg(channelCtx, flow, &wordBytes[0], uint(wordLen))
+		glog.Infof("Sent %s at %+v", word, time.Now())
 		if ret != 0 {
 			glog.Fatal("Failed to send word.")
 		}
 
 		// Receive the response from the remote host on the flow.
-		responseBuff := make([]byte, 4)
+		responseBuff := make([]byte, 64)
 
 		// Keep reading until we get a message from the same flow.
-		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 4)
+		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64)
 		for recvBytes == 0 {
-			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 4)
+			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 64)
 		}
 
 		elapsed := time.Since(start)
-		// glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]")
+		glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]"+" index: ", binary.LittleEndian.Uint64(responseBuff[:8]))
 		err := histogram.RecordValue(elapsed.Microseconds())
 		if err != nil {
 			glog.Errorf("couldn't record value to histogram: %v", err)

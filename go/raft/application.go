@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/golang/glog"
 	"io"
 	"strings"
 	"sync"
@@ -93,10 +94,16 @@ func (s *snapshot) Release() {
 
 func (r rpcInterface) AddWord(word string) (uint64, error) {
 	// start := time.Now()
+	start := time.Now()
+	glog.Warningf("AddWord: started raft Apply at %+v", start)
 	f := r.raft.Apply([]byte(word), 10*time.Microsecond)
+	glog.Warningf("AddWord: Apply took: %+v", time.Since(start))
+	start = time.Now()
+	glog.Warningf("AddWord: block on future at %+v", start)
 	if err := f.Error(); err != nil {
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
+	glog.Warningf("AddWord: future returned success result, took: %+v", time.Since(start))
 	// elapsed := time.Since(start)
 	// glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]")
 	return f.Index(), nil
