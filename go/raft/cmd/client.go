@@ -99,7 +99,7 @@ func main() {
 		}
 
 		elapsed := time.Since(start)
-		// glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]")
+		glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]")
 		err := histogram.RecordValue(elapsed.Microseconds())
 		if err != nil {
 			glog.Errorf("couldn't record value to histogram: %v", err)
