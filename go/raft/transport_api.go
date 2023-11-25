@@ -200,7 +200,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
 	start := time.Now()
-	glog.Warningf("SendMachnetRpc: sent: %+v at %+v", msg, start)
+	glog.Warningf("SendMachnetRpc: sent: rpc_type: %d rpc_id: %+d at %+v", rpcType, rpcId)
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
@@ -233,7 +233,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	}
 
 	// glog.Info("Received RPC response from ", id, " of type ", response.MsgType)
-	glog.Warningf("SendMachnetRpc: received: %+v took %+v", response, time.Since(start))
+	glog.Warningf("SendMachnetRpc: received: rpc_type: %d rpc_id: %d took %+v", response.MsgType, response.RpcId, time.Since(start))
 	// Return the payload of the response.
 	return response, nil
 }
