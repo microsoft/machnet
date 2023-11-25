@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"io"
-	"os"
-	"runtime/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -102,7 +100,7 @@ func (r rpcInterface) AddWord(word string) (uint64, error) {
 	glog.Warningf("AddWord: Apply took: %+v", time.Since(start))
 	start = time.Now()
 	glog.Warningf("AddWord: block on future at %+v", start)
-	pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+	//pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	if err := f.Error(); err != nil {
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
