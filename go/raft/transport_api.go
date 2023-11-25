@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -547,6 +548,7 @@ func (r *raftPipelineAPI) receiver() {
 // Note that it is not OK to call this method
 // twice concurrently on the same Future instance.
 func (f *appendFuture) Error() error {
+	pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	<-f.done
 	return f.err
 }
