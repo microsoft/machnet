@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -210,8 +212,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 	// Buffers to store the request and response.
 	request := make([]byte, maxWordLength)
-	response := make([]byte, 4)
-
+	response := new(bytes.Buffer)
 	// Continuously accept incoming requests from client, and handle them.
 	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
@@ -237,13 +238,18 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			flow.DstPort = tmpFlow.SrcPort
 
 			// Send the index of the word to the client.
-			// Make a byte array payload of 4 bytes.
-			response[0] = byte(index >> 24)
-			response[1] = byte(index >> 16)
-			response[2] = byte(index >> 8)
-			response[3] = byte(index)
+			// Make a byte array payload of 64  bytes.
+			response.Reset()
+			err := binary.Write(response, binary.LittleEndian, index)
+			if err != nil {
+				// handle error
+				glog.Errorf("Failed to create response:", err)
+				continue
+			}
 
-			ret := machnet.SendMsg(channelCtx, flow, &response[0], 4)
+			payload := response.Bytes()
+
+			ret := machnet.SendMsg(channelCtx, flow, &payload[0], 8)
 			if ret != 0 {
 				glog.Error("Failed to send data to client.")
 			}
