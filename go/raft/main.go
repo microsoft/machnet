@@ -217,13 +217,14 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	lastRecordedTime := time.Now()
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxWordLength)
+		start := time.Now()
 		if recvBytes < 0 {
 			glog.Fatal("Failed to receive data from client.")
 		}
 
 		// Handle the request.
 		if recvBytes > 0 {
-			start := time.Now()
+			//start := time.Now()
 			index, _ := rpcInterface.AddWord(string(request[:recvBytes]))
 			//elapsed := time.Since(start)
 
