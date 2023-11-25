@@ -548,8 +548,11 @@ func (r *raftPipelineAPI) receiver() {
 // Note that it is not OK to call this method
 // twice concurrently on the same Future instance.
 func (f *appendFuture) Error() error {
+	start := time.Now()
+	glog.Warningf("Error: started to block at %+v", start)
 	pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	<-f.done
+	glog.Warningf("Error: finished blocking took %v", time.Since(start))
 	return f.err
 }
 
