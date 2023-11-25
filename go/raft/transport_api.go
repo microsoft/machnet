@@ -200,7 +200,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
 	start := time.Now()
-	glog.Warningf("SendMachnetRpc: sent: rpc_type: %d rpc_id: %+d at %+v", rpcType, rpcId)
+	glog.Warningf("SendMachnetRpc: sent: rpc_type: %d rpc_id: %+d at %+v", rpcType, rpcId, start)
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
@@ -549,6 +549,7 @@ func (r *raftPipelineAPI) receiver() {
 // twice concurrently on the same Future instance.
 func (f *appendFuture) Error() error {
 	start := time.Now()
+	return errors.New("dummy error")
 	glog.Warningf("Error: started to block at %+v", start)
 	pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	<-f.done

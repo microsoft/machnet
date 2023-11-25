@@ -102,6 +102,7 @@ func (r rpcInterface) AddWord(word string) (uint64, error) {
 	glog.Warningf("AddWord: block on future at %+v", start)
 	//pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	if err := f.Error(); err != nil {
+		glog.Warningf("Error: couldn't block")
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
 	glog.Warningf("AddWord: future returned success result, took: %+v", time.Since(start))
