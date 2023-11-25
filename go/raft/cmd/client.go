@@ -90,16 +90,16 @@ func main() {
 		}
 
 		// Receive the response from the remote host on the flow.
-		responseBuff := make([]byte, 8)
+		responseBuff := make([]byte, 64)
 
 		// Keep reading until we get a message from the same flow.
-		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 8)
+		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64)
 		for recvBytes == 0 {
-			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 8)
+			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 64)
 		}
 
 		elapsed := time.Since(start)
-		glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]"+" index: ", binary.LittleEndian.Uint64(responseBuff))
+		glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]"+" index: ", binary.LittleEndian.Uint64(responseBuff[:8]))
 		err := histogram.RecordValue(elapsed.Microseconds())
 		if err != nil {
 			glog.Errorf("couldn't record value to histogram: %v", err)

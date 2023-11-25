@@ -240,6 +240,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			// Send the index of the word to the client.
 			// Make a byte array payload of 64  bytes.
 			response.Reset()
+			response.Grow(64)
 			err := binary.Write(response, binary.LittleEndian, index)
 			if err != nil {
 				// handle error
@@ -249,7 +250,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 			payload := response.Bytes()
 
-			ret := machnet.SendMsg(channelCtx, flow, &payload[0], 8)
+			ret := machnet.SendMsg(channelCtx, flow, &payload[0], 64)
 			if ret != 0 {
 				glog.Error("Failed to send data to client.")
 			}
