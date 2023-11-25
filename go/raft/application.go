@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"github.com/golang/glog"
 	"io"
@@ -98,14 +97,14 @@ func (r rpcInterface) AddWord(word string) (uint64, error) {
 	glog.Warningf("AddWord: started raft Apply at %+v", start)
 	f := r.raft.Apply([]byte(word), 10*time.Microsecond)
 	glog.Warningf("AddWord: Apply took: %+v", time.Since(start))
-	start = time.Now()
-	glog.Warningf("AddWord: block on future at %+v", start)
+	//start = time.Now()
+	//glog.Warningf("AddWord: block on future at %+v", start)
 	//pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
-	if err := f.Error(); err != nil {
-		glog.Warningf("Error: couldn't block")
-		return 0, errors.New("raft.Apply(): " + err.Error())
-	}
-	glog.Warningf("AddWord: future returned success result, took: %+v", time.Since(start))
+	// if err := f.Error(); err != nil {
+	//	glog.Warningf("Error: couldn't block")
+	//	return 0, errors.New("raft.Apply(): " + err.Error())
+	//}
+	//glog.Warningf("AddWord: future returned success result, took: %+v", time.Since(start))
 	// elapsed := time.Since(start)
 	// glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]")
 	return f.Index(), nil
