@@ -91,10 +91,10 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	// c.LogLevel = "WARN"
 
 	// Increase the timeouts.
-	c.CommitTimeout = 1 * time.Millisecond
-	c.LeaderLeaseTimeout = 5 * time.Second
-	c.HeartbeatTimeout = 5 * time.Second
-	c.ElectionTimeout = 60 * time.Second
+	//c.CommitTimeout = 1 * time.Millisecond
+	//c.LeaderLeaseTimeout = 5 * time.Second
+	//c.HeartbeatTimeout = 5 * time.Second
+	//c.ElectionTimeout = 60 * time.Second
 
 	baseDir := filepath.Join(*raftDir, id)
 	err := os.MkdirAll(baseDir, os.ModePerm)
