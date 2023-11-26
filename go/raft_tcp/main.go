@@ -26,6 +26,61 @@ var (
 	leader        = flag.Bool("leader", false, "Whether to start the node as a leader")
 )
 
+func main() {
+	flag.Parse()
+
+	kvStore := &sync.Map{}
+	fsm := &kvFsm{kvStore}
+
+	node, _, err := NewRaft(*localHostname, fsm)
+	if err != nil {
+		fmt.Printf("Failed to create Raft")
+		glog.Fatalf("Main: failed to create new Raft cluster: %v", err)
+	}
+
+	if *leader {
+		leaderCh := node.LeaderCh()
+		<-leaderCh
+
+		if node.State() == raft.Leader {
+			glog.Info("Main: current node is the leader")
+		} else {
+			glog.Info("Main: current node is a follower")
+		}
+
+		if err != nil {
+			glog.Fatalf("Main: failed to read config file")
+		}
+
+		for i := 1; i < *numPeers; i++ {
+			peerId := fmt.Sprintf("node%d", i)
+			raftAddress, err := getRaftAddress(peerId)
+			if err != nil {
+				glog.Error("Main: failed to construct Raft peer address")
+				continue
+			}
+			glog.Infof("Main: adding Raft peer %s to cluster ... ", raftAddress)
+			f := node.AddVoter(raft.ServerID(peerId), raft.ServerAddress(raftAddress), 0, 0)
+			if err := f.Error(); err != nil {
+				glog.Errorf("Main: failed to add peer (%s) to cluster: %+v", raftAddress, err)
+			}
+			glog.Infof("Main: added Raft peer %s to cluster", raftAddress)
+		}
+
+	} else {
+		glog.Info("Current node is a follower")
+	}
+	//
+	hs := httpServer{node, kvStore}
+
+	http.HandleFunc("/set", hs.setHandler)
+	http.HandleFunc("/get", hs.getHandler)
+	if err := http.ListenAndServe("localhost:"+*appPort, nil); err != nil {
+		glog.Fatalf("Main: http server couldn't listen & serve: ", err)
+	}
+
+}
+
 func getRaftAddress(peerId string) (string, error) {
 	jsonBytes, err := os.ReadFile(*configJson)
 	if err != nil {
@@ -89,61 +144,6 @@ func NewRaft(id string, fsm *kvFsm) (*raft.Raft, *raft.NetworkTransport, error) 
 		}
 	}
 	return r, transport, nil
-}
-
-func main() {
-	flag.Parse()
-
-	kvStore := &sync.Map{}
-	fsm := &kvFsm{kvStore}
-
-	node, _, err := NewRaft(*localHostname, fsm)
-	if err != nil {
-		fmt.Printf("Failed to create Raft")
-		glog.Fatalf("Main: failed to create new Raft cluster: %v", err)
-	}
-
-	if *leader {
-		leaderCh := node.LeaderCh()
-		<-leaderCh
-
-		if node.State() == raft.Leader {
-			glog.Info("Main: current node is the leader")
-		} else {
-			glog.Info("Main: current node is a follower")
-		}
-
-		if err != nil {
-			glog.Fatalf("Main: failed to read config file")
-		}
-
-		for i := 1; i < *numPeers; i++ {
-			peerId := fmt.Sprintf("node%d", i)
-			raftAddress, err := getRaftAddress(peerId)
-			if err != nil {
-				glog.Error("Main: failed to construct Raft peer address")
-				continue
-			}
-			glog.Infof("Main: adding Raft peer %s to cluster ... ", raftAddress)
-			f := node.AddVoter(raft.ServerID(peerId), raft.ServerAddress(raftAddress), 0, 0)
-			if err := f.Error(); err != nil {
-				glog.Errorf("Main: failed to add peer (%s) to cluster: %+v", raftAddress, err)
-			}
-			glog.Infof("Main: added Raft peer %s to cluster", raftAddress)
-		}
-
-	} else {
-		glog.Info("Current node is a follower")
-	}
-	//
-	hs := httpServer{node, kvStore}
-
-	http.HandleFunc("/set", hs.setHandler)
-	http.HandleFunc("/get", hs.getHandler)
-	if err := http.ListenAndServe("localhost:"+*appPort, nil); err != nil {
-		glog.Fatalf("Main: http server couldn't listen & serve: ", err)
-	}
-
 }
 
 type httpServer struct {
