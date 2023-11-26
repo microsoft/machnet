@@ -201,6 +201,9 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	msgLen := len(msgBytes)
 	start := time.Now()
 	glog.Warningf("SendMachnetRpc: sent: rpc_type: %d rpc_id: %+d at %+v", rpcType, rpcId, start)
+	if rpcType == 0 {
+		pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+	}
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
