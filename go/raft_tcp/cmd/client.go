@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/buger/jsonparser"
 	"github.com/golang/glog"
 	"math"
@@ -65,18 +66,22 @@ func main() {
 		}
 	}(conn)
 
+	histogram := hdrhistogram.New(1, 1000000, 3)
+	lastRecordedTime := time.Now()
 	for {
-		// send msg
 		key := generateRandomKey(*keySize)
 		value := generateRandomValue(*valueSize)
 		payload := Payload{
 			key, value,
 		}
+
+		start := time.Now()
+
 		if err := json.NewEncoder(conn).Encode(payload); err != nil {
 			glog.Errorf("Main: failed to send payload: %v", err)
 			continue
 		}
-		// recv success
+
 		rawResponse, err := bufio.NewReader(conn).ReadString('\n')
 		if err != nil {
 			glog.Errorf("Main: failed to read raw_response: %v", err)
@@ -91,9 +96,23 @@ func main() {
 		if response.Key != payload.Key || response.Value != payload.Value {
 			glog.Errorf("Main: wrong response: expected: %v actual: %v", payload, response)
 		}
-	}
 
+		if err := histogram.RecordValue(time.Since(start).Microseconds()); err != nil {
+			glog.Errorf("Main: failed to record value to histogram: %v", err)
+		}
+
+		if time.Since(lastRecordedTime) > 1*time.Second {
+			percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+			glog.Infof("[RTT: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us,  requests: %d]",
+				float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+				float64(percentileValues[99.0]), float64(percentileValues[99.9]),
+				histogram.TotalCount())
+			histogram.Reset()
+			lastRecordedTime = time.Now()
+		}
+	}
 }
+
 func generateRandomKey(length int) string {
 	source := rand.NewSource(time.Now().UnixNano())
 	randRange := rand.New(source)
