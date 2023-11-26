@@ -111,7 +111,7 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	// c.LogLevel = "WARN"
 
 	// Increase the timeouts.
-	c.CommitTimeout = 10 * time.Second
+	c.CommitTimeout = 1 * time.Millisecond
 	c.LeaderLeaseTimeout = 1 * time.Minute
 	c.HeartbeatTimeout = 1 * time.Minute
 	c.ElectionTimeout = 1 * time.Minute
