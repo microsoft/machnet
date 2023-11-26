@@ -1,0 +1,10 @@
+{
+  "hosts_config": {
+    "node0": {
+      "ipv4_addr": "localhost:7777"
+    },
+    "node1": {
+      "ipv4_addr": "localhost:7778"
+    }
+  }
+}
