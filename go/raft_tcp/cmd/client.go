@@ -74,14 +74,23 @@ func main() {
 		}
 		if err := json.NewEncoder(conn).Encode(payload); err != nil {
 			glog.Errorf("Main: failed to send payload: %v", err)
+			continue
 		}
 		// recv success
-		response, err := bufio.NewReader(conn).ReadString('\n')
+		rawResponse, err := bufio.NewReader(conn).ReadString('\n')
 		if err != nil {
-			glog.Errorf("Main: failed to read response: %v", err)
+			glog.Errorf("Main: failed to read raw_response: %v", err)
+			continue
 		}
-		response = strings.TrimSpace(response)
-		glog.Infof("Main: received response: %v", response)
+		rawResponse = strings.TrimSpace(rawResponse)
+		var response Payload
+		if err := json.Unmarshal([]byte(rawResponse), &response); err != nil {
+			glog.Errorf("Main: failed to unmarshal raw response to struct: %+v", err)
+			continue
+		}
+		if response.Key != payload.Key || response.Value != payload.Value {
+			glog.Errorf("Main: wrong response: expected: %v actual: %v", payload, response)
+		}
 	}
 
 }
