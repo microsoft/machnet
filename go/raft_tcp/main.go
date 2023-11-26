@@ -26,6 +26,16 @@ var (
 	leader        = flag.Bool("leader", false, "Whether to start the node as a leader")
 )
 
+func getRaftAddress(peerId string) (string, error) {
+	jsonBytes, err := os.ReadFile(*configJson)
+	if err != nil {
+		return "", fmt.Errorf("NewRaft: failed to read config file: %v", err)
+	}
+	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", peerId, "ipv4_addr")
+	raftPort, _ := jsonparser.GetString(jsonBytes, "hosts_config", peerId, "raft_port")
+	return localIp + ":" + raftPort, nil
+}
+
 func NewRaft(id string, fsm *kvFsm) (*raft.Raft, *raft.NetworkTransport, error) {
 	baseDir := filepath.Join(*raftDir, id)
 	if err := os.MkdirAll(baseDir, os.ModePerm); err != nil {
@@ -43,14 +53,10 @@ func NewRaft(id string, fsm *kvFsm) (*raft.Raft, *raft.NetworkTransport, error) 
 	raftCfg.LocalID = raft.ServerID(id)
 
 	// Read the contents of file config_json into a byte array.
-	jsonBytes, err := os.ReadFile(*configJson)
+	raftAddress, err := getRaftAddress(*localHostname)
 	if err != nil {
-		return nil, nil, fmt.Errorf("NewRaft: failed to read config file: %v", err)
+		return nil, nil, fmt.Errorf("NewRaft: failed to construct raft address")
 	}
-	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
-
-	raftAddress := localIp //+ ":" + *raftPort
-
 	tcpAddr, err := net.ResolveTCPAddr("tcp", raftAddress)
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewRaft: failed to resolve TCP address %s: %v", raftAddress, err)
@@ -71,7 +77,7 @@ func NewRaft(id string, fsm *kvFsm) (*raft.Raft, *raft.NetworkTransport, error) 
 			{
 				Suffrage: raft.Voter,
 				ID:       raft.ServerID(id),
-				Address:  raft.ServerAddress(localIp),
+				Address:  raft.ServerAddress(raftAddress),
 			},
 		}
 
@@ -107,20 +113,23 @@ func main() {
 			glog.Info("Main: current node is a follower")
 		}
 
-		jsonBytes, err := os.ReadFile(*configJson)
 		if err != nil {
 			glog.Fatalf("Main: failed to read config file")
 		}
 
 		for i := 1; i < *numPeers; i++ {
 			peerId := fmt.Sprintf("node%d", i)
-			peerIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", peerId, "ipv4_addr")
-			glog.Infof("Main: adding Raft peer %s to cluster ... ", peerIp)
-			f := node.AddVoter(raft.ServerID(peerId), raft.ServerAddress(peerIp), 0, 0)
-			if err := f.Error(); err != nil {
-				glog.Errorf("Main: failed to add peer (%s) to cluster: %+v", peerIp, err)
+			raftAddress, err := getRaftAddress(peerId)
+			if err != nil {
+				glog.Error("Main: failed to construct Raft peer address")
+				continue
 			}
-			glog.Infof("Main: added Raft peer %s to cluster", peerIp)
+			glog.Infof("Main: adding Raft peer %s to cluster ... ", raftAddress)
+			f := node.AddVoter(raft.ServerID(peerId), raft.ServerAddress(raftAddress), 0, 0)
+			if err := f.Error(); err != nil {
+				glog.Errorf("Main: failed to add peer (%s) to cluster: %+v", raftAddress, err)
+			}
+			glog.Infof("Main: added Raft peer %s to cluster", raftAddress)
 		}
 
 	} else {

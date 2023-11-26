@@ -1,10 +1,12 @@
 {
   "hosts_config": {
     "node0": {
-      "ipv4_addr": "localhost:7777"
+      "ipv4_addr": "localhost",
+      "raft_port": "7777"
     },
     "node1": {
-      "ipv4_addr": "localhost:7778"
+      "ipv4_addr": "localhost",
+      "raft_port": "7778"
     }
   }
 }
