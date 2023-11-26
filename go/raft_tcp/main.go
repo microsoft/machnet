@@ -1,16 +1,13 @@
 package main
 
 import (
-	"encoding/json"
+	"bufio"
 	"flag"
 	"fmt"
 	"github.com/buger/jsonparser"
 	"github.com/golang/glog"
 	"github.com/hashicorp/raft"
-	"io"
-	"log"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,7 +31,6 @@ func main() {
 
 	node, _, err := NewRaft(*localHostname, fsm)
 	if err != nil {
-		fmt.Printf("Failed to create Raft")
 		glog.Fatalf("Main: failed to create new Raft cluster: %v", err)
 	}
 
@@ -68,17 +64,56 @@ func main() {
 		}
 
 	} else {
-		glog.Info("Current node is a follower")
+		glog.Info("Main: current node is a follower")
 	}
-	//
-	hs := httpServer{node, kvStore}
+	// start Application TCP server
+	app := appServer{node, kvStore}
 
-	http.HandleFunc("/set", hs.setHandler)
-	http.HandleFunc("/get", hs.getHandler)
-	if err := http.ListenAndServe("localhost:"+*appPort, nil); err != nil {
-		glog.Fatalf("Main: http server couldn't listen & serve: ", err)
+	ln, err := net.Listen("tcp", ":"+*appPort)
+	if err != nil {
+		glog.Fatalf("Main: failed to listen : %+v", err)
 	}
+	defer func(ln net.Listener) {
+		err := ln.Close()
+		if err != nil {
+			glog.Errorf("Main: failed to close listener socket: %+v", err)
+		}
+	}(ln)
 
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			glog.Warningf("Main: failed to accept connection: %+v", err)
+			if err := conn.Close(); err != nil {
+				glog.Errorf("Main: failed to close connection: %+v", err)
+			}
+			continue
+		}
+
+		reader := bufio.NewReader(conn)
+
+		for {
+			rawBytes, err := reader.ReadBytes('\n')
+			if err != nil {
+				glog.Errorf("Main: couldn't read bytes: %+v", err)
+				break
+			}
+
+			future := app.raft.Apply(rawBytes, 500*time.Millisecond)
+			if err := future.Error(); err != nil {
+				glog.Errorf("Main: failed to replicate : %s", err)
+			}
+
+			if _, err := conn.Write(rawBytes); err != nil {
+				glog.Errorf("Main: failed to write back: %+v", err)
+			}
+		}
+
+		glog.Infof("Main: closing connection to client: %+v", conn)
+		if err := conn.Close(); err != nil {
+			glog.Errorf("Main: failed tp close connection: %+v", conn)
+		}
+	}
 }
 
 func getRaftAddress(peerId string) (string, error) {
@@ -146,52 +181,7 @@ func NewRaft(id string, fsm *kvFsm) (*raft.Raft, *raft.NetworkTransport, error) 
 	return r, transport, nil
 }
 
-type httpServer struct {
-	r  *raft.Raft
-	db *sync.Map
-}
-
-func (hs httpServer) setHandler(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	bs, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("Could not read key-value in http request: %s", err)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-
-	start := time.Now()
-	future := hs.r.Apply(bs, 500*time.Millisecond)
-	if err := future.Error(); err != nil {
-		log.Printf("Could not write key-value: %s", err)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-
-	e := future.Response()
-	if e != nil {
-		log.Printf("Could not write key-value, application: %s", e)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-	glog.Infof("Replication took: %+v\n", time.Since(start))
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func (hs httpServer) getHandler(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Query().Get("key")
-	value, _ := hs.db.Load(key)
-	if value == nil {
-		value = ""
-	}
-
-	rsp := struct {
-		Data string `json:"data"`
-	}{value.(string)}
-	err := json.NewEncoder(w).Encode(rsp)
-	if err != nil {
-		log.Printf("Could not encode key-value in http response: %s", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
+type appServer struct {
+	raft    *raft.Raft
+	kvStore *sync.Map
 }
