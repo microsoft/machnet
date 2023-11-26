@@ -43,10 +43,10 @@ func main() {
 			data := metricsSink.Data()
 			for _, interval := range data {
 				for key, val := range interval.Gauges {
-					fmt.Printf("Gauge %v: %v\n", key, val.Value)
+					glog.Warningf("Gauge %v: %v\n", key, val.Value)
 				}
 				for key, val := range interval.Counters {
-					fmt.Printf("Counter %v: %v\n", key, val.Count)
+					glog.Warningf("Counter %v: %v\n", key, val.Count)
 				}
 
 			}
