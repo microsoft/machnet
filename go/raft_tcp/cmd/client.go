@@ -18,10 +18,9 @@ import (
 )
 
 var (
-	localHostname  = flag.String("local_hostname", "", "Local hostname in the hosts JSON file.")
 	remoteHostname = flag.String("remote_hostname", "", "Local hostname in the hosts JSON file.")
-	appPort        = flag.String("app_port", "888", "Port to listen on for application traffic.")
-	configJson     = flag.String("config_json", "./servers.json", "Path to the JSON file containing the hosts config.")
+	appPort        = flag.String("app_port", "888", "Connection port of Application server.")
+	configJson     = flag.String("config_json", "./servers.json", "Path to the JSON file containing the hosts information.")
 	cpuProfile     = flag.String("cpuProfile", "", "write cpu profile to file")
 	keySize        = flag.Int("key_size", 16, "Key size")
 	valueSize      = flag.Int("value_size", 64, "Value size")
@@ -51,7 +50,6 @@ func main() {
 		glog.Fatalf("Main: failed to read config file: %v", err)
 	}
 
-	// Parse the json file to get the local ip and remote ip.
 	remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *remoteHostname, "ipv4_addr")
 	remoteAddr := remoteIp + ":" + *appPort
 
@@ -68,6 +66,7 @@ func main() {
 
 	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
+
 	for {
 		key := generateRandomKey(*keySize)
 		value := generateRandomValue(*valueSize)
