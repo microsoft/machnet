@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	metrics "github.com/armon/go-metrics"
 	"log"
 	"os"
 	"path/filepath"
@@ -33,7 +34,24 @@ func main() {
 	flag.Parse()
 
 	wt := &WordTracker{}
+	metricsSink := metrics.NewInmemSink(1*time.Second, time.Minute)
+	metrics.NewGlobal(metrics.DefaultConfig("main-raft"), metricsSink)
+	ticker := time.NewTicker(1 * time.Second)
+	go func() {
+		select {
+		case <-ticker.C:
+			data := metricsSink.Data()
+			for _, interval := range data {
+				for key, val := range interval.Gauges {
+					fmt.Printf("Gauge %v: %v\n", key, val.Value)
+				}
+				for key, val := range interval.Counters {
+					fmt.Printf("Counter %v: %v\n", key, val.Count)
+				}
 
+			}
+		}
+	}()
 	// Initialize the Machnet library.
 	if ret := machnet.Init(); ret != 0 {
 		glog.Fatal("Failed to initialize the Machnet library.")
