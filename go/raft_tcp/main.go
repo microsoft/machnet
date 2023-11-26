@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/buger/jsonparser"
 	"github.com/golang/glog"
 	"github.com/hashicorp/raft"
@@ -71,8 +72,11 @@ func main() {
 	} else {
 		glog.Info("Main: current node is a follower")
 	}
-	// start Application TCP server
+
 	app := appServer{node, kvStore}
+
+	histogram := hdrhistogram.New(1, 1000000, 3)
+	lastRecordedTime := time.Now()
 
 	ln, err := net.Listen("tcp", ":"+*appPort)
 	if err != nil {
@@ -104,6 +108,8 @@ func main() {
 				break
 			}
 
+			start := time.Now()
+
 			future := app.raft.Apply(rawBytes, 500*time.Millisecond)
 			if err := future.Error(); err != nil {
 				glog.Errorf("Main: failed to replicate : %s", err)
@@ -111,6 +117,19 @@ func main() {
 
 			if _, err := conn.Write(rawBytes); err != nil {
 				glog.Errorf("Main: failed to write back: %+v", err)
+			}
+
+			if err := histogram.RecordValue(time.Since(start).Microseconds()); err != nil {
+				glog.Errorf("Main: failed to record to histogram: %v", err)
+			}
+
+			if time.Since(lastRecordedTime) > 1*time.Second {
+				percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+				glog.Warningf("Processing Time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us",
+					float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+					float64(percentileValues[99.0]), float64(percentileValues[99.9]))
+				histogram.Reset()
+				lastRecordedTime = time.Now()
 			}
 		}
 
