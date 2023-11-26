@@ -111,9 +111,9 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	// c.LogLevel = "WARN"
 
 	// Increase the timeouts.
-	c.CommitTimeout = 100 * time.Millisecond
-	c.LeaderLeaseTimeout = 5 * time.Second
-	c.HeartbeatTimeout = 5 * time.Second
+	c.CommitTimeout = 10 * time.Second
+	c.LeaderLeaseTimeout = 30 * time.Second
+	c.HeartbeatTimeout = 30 * time.Second
 	c.ElectionTimeout = 60 * time.Second
 
 	baseDir := filepath.Join(*raftDir, id)
