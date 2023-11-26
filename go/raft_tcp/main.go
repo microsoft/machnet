@@ -23,6 +23,11 @@ var (
 	leader        = flag.Bool("leader", false, "Whether to start the node as a leader")
 )
 
+type appServer struct {
+	raft    *raft.Raft
+	kvStore *sync.Map
+}
+
 func main() {
 	flag.Parse()
 
@@ -179,9 +184,4 @@ func NewRaft(id string, fsm *kvFsm) (*raft.Raft, *raft.NetworkTransport, error) 
 		}
 	}
 	return r, transport, nil
-}
-
-type appServer struct {
-	raft    *raft.Raft
-	kvStore *sync.Map
 }
