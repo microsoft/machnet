@@ -368,14 +368,15 @@ func (s *Server) HandleAppendEntriesPipelineStart(rpcId uint64, flow flow, start
 	s.pipelineMutex.Unlock()
 
 	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
-		MsgType: AppendEntriesPipelineStartResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
+	//response := RpcMessage{
+	//	MsgType: AppendEntriesPipelineStartResponse,
+	//	RpcId:   rpcId,
+	//	Payload: []byte{},
+	//}
 
 	//glog.Infof("HandleAppendEntriesPipelineStart: send dummy response: %+v", response)
-	return s.SendMachnetResponse(response, flow, start)
+	//return s.SendMachnetResponse(response, flow, start)
+	return nil
 }
 
 func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, flow flow, start time.Time) error {
@@ -408,13 +409,14 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 	s.transport.rpcChan <- rpc
 
 	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
-		MsgType: AppendEntriesPipelineSendResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
+	//response := RpcMessage{
+	//	MsgType: AppendEntriesPipelineSendResponse,
+	//	RpcId:   rpcId,
+	//	Payload: []byte{},
+	//}
 	//glog.Infof("HandleAppendEntriesPipelineSend: send dummy response: %+v", response)
-	return s.SendMachnetResponse(response, flow, start)
+	//return s.SendMachnetResponse(response, flow, start)
+	return nil
 }
 
 func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start time.Time) error {
@@ -423,14 +425,14 @@ func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start 
 	if !exists {
 		// pipeline closed
 		glog.Info("HandleAppendEntriesPipelineRecv: receive on closed pipeline! ")
-		response := RpcMessage{
-			MsgType: AppendEntriesPipelineCloseResponse,
-			RpcId:   rpcId,
-			Payload: []byte{},
-		}
+		//response := RpcMessage{
+		//	MsgType: AppendEntriesPipelineCloseResponse,
+		//	RpcId:   rpcId,
+		//	Payload: []byte{},
+		//}
 		//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
-		return s.SendMachnetResponse(response, flow, start)
-
+		//return s.SendMachnetResponse(response, flow, start)
+		return errors.New("HandleAppendEntriesPipelineRecv: receive on closed pipeline! ")
 	}
 	// Send response back to the Machnet Channel
 	return s.GetResponseFromChannel(ch, flow, AppendEntriesPipelineRecv, rpcId, start)
@@ -443,13 +445,14 @@ func (s *Server) HandleAppendEntriesPipelineClose(rpcId uint64, flow flow, start
 	close(ch)
 
 	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
-		MsgType: AppendEntriesPipelineCloseResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
+	//response := RpcMessage{
+	//	MsgType: AppendEntriesPipelineCloseResponse,
+	//	RpcId:   rpcId,
+	//	Payload: []byte{},
+	//}
 	//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
-	return s.SendMachnetResponse(response, flow, start)
+	//return s.SendMachnetResponse(response, flow, start)
+	return nil
 }
 
 func (s *Server) HandleRPCs() {

@@ -206,7 +206,9 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
 	}
-
+	if rpcType == AppendEntriesPipelineStart || rpcType == AppendEntriesPipelineSend {
+		return RpcMessage{}, nil
+	}
 	// Receive the response from the remote host on the flow.
 	responseBuff := make([]byte, maxMessageLength)
 
