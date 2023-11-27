@@ -89,17 +89,17 @@ func (s *Server) HandleRPCs() {
 	for {
 		// Receive Message from the Machnet Channel
 		var rpcType byte
-		recvBytes, f := machnet.Recv(s.transport.channelCtx, &rpcType, 1)
-
-		if recvBytes < 0 {
-			glog.Errorf("Failed to receive message from Machnet Channel.")
-			continue
-		} else if recvBytes == 0 {
-			continue
-		}
+		//recvBytes, f := machnet.Recv(s.transport.channelCtx, &rpcType, 1)
+		//
+		//if recvBytes < 0 {
+		//	glog.Errorf("Failed to receive message from Machnet Channel.")
+		//	continue
+		//} else if recvBytes == 0 {
+		//	continue
+		//}
 
 		respBuf := make([]byte, maxMessageLength)
-		recvBytes, f = machnet.Recv(s.transport.channelCtx, &respBuf[0], maxMessageLength)
+		recvBytes, f := machnet.Recv(s.transport.channelCtx, &respBuf[0], maxMessageLength)
 
 		if recvBytes < 0 {
 			glog.Errorf("Failed to receive message from Machnet Channel.")
