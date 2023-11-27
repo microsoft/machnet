@@ -88,7 +88,7 @@ func NewTransport(localIp raft.ServerAddress, sendChannelCtx *machnet.MachnetCha
 	trans.localIp = localIp
 	trans.sendChannelCtx = sendChannelCtx
 	trans.receiveChannelCtx = receiveChannelCtx
-	trans.configJson = "../../servers.json"
+	trans.configJson = "../servers.json"
 	trans.raftPort = raftPort
 	trans.flows = make(map[raft.ServerID]*flow)
 	trans.rpcChan = make(chan raft.RPC, 100)
