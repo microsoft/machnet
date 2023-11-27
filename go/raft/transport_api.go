@@ -32,7 +32,6 @@ const (
 	AppendEntriesPipelineRecv
 	AppendEntriesPipelineClose
 	Response
-	DummyMsg
 )
 
 const maxMessageLength = 4 * 1024
@@ -55,10 +54,12 @@ type TransportApi struct {
 
 	flowsMtx sync.Mutex
 	flows    map[raft.ServerID]*flow
+	rpcId    uint64
 }
 
-type rpcMessage struct {
+type RpcMessage struct {
 	MsgType uint8
+	RpcId   uint64
 	Payload []byte
 }
 
@@ -89,11 +90,12 @@ func NewTransport(localIp raft.ServerAddress, sendChannelCtx *machnet.MachnetCha
 	trans.localIp = localIp
 	trans.sendChannelCtx = sendChannelCtx
 	trans.receiveChannelCtx = receiveChannelCtx
-	trans.configJson = "../../servers.json"
+	trans.configJson = "../servers.json"
 	trans.raftPort = raftPort
 	trans.flows = make(map[raft.ServerID]*flow)
 	trans.rpcChan = make(chan raft.RPC, 100)
 	trans.hostname = hostname
+	trans.rpcId = 0
 
 	return trans
 }
@@ -110,7 +112,7 @@ func (t *TransportApi) LocalAddr() raft.ServerAddress {
 
 func (t *TransportApi) BootstrapPeers(numPeers int) {
 	t.flowsMtx.Lock()
-	for i := 0; i <= numPeers; i++ {
+	for i := 0; i < numPeers; i++ {
 		id := fmt.Sprintf("node%d", i)
 
 		if id == t.hostname {
@@ -123,12 +125,12 @@ func (t *TransportApi) BootstrapPeers(numPeers int) {
 		}
 
 		// Parse the json file to get the remote_ip.
-		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", string(id), "ipv4_addr")
-
+		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", id, "ipv4_addr")
+		glog.Infof("%s connecting to %s", t.localIp, remoteIp)
 		// Initiate connection to the remote host.
 		ret, f := machnet.Connect(t.sendChannelCtx, string(t.localIp), remoteIp, uint(t.raftPort))
 		if ret != 0 {
-			glog.Fatal("Failed to connect to remote host")
+			glog.Fatalf("Failed to connect to remote host: %s->%s", t.localIp, remoteIp)
 		}
 		t.flows[raft.ServerID(id)] = &f
 	}
@@ -162,7 +164,7 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 }
 
 // SendMachnetRpc Generic Machnet RPC handler.
-// Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using NSaaS library functions.
+// Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using Machnet library functions.
 func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp []byte, err error) {
 	// Get the flow to the remote host.
 	flow, err := t.getPeer(id)
@@ -175,7 +177,9 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	dec := gob.NewDecoder(&buff)
 
 	// Enclose the payload into a rpcMessage and then encode into byte array.
-	msg := rpcMessage{MsgType: rpcType, Payload: payload}
+	var rpcId = t.rpcId
+	msg := RpcMessage{MsgType: rpcType, RpcId: rpcId, Payload: payload}
+	t.rpcId = 1 + t.rpcId
 	if err := enc.Encode(msg); err != nil {
 		return nil, err
 	}
@@ -217,7 +221,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		return nil, errors.New("failed to write response into buffer")
 	}
 
-	var response rpcMessage
+	var response RpcMessage
 	if err := dec.Decode(&response); err != nil {
 		return nil, err
 	}

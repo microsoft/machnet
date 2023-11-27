@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/golang/glog"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/go-msgpack/codec"
 	"github.com/hashicorp/raft"
@@ -33,14 +35,14 @@ func bytesToUint64(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
 }
 
-// Converts a uint to a byte slice
+// Converts "a" uint to a byte slice
 func uint64ToBytes(u uint64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, u)
 	return buf
 }
 
-// Make a in-memory buffer store implementation of LogStore and StableStore for raft.
+// BuffStore Make an in-memory buffer store implementation of LogStore and StableStore for raft.
 type BuffStore struct {
 	entries      map[uint64][]byte
 	entriesMutex sync.RWMutex
@@ -118,11 +120,14 @@ func (s *BuffStore) StoreLog(log *raft.Log) error {
 }
 
 func (s *BuffStore) StoreLogs(logs []*raft.Log) error {
+	start := time.Now()
+	glog.Warningf("StoreLogs: started at %+v", start)
 	for _, log := range logs {
 		if err := s.StoreLog(log); err != nil {
 			return err
 		}
 	}
+	glog.Warningf("StoreLogs: took %+v", time.Since(start))
 	return nil
 }
 
@@ -147,7 +152,7 @@ func (s *BuffStore) DeleteRange(min, max uint64) error {
 }
 
 func (s *BuffStore) Set(key []byte, val []byte) error {
-	// Convert the key to a uint64.
+	// Convert the key to uint64.
 	keyInt := bytesToUint64(key)
 
 	s.entriesMutex.Lock()
@@ -157,7 +162,7 @@ func (s *BuffStore) Set(key []byte, val []byte) error {
 }
 
 func (s *BuffStore) Get(key []byte) ([]byte, error) {
-	// Convert the key to a uint64.
+	// Convert the key to uint64.
 	keyInt := bytesToUint64(key)
 
 	s.entriesMutex.RLock()

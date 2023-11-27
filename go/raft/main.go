@@ -61,7 +61,7 @@ func main() {
 			glog.Fatal("Failed to read config file.")
 		}
 
-		for i := 1; i <= *numPeers; i++ {
+		for i := 1; i < *numPeers; i++ {
 			peerId := fmt.Sprintf("node%d", i)
 			peerIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", peerId, "ipv4_addr")
 			glog.Info("[RAFT Peer] [", peerIp, ":", *serverPort, "]")
@@ -121,12 +121,12 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	}
 
 	// Define two ChannelCtx, one for sending Raft RPCs and other for receiving.
-	var sendChannelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer nsaas.Detach()?
+	var sendChannelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 	if sendChannelCtx == nil {
 		glog.Fatal("Failed to attach to the channel.")
 	}
 
-	var recvChannelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer nsaas.Detach()?
+	var recvChannelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 	if recvChannelCtx == nil {
 		glog.Fatal("Failed to attach to the channel.")
 	}
@@ -140,7 +140,7 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	// Parse the json file to get the localIp.
 	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
 
-	// Create a new NSaaS Transport.
+	// Create a new Machnet Transport.
 	transport := NewTransport(raft.ServerAddress(localIp), sendChannelCtx, recvChannelCtx, *serverPort, id)
 
 	r, err := raft.NewRaft(c, fsm, logStore, store, snapshotStore, raft.Transport(transport))
@@ -183,8 +183,8 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 }
 
 func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
-	// Define a pointer variable channel_ctx to store the output of C.nsaas_attach()
-	var channelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer nsaas.Detach()?
+	// Define a pointer variable channel_ctx to store the output of C.machnet_attach()
+	var channelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 	if channelCtx == nil {
 		glog.Fatal("Failed to attach to the channel.")
 	}
@@ -198,12 +198,12 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	// Parse the json file to get the localIp.
 	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
 
-	// Create a new NSaaS Transport.
-	ret := machnet.Listen(channelCtx, localIp, uint(*applPort))
+	// Create a new Machnet Transport.
+	ret := machnet.Listen(channelCtx, localIp, uint(*appPort))
 	if ret != 0 {
 		glog.Fatal("Failed to listen for incoming connections.")
 	}
-	glog.Info("[APPL SERVER LISTENING] [", localIp, ":", *applPort, "]")
+	glog.Warningf("[APP SERVER LISTENING] [", localIp, ":", *appPort, "]")
 
 	// Create the rpcInterface object.
 	rpcInterface := rpcInterface{wt, raftNode}
@@ -213,7 +213,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	response := make([]byte, 4)
 
 	// Continuously accept incoming requests from client, and handle them.
-	histogram := hdrhistogram.New(1, 100000000, 3)
+	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxWordLength)
@@ -223,16 +223,18 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 		// Handle the request.
 		if recvBytes > 0 {
+			glog.Warningf("Received %s at %+v", string(request[:recvBytes]), time.Now())
 			start := time.Now()
 			index, _ := rpcInterface.AddWord(string(request[:recvBytes]))
-			elapsed := time.Since(start)
+			glog.Warningf("Replicated %s in %d us", string(request[:recvBytes]), time.Since(start).Microseconds())
+			//elapsed := time.Since(start)
 
 			// Swap the source and destination IP addresses.
-			tmp_flow := flow
-			flow.SrcIp = tmp_flow.DstIp
-			flow.DstIp = tmp_flow.SrcIp
-			flow.SrcPort = tmp_flow.DstPort
-			flow.DstPort = tmp_flow.SrcPort
+			tmpFlow := flow
+			flow.SrcIp = tmpFlow.DstIp
+			flow.DstIp = tmpFlow.SrcIp
+			flow.SrcPort = tmpFlow.DstPort
+			flow.DstPort = tmpFlow.SrcPort
 
 			// Send the index of the word to the client.
 			// Make a byte array payload of 4 bytes.
@@ -245,14 +247,15 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			if ret != 0 {
 				glog.Error("Failed to send data to client.")
 			}
-
-			histogram.RecordValue(elapsed.Nanoseconds())
+			glog.Warningf("Sent %s 's index [%d] at %+v", string(request[:recvBytes]), index, time.Now())
+			elapsed := time.Since(start)
+			_ = histogram.RecordValue(elapsed.Nanoseconds())
 
 			if time.Since(lastRecordedTime) > 1*time.Second {
-				perc_values := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-				glog.Infof("[Processing Time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
-					float64(perc_values[50.0])/1000, float64(perc_values[95.0])/1000,
-					float64(perc_values[99.0])/1000, float64(perc_values[99.9])/1000)
+				percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+				glog.Warningf("[Processing Time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
+					float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
+					float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000)
 				histogram.Reset()
 				lastRecordedTime = time.Now()
 			}
