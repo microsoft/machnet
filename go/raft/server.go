@@ -4,17 +4,15 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"io"
-	"sync"
-	"time"
-
 	"github.com/golang/glog"
 	"github.com/hashicorp/raft"
 	"github.com/microsoft/machnet"
+	"io"
+	"sync"
 )
 
 type Server struct {
-	transport *TransportApi
+	transport *MachnetTransport
 
 	// Assumption: There is only one snapshot per flow.
 	snapshotReaders map[flow]*snapshotReader
@@ -63,7 +61,7 @@ func (s *snapshotReader) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-func NewServer(transport *TransportApi) *Server {
+func NewServer(transport *MachnetTransport) *Server {
 	return &Server{
 		transport:       transport,
 		snapshotReaders: make(map[flow]*snapshotReader),
@@ -76,7 +74,7 @@ func NewServer(transport *TransportApi) *Server {
 // StartServer Listens for incoming connection from leader, and start the Recv thread.
 func (s *Server) StartServer() {
 	// Listen for incoming connections.
-	ret := machnet.Listen(s.transport.receiveChannelCtx, string(s.transport.localIp), uint(s.transport.raftPort))
+	ret := machnet.Listen(s.transport.channelCtx, string(s.transport.localIp), uint(s.transport.raftPort))
 	if ret != 0 {
 		glog.Fatal("Failed to listen for incoming connections")
 	}
@@ -86,381 +84,13 @@ func (s *Server) StartServer() {
 	s.HandleRPCs()
 }
 
-func DecodeRPCMessage(data []byte) (RpcMessage, error) {
-	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-	// Decode the message
-	if n, _ := buff.Write(data); n != len(data) {
-		return RpcMessage{}, errors.New("failed to write response into buffer")
-	}
-
-	var request RpcMessage
-	if err := dec.Decode(&request); err != nil {
-		return RpcMessage{}, err
-	}
-	return request, nil
-}
-
-// SendMachnetResponse sends a response to the Machnet Channel.
-// The response is sent on the reverse flow.
-//
-// Parameters:
-// response (rpcMessage): The response to be sent.
-// flow (flow): The flow that received the original RPC. SendMachnetResponse will send the response on the reverse flow.
-func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.Time) error {
-	// Encode the response
-	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-
-	if err := enc.Encode(response); err != nil {
-		glog.Errorf("SendMachnetResponse: failed to encode response: %v", err)
-		return err
-	}
-
-	// Send the response back to the Machnet Channel
-	responseBytes := buff.Bytes()
-	responseLen := len(responseBytes)
-
-	// Swap the flow's source and destination addresses
-	tmpFlow := flow
-	flow.SrcIp = tmpFlow.DstIp
-	flow.DstIp = tmpFlow.SrcIp
-	flow.SrcPort = tmpFlow.DstPort
-	flow.DstPort = tmpFlow.SrcPort
-
-	// glog.Info("Sending response to Machnet Channel: ", response.MsgType, " with length: ", responseLen)
-
-	elapsed := time.Since(start)
-	glog.Info("SendMachnetResponse: Total Rpc took: ", elapsed.Microseconds(), " us")
-	//glog.Infof("SendMachnetResponse: putting response on wire: %+v", responseBytes)
-	// Send to the remote host on the flow.
-	ret := machnet.SendMsg(s.transport.receiveChannelCtx, flow, &responseBytes[0], uint(responseLen))
-	if ret != 0 {
-		return errors.New("SendMachnetResponse: failed to send message to remote host")
-	}
-
-	return nil
-}
-
-func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, msgType uint8, rpcId uint64, start time.Time) error {
-	raftStart := time.Now()
-	glog.Info("GetResponseFromChannel: waiting for response from Raft channel...")
-	resp := <-ch
-	if resp.Error != nil {
-		glog.Error("GetResponseFromChannel: couldn't handle Rpc; error: ", resp.Error)
-		return resp.Error
-	}
-
-	// Encode the response
-	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	// Based on MsgType, construct the rpcMessage payload
-	switch msgType {
-	case AppendEntriesRequest:
-		payload := resp.Response.(*raft.AppendEntriesResponse)
-		if err := enc.Encode(*payload); err != nil {
-			return err
-		}
-		msgType = AppendEntriesRequestResponse
-
-	case RequestVoteRequest:
-		payload := resp.Response.(*raft.RequestVoteResponse)
-		if err := enc.Encode(*payload); err != nil {
-			return err
-		}
-		msgType = RequestVoteRequestResponse
-
-	case TimeoutNowRequest:
-		payload := resp.Response.(*raft.TimeoutNowResponse)
-		if err := enc.Encode(*payload); err != nil {
-			return err
-		}
-		msgType = TimeoutNowRequestResponse
-	case InstallSnapshotRequestStart:
-		payload := resp.Response.(*raft.InstallSnapshotResponse)
-		if err := enc.Encode(*payload); err != nil {
-			return err
-		}
-		msgType = InstallSnapshotRequestStartResponse
-	case InstallSnapshotRequestClose:
-		payload := resp.Response.(*raft.InstallSnapshotResponse)
-		if err := enc.Encode(*payload); err != nil {
-			return err
-		}
-		msgType = InstallSnapshotRequestCloseResponse
-	case AppendEntriesPipelineRecv:
-		payload := resp.Response.(*raft.AppendEntriesResponse)
-		if err := enc.Encode(*payload); err != nil {
-			return err
-		}
-		msgType = AppendEntriesPipelineRecvResponse
-	default:
-		return errors.New("GetResponseFromChannel: Unknown message type")
-	}
-
-	// Construct the rpcMessage response.
-	response := RpcMessage{
-		MsgType: msgType,
-		RpcId:   rpcId,
-		Payload: buff.Bytes(),
-	}
-	//glog.Infof("GetResponseFromChannel: MsgType: %v Payload: %+v", response.MsgType, response.Payload)
-	if err := s.SendMachnetResponse(response, flow, start); err != nil {
-		glog.Errorf("GetResponseFromChannel: failed to SendMachnetResponse: %v", err)
-		return err
-	}
-
-	raftElapsed := time.Since(raftStart)
-	glog.Info("GetResponseFromChannel: Raft Rpc took: ", raftElapsed.Microseconds(), " us")
-
-	return nil
-}
-
-// HandleRaftCommand Send a Raft command to the Raft channel.
-// To be used for all operations except AppendEntriesPipeline.
-func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flow, msgType uint8, rpcId uint64, waitForResponse bool, start time.Time) error {
-	ch := make(chan raft.RPCResponse, 1)
-	rpc := raft.RPC{
-		Command:  command,
-		RespChan: ch,
-		Reader:   data,
-	}
-	s.transport.rpcChan <- rpc
-
-	if waitForResponse {
-		return s.GetResponseFromChannel(ch, flow, msgType, rpcId, start)
-	}
-
-	// Add the response channel to the list of pending responses
-	s.pendingSnapshotResponses[flow] = ch
-
-	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
-		MsgType: DummyResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
-
-	//glog.Infof("HandleRaftCommand: sent dummy response: %v msgType was: %v", response, msgType)
-	return s.SendMachnetResponse(response, flow, start)
-}
-
-func (s *Server) HandleAppendEntriesRequest(payload []byte, rpcId uint64, flow flow, start time.Time) error {
-	// Decode the payload to get the AppendEntriesRequest struct
-	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
-	var appendEntriesRequest raft.AppendEntriesRequest
-	if n, _ := buff.Write(payload); n != len(payload) {
-		return errors.New("failed to write payload into buffer")
-	}
-
-	if err := dec.Decode(&appendEntriesRequest); err != nil {
-		glog.Errorf("HandleAppendEntriesRequest: failed to decode payload: %v", err)
-		return err
-	}
-
-	// Get the previous index from the AppendEntriesRequest
-	// prevIndex := appendEntriesRequest.PrevLogEntry
-	// glog.Info("Received AppendEntriesRequest with PrevLogEntry: ", prevIndex)
-
-	return s.HandleRaftCommand(&appendEntriesRequest, nil, flow, AppendEntriesRequest, rpcId, true, start)
-}
-
-func (s *Server) HandleRequestVoteRequest(payload []byte, rpcId uint64, flow flow, start time.Time) error {
-	// Decode the payload to get the RequestVoteRequest struct
-	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
-	var requestVoteRequest raft.RequestVoteRequest
-	if n, _ := buff.Write(payload); n != len(payload) {
-		return errors.New("failed to write payload into buffer")
-	}
-
-	if err := dec.Decode(&requestVoteRequest); err != nil {
-		return err
-	}
-
-	return s.HandleRaftCommand(&requestVoteRequest, nil, flow, RequestVoteRequest, rpcId, true, start)
-}
-
-func (s *Server) HandleTimeoutNowRequest(payload []byte, rpcId uint64, flow flow, start time.Time) error {
-	// Decode the payload to get the TimeoutNowRequest struct
-	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
-	var timeoutNowRequest raft.TimeoutNowRequest
-	if n, _ := buff.Write(payload); n != len(payload) {
-		return errors.New("failed to write payload into buffer")
-	}
-
-	if err := dec.Decode(&timeoutNowRequest); err != nil {
-		return err
-	}
-
-	return s.HandleRaftCommand(&timeoutNowRequest, nil, flow, TimeoutNowRequest, rpcId, true, start)
-}
-
-func (s *Server) HandleInstallSnapshotRequestStart(payload []byte, rpcId uint64, flow flow, start time.Time) error {
-	// Decode the payload to get the InstallSnapshotRequest struct
-	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
-	var installSnapshotRequest raft.InstallSnapshotRequest
-	if n, _ := buff.Write(payload); n != len(payload) {
-		return errors.New("failed to write payload into buffer")
-	}
-
-	if err := dec.Decode(&installSnapshotRequest); err != nil {
-		return err
-	}
-
-	// Create a snapshotReader and add it to the list of snapshotReaders
-	snapshotReaderObj := snapshotReader{
-		buf: make([]byte, installSnapshotRequest.Size),
-	}
-
-	// Add the snapshotReader to the list of snapshotReaders
-	s.snapshotMutex.Lock()
-	s.snapshotReaders[flow] = &snapshotReaderObj
-	s.snapshotMutex.Unlock()
-
-	return s.HandleRaftCommand(&installSnapshotRequest, &snapshotReaderObj, flow, InstallSnapshotRequestStart, rpcId, false, start)
-}
-
-func (s *Server) HandleInstallSnapshotRequestBuffer(payload []byte, rpcId uint64, flow flow, start time.Time) error {
-	// Find the snapshotReader corresponding to the flow and write the payload to it
-	s.snapshotMutex.Lock()
-	snapshotReaderObj := s.snapshotReaders[flow]
-	_, err := snapshotReaderObj.Write(payload)
-	if err != nil {
-		return err
-	}
-	s.snapshotMutex.Unlock()
-
-	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
-		MsgType: InstallSnapshotRequestBufferResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
-
-	return s.SendMachnetResponse(response, flow, start)
-}
-
-func (s *Server) HandleInstallSnapshotRequestClose(rpcId uint64, flow flow, start time.Time) error {
-	// Close the snapshotReader and remove it from the list of snapshotReaders
-	s.snapshotMutex.Lock()
-	snapshotReaderObj := s.snapshotReaders[flow]
-	snapshotReaderObj.numReady = 0
-	s.snapshotMutex.Unlock()
-
-	// Get the channel corresponding to the flow and remove it from the list of pendingSnapshotResponses
-	ch := s.pendingSnapshotResponses[flow]
-	delete(s.pendingSnapshotResponses, flow)
-
-	return s.GetResponseFromChannel(ch, flow, InstallSnapshotRequestClose, rpcId, start)
-}
-
-func (s *Server) HandleAppendEntriesPipelineStart(rpcId uint64, flow flow, start time.Time) error {
-	// Construct a channel to send RPCs and add it to the list of pendingPipelineResponses
-	ch := make(chan raft.RPCResponse, 1024)
-
-	s.pipelineMutex.Lock()
-	s.pendingPipelineResponses[flow] = ch
-	s.pipelineMutex.Unlock()
-
-	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
-		MsgType: AppendEntriesPipelineStartResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
-
-	//glog.Infof("HandleAppendEntriesPipelineStart: send dummy response: %+v", response)
-	return s.SendMachnetResponse(response, flow, start)
-}
-
-func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, flow flow, start time.Time) error {
-	// Decode the payload to get the AppendEntriesRequest struct
-	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
-	var appendEntriesRequest raft.AppendEntriesRequest
-	if n, _ := buff.Write(payload); n != len(payload) {
-		return errors.New("failed to write payload into buffer")
-	}
-
-	if err := dec.Decode(&appendEntriesRequest); err != nil {
-		return err
-	}
-
-	// Send the RPC to the Raft channel
-	ch := s.pendingPipelineResponses[flow]
-	rpc := raft.RPC{
-		Command:  &appendEntriesRequest,
-		RespChan: ch,
-		Reader:   nil,
-	}
-
-	_, ok := rpc.Command.(raft.WithRPCHeader)
-	if !ok {
-		glog.Error("AppendEntriesRequest does not have a WithRPCHeader")
-	}
-
-	s.transport.rpcChan <- rpc
-
-	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
-		MsgType: AppendEntriesPipelineSendResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
-	//glog.Infof("HandleAppendEntriesPipelineSend: send dummy response: %+v", response)
-	return s.SendMachnetResponse(response, flow, start)
-}
-
-func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start time.Time) error {
-	// Get the channel corresponding to the flow
-	ch, exists := s.pendingPipelineResponses[flow]
-	if !exists {
-		// pipeline closed
-		glog.Info("HandleAppendEntriesPipelineRecv: receive on closed pipeline! ")
-		response := RpcMessage{
-			MsgType: AppendEntriesPipelineCloseResponse,
-			RpcId:   rpcId,
-			Payload: []byte{},
-		}
-		//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
-		return s.SendMachnetResponse(response, flow, start)
-
-	}
-	// Send response back to the Machnet Channel
-	return s.GetResponseFromChannel(ch, flow, AppendEntriesPipelineRecv, rpcId, start)
-}
-
-func (s *Server) HandleAppendEntriesPipelineClose(rpcId uint64, flow flow, start time.Time) error {
-	// Get the channel corresponding to the flow and remove it from the list of pendingPipelineResponses
-	ch := s.pendingPipelineResponses[flow]
-	delete(s.pendingPipelineResponses, flow)
-	close(ch)
-
-	// Send a dummy response back to the Machnet Channel
-	response := RpcMessage{
-		MsgType: AppendEntriesPipelineCloseResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
-	//glog.Infof("HandleAppendEntriesPipelineClose: sent dummy response: %+v", response)
-	return s.SendMachnetResponse(response, flow, start)
-}
-
 func (s *Server) HandleRPCs() {
 
 	for {
 		// Receive Message from the Machnet Channel
-		requestBuff := make([]byte, maxMessageLength)
-		recvBytes, flow := machnet.Recv(s.transport.receiveChannelCtx, &requestBuff[0], maxMessageLength)
+		var rpcType byte
+		recvBytes, f := machnet.Recv(s.transport.channelCtx, &rpcType, 1)
+
 		if recvBytes < 0 {
 			glog.Errorf("Failed to receive message from Machnet Channel.")
 			continue
@@ -468,80 +98,125 @@ func (s *Server) HandleRPCs() {
 			continue
 		}
 
-		start := time.Now()
+		respBuf := make([]byte, maxMessageLength)
+		recvBytes, f = machnet.Recv(s.transport.channelCtx, &respBuf[0], maxMessageLength)
 
-		// Decode the rpcMessage
-		request, err := DecodeRPCMessage(requestBuff[:recvBytes])
-		if err != nil {
-			glog.Errorf("Failed to decode rpcMessage.")
+		if recvBytes < 0 {
+			glog.Errorf("Failed to receive message from Machnet Channel.")
+			continue
+		} else if recvBytes == 0 {
 			continue
 		}
 
-		// Depending on the type of message, handle it accordingly
-		glog.Infof("HandleRpc: MsgType: %v RpcId:%v", request.MsgType, request.RpcId)
-		switch request.MsgType {
-		case AppendEntriesRequest:
-			err := s.HandleAppendEntriesRequest(request.Payload, request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleAppendEntriesRequest failed: %v", err)
+		var buf bytes.Buffer
+		dec := gob.NewDecoder(&buf)
+		if n, _ := buf.Write(respBuf[:recvBytes]); n != recvBytes {
+			glog.Errorf("Failed to write to buffer completely")
+			continue
+		}
+		// Create the RPC object
+		respCh := make(chan raft.RPCResponse, 1)
+		rpc := raft.RPC{
+			RespChan: respCh,
+		}
+
+		isHeartbeat := false
+
+		switch rpcType {
+		case rpcAppendEntries:
+			var req raft.AppendEntriesRequest
+			if err := dec.Decode(&req); err != nil {
+				glog.Errorf("Failed to decode: %v", err)
+				continue
 			}
 
-		case RequestVoteRequest:
-			err := s.HandleRequestVoteRequest(request.Payload, request.RpcId, flow, start)
-			if err != nil {
-				glog.Error("HandleRequestVoteRequest failed: %v", err)
+			rpc.Command = &req
+			leaderAddr := req.Leader
+			if len(leaderAddr) == 0 {
+				leaderAddr = req.Leader
 			}
 
-		case TimeoutNowRequest:
-			err := s.HandleTimeoutNowRequest(request.Payload, request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleTimeoutNowRequest failed: %v", err)
+			// Check if this is a heartbeat
+			if req.Term != 0 && leaderAddr != nil &&
+				req.PrevLogEntry == 0 && req.PrevLogTerm == 0 &&
+				len(req.Entries) == 0 && req.LeaderCommitIndex == 0 {
+				isHeartbeat = true
 			}
 
-		case InstallSnapshotRequestStart:
-			err := s.HandleInstallSnapshotRequestStart(request.Payload, request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleInstallSnapshotRequestStart failed: %v", err)
+		case rpcRequestVote:
+			var req raft.RequestVoteRequest
+			if err := dec.Decode(&req); err != nil {
+				glog.Error("Failed to handle RequestVote request: %v", err)
+				continue
 			}
+			rpc.Command = &req
 
-		case InstallSnapshotRequestBuffer:
-			err := s.HandleInstallSnapshotRequestBuffer(request.Payload, request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleInstallSnapshotRequestBuffer failed: %v", err)
+		case rpcInstallSnapshot:
+			var req raft.InstallSnapshotRequest
+			if err := dec.Decode(&req); err != nil {
+				glog.Errorf("Failed to handle InstallSnapshot request: %v", err)
+				continue
 			}
-
-		case InstallSnapshotRequestClose:
-			err := s.HandleInstallSnapshotRequestClose(request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleInstallSnapshotRequestClose failed: %v", err)
+			rpc.Command = &req
+		case rpcTimeoutNow:
+			var req raft.TimeoutNowRequest
+			if err := dec.Decode(&req); err != nil {
+				glog.Errorf("Failed to handle TimeoutNow request: %v", err)
+				continue
 			}
-
-		case AppendEntriesPipelineStart:
-			err := s.HandleAppendEntriesPipelineStart(request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleAppendEntriesPipelineStart failed: %v", err)
-			}
-
-		case AppendEntriesPipelineSend:
-			err := s.HandleAppendEntriesPipelineSend(request.Payload, request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleAppendEntriesPipelineSend failed: %v", err)
-			}
-
-		case AppendEntriesPipelineRecv:
-			err := s.HandleAppendEntriesPipelineRecv(request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleAppendEntriesPipelineRecv failed: %v", err)
-			}
-
-		case AppendEntriesPipelineClose:
-			err := s.HandleAppendEntriesPipelineClose(request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleAppendEntriesPipelineClose failed: %v", err)
-			}
+			rpc.Command = &req
 
 		default:
 			glog.Errorf("Unknown message type.")
+		}
+
+		// Check for heartbeat fast-path
+		if isHeartbeat {
+			s.transport.heartbeatFnLock.Lock()
+			fn := s.transport.heartbeatFn
+			s.transport.heartbeatFnLock.Unlock()
+			if fn != nil {
+				fn(rpc)
+				goto RESP
+			}
+		}
+		// Dispatch the RPC
+		select {
+		case s.transport.consumeCh <- rpc:
+		case <-s.transport.shutdownCh:
+			glog.Error("ErrTransportShutdown")
+		}
+	RESP:
+		select {
+		case resp := <-respCh:
+			respErr := ""
+			if resp.Error != nil {
+				respErr = resp.Error.Error()
+			}
+			var buf bytes.Buffer
+			enc := gob.NewEncoder(&buf)
+			if err := enc.Encode(respErr); err != nil {
+				glog.Errorf("Failed to encode respErr")
+				continue
+			}
+			msgBytes := buf.Bytes()
+			if ret := machnet.SendMsg(s.transport.channelCtx, f, &msgBytes[0], uint(len(msgBytes))); ret != 0 {
+				glog.Error("Failed to send machnet rpc response (respErr)")
+			}
+			buf.Reset()
+			if err := enc.Encode(resp.Response); err != nil {
+				glog.Errorf("Failed to encode respErr")
+				continue
+			}
+			msgBytes = buf.Bytes()
+			// Send the response
+			if ret := machnet.SendMsg(s.transport.channelCtx, f, &msgBytes[0], uint(len(msgBytes))); ret != 0 {
+				glog.Error("Failed to send machnet rpc response (response)")
+			}
+		case <-s.transport.shutdownCh:
+			glog.Error("ErrorTransportShutdown")
+			// Wait for response
+
 		}
 	}
 }

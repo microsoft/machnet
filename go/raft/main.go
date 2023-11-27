@@ -105,7 +105,7 @@ func main() {
 	server.StartServer()
 }
 
-func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
+func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *MachnetTransport, error) {
 	c := raft.DefaultConfig()
 	c.LocalID = raft.ServerID(id)
 	// c.LogLevel = "WARN"
@@ -141,13 +141,8 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	}
 
 	// Define two ChannelCtx, one for sending Raft RPCs and other for receiving.
-	var sendChannelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
-	if sendChannelCtx == nil {
-		glog.Fatal("Failed to attach to the channel.")
-	}
-
-	var recvChannelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
-	if recvChannelCtx == nil {
+	var channelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
+	if channelCtx == nil {
 		glog.Fatal("Failed to attach to the channel.")
 	}
 
@@ -161,7 +156,7 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
 
 	// Create a new Machnet Transport.
-	transport := NewTransport(raft.ServerAddress(localIp), sendChannelCtx, recvChannelCtx, *serverPort, id)
+	transport := NewMachnetTransport(raft.ServerAddress(localIp), channelCtx, *serverPort, id)
 
 	r, err := raft.NewRaft(c, fsm, logStore, store, snapshotStore, raft.Transport(transport))
 	if err != nil {
