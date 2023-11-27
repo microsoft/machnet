@@ -268,14 +268,14 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 
 	// Send Machnet RPC to remote host. Send a dummy payload.
 	// We don't care about the response as this is just to register the AppendEntriesPipeline request.
-	//dummyPayload := make([]byte, 1)
-	//rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
-	//glog.Infof("AppendEntriesPipeline: rpc response: %+v", rpcResponse)
-	//if err != nil {
-	//	glog.Errorf("AppendEntriesPipeline not functioning properly")
-	//	cancel()
-	//	return nil, err
-	//}
+	dummyPayload := make([]byte, 1)
+	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
+	glog.Infof("AppendEntriesPipeline: rpc response: %+v", rpcResponse)
+	if err != nil {
+		glog.Errorf("AppendEntriesPipeline not functioning properly")
+		cancel()
+		return nil, err
+	}
 
 	pipelineObject := raftPipelineAPI{
 		t:          t,

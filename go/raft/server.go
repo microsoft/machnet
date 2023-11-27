@@ -373,23 +373,9 @@ func (s *Server) HandleInstallSnapshotRequestClose(rpcId uint64, flow flow, star
 	return s.GetResponseFromChannel(ch, flow, InstallSnapshotRequestClose, rpcId, start)
 }
 
-func (s *Server) HandleAppendEntriesPipelineStart(rpcId uint64, flow flow, start time.Time) error {
+func (s *Server) HandleAppendEntriesPipelineStart(flow flow) error {
 	// Construct a channel to send RPCs and add it to the list of pendingPipelineResponses
-	ch := make(chan raft.RPCResponse, 1024)
 
-	s.pipelineMutex.Lock()
-	s.pendingPipelineResponses[flow] = ch
-	s.pipelineMutex.Unlock()
-
-	// Send a dummy response back to the Machnet Channel
-	//response := RpcMessage{
-	//	MsgType: AppendEntriesPipelineStartResponse,
-	//	RpcId:   rpcId,
-	//	Payload: []byte{},
-	//}
-
-	//glog.Infof("HandleAppendEntriesPipelineStart: send dummy response: %+v", response)
-	//return s.SendMachnetResponse(response, flow, start)
 	return nil
 }
 
@@ -531,10 +517,10 @@ func (s *Server) HandleRPCs() {
 			}
 
 		case AppendEntriesPipelineStart:
-			err := s.HandleAppendEntriesPipelineStart(request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleAppendEntriesPipelineStart failed: %v", err)
-			}
+			ch := make(chan raft.RPCResponse, 1024)
+			s.pipelineMutex.Lock()
+			s.pendingPipelineResponses[flow] = ch
+			s.pipelineMutex.Unlock()
 
 		case AppendEntriesPipelineSend:
 			err := s.HandleAppendEntriesPipelineSend(request.Payload, request.RpcId, flow, start)
