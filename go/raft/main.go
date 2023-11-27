@@ -61,7 +61,7 @@ func main() {
 			glog.Fatal("Failed to read config file.")
 		}
 
-		for i := 1; i < *numPeers; i++ {
+		for i := 1; i <= *numPeers; i++ {
 			peerId := fmt.Sprintf("node%d", i)
 			peerIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", peerId, "ipv4_addr")
 			glog.Info("[RAFT Peer] [", peerIp, ":", *serverPort, "]")
@@ -213,7 +213,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	response := make([]byte, 4)
 
 	// Continuously accept incoming requests from client, and handle them.
-	histogram := hdrhistogram.New(1, 1000000, 3)
+	histogram := hdrhistogram.New(1, 100000000, 3)
 	lastRecordedTime := time.Now()
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxWordLength)
@@ -223,11 +223,9 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 		// Handle the request.
 		if recvBytes > 0 {
-			glog.Warningf("Received %s at %+v", string(request[:recvBytes]), time.Now())
 			start := time.Now()
 			index, _ := rpcInterface.AddWord(string(request[:recvBytes]))
-			glog.Warningf("Replicated %s in %d us", string(request[:recvBytes]), time.Since(start).Microseconds())
-			//elapsed := time.Since(start)
+			elapsed := time.Since(start)
 
 			// Swap the source and destination IP addresses.
 			tmpFlow := flow
@@ -247,9 +245,8 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			if ret != 0 {
 				glog.Error("Failed to send data to client.")
 			}
-			glog.Warningf("Sent %s 's index [%d] at %+v", string(request[:recvBytes]), index, time.Now())
-			elapsed := time.Since(start)
-			_ = histogram.RecordValue(elapsed.Nanoseconds())
+
+			histogram.RecordValue(elapsed.Nanoseconds())
 
 			if time.Since(lastRecordedTime) > 1*time.Second {
 				percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})

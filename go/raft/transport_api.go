@@ -54,12 +54,10 @@ type TransportApi struct {
 
 	flowsMtx sync.Mutex
 	flows    map[raft.ServerID]*flow
-	rpcId    uint64
 }
 
-type RpcMessage struct {
+type rpcMessage struct {
 	MsgType uint8
-	RpcId   uint64
 	Payload []byte
 }
 
@@ -90,29 +88,28 @@ func NewTransport(localIp raft.ServerAddress, sendChannelCtx *machnet.MachnetCha
 	trans.localIp = localIp
 	trans.sendChannelCtx = sendChannelCtx
 	trans.receiveChannelCtx = receiveChannelCtx
-	trans.configJson = "../servers.json"
+	trans.configJson = "../../servers.json"
 	trans.raftPort = raftPort
 	trans.flows = make(map[raft.ServerID]*flow)
 	trans.rpcChan = make(chan raft.RPC, 100)
 	trans.hostname = hostname
-	trans.rpcId = 0
 
 	return trans
 }
 
-// Consumer Interface function that returns a channel that can be used to consume and respond to RPC requests.
+// Interface function that returns a channel that can be used to consume and respond to RPC requests.
 func (t *TransportApi) Consumer() <-chan raft.RPC {
 	return t.rpcChan
 }
 
-// LocalAddr Interface function that is used to return our local address to distinguish from our peers.
+// Interface function that is used to return our local address to distinguish from our peers.
 func (t *TransportApi) LocalAddr() raft.ServerAddress {
 	return t.localIp
 }
 
 func (t *TransportApi) BootstrapPeers(numPeers int) {
 	t.flowsMtx.Lock()
-	for i := 0; i < numPeers; i++ {
+	for i := 0; i <= numPeers; i++ {
 		id := fmt.Sprintf("node%d", i)
 
 		if id == t.hostname {
@@ -125,12 +122,12 @@ func (t *TransportApi) BootstrapPeers(numPeers int) {
 		}
 
 		// Parse the json file to get the remote_ip.
-		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", id, "ipv4_addr")
-		glog.Infof("%s connecting to %s", t.localIp, remoteIp)
+		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", string(id), "ipv4_addr")
+
 		// Initiate connection to the remote host.
 		ret, f := machnet.Connect(t.sendChannelCtx, string(t.localIp), remoteIp, uint(t.raftPort))
 		if ret != 0 {
-			glog.Fatalf("Failed to connect to remote host: %s->%s", t.localIp, remoteIp)
+			glog.Fatal("Failed to connect to remote host")
 		}
 		t.flows[raft.ServerID(id)] = &f
 	}
@@ -177,9 +174,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	dec := gob.NewDecoder(&buff)
 
 	// Enclose the payload into a rpcMessage and then encode into byte array.
-	var rpcId = t.rpcId
-	msg := RpcMessage{MsgType: rpcType, RpcId: rpcId, Payload: payload}
-	t.rpcId = 1 + t.rpcId
+	msg := rpcMessage{MsgType: rpcType, Payload: payload}
 	if err := enc.Encode(msg); err != nil {
 		return nil, err
 	}
@@ -221,7 +216,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		return nil, errors.New("failed to write response into buffer")
 	}
 
-	var response RpcMessage
+	var response rpcMessage
 	if err := dec.Decode(&response); err != nil {
 		return nil, err
 	}

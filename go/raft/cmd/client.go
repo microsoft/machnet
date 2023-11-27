@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"flag"
 	"os"
 	"runtime/pprof"
@@ -19,30 +18,26 @@ var (
 	remoteHostname = flag.String("remote_hostname", "", "Local hostname in the hosts JSON file.")
 	appPort        = flag.Int("app_port", 888, "Port to listen on for application traffic.")
 	configJson     = flag.String("config_json", "../servers.json", "Path to the JSON file containing the hosts config.")
-	cpuProfile     = flag.String("cpuProfile", "", "write cpu profile to file")
+	cpuprofile     = flag.String("cpuprofile", "", "write cpu profile to file")
 )
 
 func main() {
 	flag.Parse()
-	if *cpuProfile != "" {
-		f, err := os.Create(*cpuProfile)
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
 		if err != nil {
 			glog.Fatal(err)
 		}
-		err = pprof.StartCPUProfile(f)
-		if err != nil {
-			glog.Errorf("Couldn't start CPU profiler: %v", err)
-		}
+		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
 
-	// Start Machnet channel.
+	// Start NSaaS channel.
 	ret := machnet.Init()
 	if ret != 0 {
-		glog.Fatal("Failed to initialize the Machnet library.")
+		glog.Fatal("Failed to initialize the nsaas library.")
 	}
 
-	// Define a pointer variable channelCtx to store the output of C.machnet_attach()
 	var channelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 
 	if channelCtx == nil {
@@ -72,7 +67,8 @@ func main() {
 	babbler := babble.NewBabbler()
 	babbler.Count = 1
 
-	histogram := hdrhistogram.New(1, 1000000, 3)
+	count := 0
+	histogram := hdrhistogram.New(1, 100000000, 3)
 	lastRecordedTime := time.Now()
 	for {
 		word := babbler.Babble()
@@ -84,34 +80,33 @@ func main() {
 
 		// Time the SendMsg() call.
 		start := time.Now()
+
 		ret := machnet.SendMsg(channelCtx, flow, &wordBytes[0], uint(wordLen))
-		glog.Infof("Sent %s at %+v", word, time.Now())
 		if ret != 0 {
 			glog.Fatal("Failed to send word.")
 		}
 
 		// Receive the response from the remote host on the flow.
-		responseBuff := make([]byte, 64)
+		responseBuff := make([]byte, 4)
 
 		// Keep reading until we get a message from the same flow.
-		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64)
+		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 4)
 		for recvBytes == 0 {
-			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 64)
+			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 4)
 		}
 
 		elapsed := time.Since(start)
-		glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]"+" index: ", binary.LittleEndian.Uint64(responseBuff[:8]))
-		err := histogram.RecordValue(elapsed.Microseconds())
-		if err != nil {
-			glog.Errorf("couldn't record value to histogram: %v", err)
-		}
+		count += 1
+		// glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us, ", elapsed.Nanoseconds(), " ns]")
+		histogram.RecordValue(elapsed.Nanoseconds())
 
 		if time.Since(lastRecordedTime) > 1*time.Second {
 			percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
 			glog.Infof("[RTT: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us, Words added: %d]",
-				float64(percentileValues[50.0]), float64(percentileValues[95.0]),
-				float64(percentileValues[99.0]), float64(percentileValues[99.9]),
-				histogram.TotalCount())
+				float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
+				float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000,
+				count)
+			count = 0
 			histogram.Reset()
 			lastRecordedTime = time.Now()
 		}
