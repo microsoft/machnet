@@ -260,6 +260,35 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	return response, nil
 }
 
+// AppendEntriesPipeline returns an interface that can be used to pipeline
+// AppendEntries requests.
+func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.ServerAddress) (raft.AppendPipeline, error) {
+	ctx := context.TODO()
+	_, cancel := context.WithCancel(ctx)
+
+	// Send Machnet RPC to remote host. Send a dummy payload.
+	// We don't care about the response as this is just to register the AppendEntriesPipeline request.
+	//dummyPayload := make([]byte, 1)
+	//rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
+	//glog.Infof("AppendEntriesPipeline: rpc response: %+v", rpcResponse)
+	//if err != nil {
+	//	glog.Errorf("AppendEntriesPipeline not functioning properly")
+	//	cancel()
+	//	return nil, err
+	//}
+
+	pipelineObject := raftPipelineAPI{
+		t:          t,
+		id:         id,
+		ctx:        ctx,
+		cancel:     cancel,
+		inflightCh: make(chan *appendFuture, 20),
+		doneCh:     make(chan raft.AppendFuture, 20),
+	}
+	go pipelineObject.receiver()
+	return &pipelineObject, nil
+}
+
 // AppendEntries sends the appropriate RPC to the target node.
 func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
 	var buff bytes.Buffer
@@ -335,39 +364,6 @@ func (t *TransportApi) RequestVote(id raft.ServerID, target raft.ServerAddress, 
 	return nil
 }
 
-// TimeoutNow is used to start a leadership transfer to the target node.
-func (t *TransportApi) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse) error {
-	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	dec := gob.NewDecoder(&buff)
-
-	// Encode the TimeoutNowRequest into a byte array.
-	if err := enc.Encode(args); err != nil {
-		return err
-	}
-	reqBytes := buff.Bytes()
-
-	// Send Machnet RPC to remote host.
-	rpcResponse, err := t.SendMachnetRpc(id, TimeoutNowRequest, reqBytes)
-	glog.Infof("TimeoutNow: rpc response: %+v", rpcResponse)
-	recvBytes := rpcResponse.Payload
-	if err != nil {
-		return err
-	}
-
-	// Decode the TimeoutNowResponse from the received payload.
-	buff.Reset()
-	if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
-		return errors.New("failed to write payload into buffer")
-	}
-
-	if err := dec.Decode(resp); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // InstallSnapshot is used to push a snapshot down to a follower. The data is read from
 // the ReadCloser and streamed to the client.
 func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, req *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader) error {
@@ -428,42 +424,57 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 	return nil
 }
 
-// AppendEntriesPipeline returns an interface that can be used to pipeline
-// AppendEntries requests.
-func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.ServerAddress) (raft.AppendPipeline, error) {
-	ctx := context.TODO()
-	_, cancel := context.WithCancel(ctx)
+// EncodePeer is used to serialize a peer's address.
+func (t *TransportApi) EncodePeer(id raft.ServerID, addr raft.ServerAddress) []byte {
+	return []byte(addr)
+}
 
-	// Send Machnet RPC to remote host. Send a dummy payload.
-	// We don't care about the response as this is just to register the AppendEntriesPipeline request.
-	dummyPayload := make([]byte, 1)
-	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
-	glog.Infof("AppendEntriesPipeline: rpc response: %+v", rpcResponse)
+// DecodePeer is used to deserialize a peer's address.
+func (t *TransportApi) DecodePeer(p []byte) raft.ServerAddress {
+	return raft.ServerAddress(p)
+}
+
+// TimeoutNow is used to start a leadership transfer to the target node.
+func (t *TransportApi) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse) error {
+	var buff bytes.Buffer
+	enc := gob.NewEncoder(&buff)
+	dec := gob.NewDecoder(&buff)
+
+	// Encode the TimeoutNowRequest into a byte array.
+	if err := enc.Encode(args); err != nil {
+		return err
+	}
+	reqBytes := buff.Bytes()
+
+	// Send Machnet RPC to remote host.
+	rpcResponse, err := t.SendMachnetRpc(id, TimeoutNowRequest, reqBytes)
+	glog.Infof("TimeoutNow: rpc response: %+v", rpcResponse)
+	recvBytes := rpcResponse.Payload
 	if err != nil {
-		glog.Errorf("AppendEntriesPipeline not functioning properly")
-		cancel()
-		return nil, err
+		return err
 	}
 
-	pipelineObject := raftPipelineAPI{
-		t:          t,
-		id:         id,
-		ctx:        ctx,
-		cancel:     cancel,
-		inflightCh: make(chan *appendFuture, 20),
-		doneCh:     make(chan raft.AppendFuture, 20),
+	// Decode the TimeoutNowResponse from the received payload.
+	buff.Reset()
+	if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
+		return errors.New("failed to write payload into buffer")
 	}
-	go pipelineObject.receiver()
-	return &pipelineObject, nil
+
+	if err := dec.Decode(resp); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // AppendEntries is used to add another request to the pipeline.
 // The send may block which is an effective form of back-pressure.
 func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) (raft.AppendFuture, error) {
 	af := &appendFuture{
-		start:   time.Now(),
-		request: req,
-		done:    make(chan struct{}),
+		start:    time.Now(),
+		request:  req,
+		response: resp,
+		done:     make(chan struct{}),
 	}
 
 	var buff bytes.Buffer
@@ -483,14 +494,20 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 		return nil, err
 	}
 
-	r.inflightChMtx.Lock()
 	select {
+	case r.inflightCh <- af:
+		return af, nil
 	case <-r.ctx.Done():
-	default:
-		r.inflightCh <- af
+		return nil, raft.ErrPipelineShutdown
 	}
-	r.inflightChMtx.Unlock()
-	return af, nil
+	//r.inflightChMtx.Lock()
+	//select {
+	//case <-r.ctx.Done():
+	//default:
+	//	r.inflightCh <- af
+	//}
+	//r.inflightChMtx.Unlock()
+	//return af, nil
 }
 
 // Consumer returns a channel that can be used to consume
@@ -513,7 +530,7 @@ func (r *raftPipelineAPI) Close() error {
 		return err
 	}
 
-	r.inflightChMtx.Lock()
+	r.inflightChMtx.Lock() // do we need this lock here ???
 	close(r.inflightCh)
 	r.inflightChMtx.Unlock()
 	return nil
@@ -586,14 +603,4 @@ func (f *appendFuture) Request() *raft.AppendEntriesRequest {
 // method returns, and will only be valid on success.
 func (f *appendFuture) Response() *raft.AppendEntriesResponse {
 	return f.response
-}
-
-// EncodePeer is used to serialize a peer's address.
-func (t *TransportApi) EncodePeer(id raft.ServerID, addr raft.ServerAddress) []byte {
-	return []byte(addr)
-}
-
-// DecodePeer is used to deserialize a peer's address.
-func (t *TransportApi) DecodePeer(p []byte) raft.ServerAddress {
-	return raft.ServerAddress(p)
 }
