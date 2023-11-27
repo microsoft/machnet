@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
-	metrics "github.com/armon/go-metrics"
 	"log"
 	"os"
 	"path/filepath"
@@ -34,24 +33,6 @@ func main() {
 	flag.Parse()
 
 	wt := &WordTracker{}
-	metricsSink := metrics.NewInmemSink(1*time.Second, time.Minute)
-	metrics.NewGlobal(metrics.DefaultConfig("main-raft"), metricsSink)
-	ticker := time.NewTicker(1 * time.Second)
-	go func() {
-		select {
-		case <-ticker.C:
-			data := metricsSink.Data()
-			for _, interval := range data {
-				for key, val := range interval.Gauges {
-					glog.Warningf("Gauge %v: %v\n", key, val.Value)
-				}
-				for key, val := range interval.Counters {
-					glog.Warningf("Counter %v: %v\n", key, val.Count)
-				}
-
-			}
-		}
-	}()
 	// Initialize the Machnet library.
 	if ret := machnet.Init(); ret != 0 {
 		glog.Fatal("Failed to initialize the Machnet library.")
@@ -110,12 +91,6 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	c.LocalID = raft.ServerID(id)
 	// c.LogLevel = "WARN"
 
-	// Increase the timeouts.
-	c.CommitTimeout = 1 * time.Millisecond
-	c.LeaderLeaseTimeout = 1 * time.Minute
-	c.HeartbeatTimeout = 1 * time.Minute
-	c.ElectionTimeout = 1 * time.Minute
-
 	baseDir := filepath.Join(*raftDir, id)
 	err := os.MkdirAll(baseDir, os.ModePerm)
 	if err != nil {
@@ -123,16 +98,8 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 		os.Exit(-1)
 	}
 
-	// store, err := boltdb.NewBoltStore(filepath.Join(baseDir, "stable.dat"))
-	// if err != nil {
-	// 	return nil, nil, fmt.Errorf(`boltdb.NewBoltStore(%q): %v`, filepath.Join(baseDir, "stable.dat"), err)
-	// }
 	store := NewBuffStore(10240)
 
-	// logStore, err := boltdb.NewBoltStore(filepath.Join(baseDir, "logs.dat"))
-	// if err != nil {
-	// 	return nil, nil, fmt.Errorf(`boltdb.NewBoltStore(%q): %v`, filepath.Join(baseDir, "logs.dat"), err)
-	// }
 	logStore := NewBuffStore(10240)
 
 	snapshotStore, err := raft.NewFileSnapshotStore(baseDir, 3, os.Stderr)
@@ -140,7 +107,6 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 		return nil, nil, fmt.Errorf(`raft.NewFileSnapshotStore(%q, ...): %v`, baseDir, err)
 	}
 
-	// Define two ChannelCtx, one for sending Raft RPCs and other for receiving.
 	var sendChannelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 	if sendChannelCtx == nil {
 		glog.Fatal("Failed to attach to the channel.")
@@ -151,16 +117,13 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 		glog.Fatal("Failed to attach to the channel.")
 	}
 
-	// Read the contents of file config_json into a byte array.
 	jsonBytes, err := os.ReadFile(*configJson)
 	if err != nil {
 		glog.Fatal("Failed to read config file.")
 	}
 
-	// Parse the json file to get the localIp.
 	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
 
-	// Create a new Machnet Transport.
 	transport := NewTransport(raft.ServerAddress(localIp), sendChannelCtx, recvChannelCtx, *serverPort, id)
 
 	r, err := raft.NewRaft(c, fsm, logStore, store, snapshotStore, raft.Transport(transport))
@@ -168,9 +131,7 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 		return nil, nil, fmt.Errorf("raft.NewRaft: %v", err)
 	}
 
-	// Bootstrap the cluster if requested.
 	if *leader {
-		// Create a list of raft.Server objects.
 		raftServers := []raft.Server{
 			{
 				Suffrage: raft.Voter,
@@ -178,17 +139,6 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 				Address:  raft.ServerAddress(localIp),
 			},
 		}
-
-		// Add the peers to the list.
-		// for i := 1; i <= *numPeers; i++ {
-		// 	peerId := fmt.Sprintf("node%d", i)
-		// 	peerIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", peerId, "ipv4_addr")
-		// 	raftServers = append(raftServers, raft.Server{
-		// 		Suffrage: raft.Voter,
-		// 		ID:       raft.ServerID(peerId),
-		// 		Address:  raft.ServerAddress(peerIp),
-		// 	})
-		// }
 
 		cfg := raft.Configuration{
 			Servers: raftServers,
@@ -209,31 +159,27 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 		glog.Fatal("Failed to attach to the channel.")
 	}
 
-	// Read the contents of file config_json into a byte array.
 	jsonBytes, err := os.ReadFile(*configJson)
 	if err != nil {
 		glog.Fatal("Failed to read config file.")
 	}
 
-	// Parse the json file to get the localIp.
 	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
 
-	// Create a new Machnet Transport.
 	ret := machnet.Listen(channelCtx, localIp, uint(*appPort))
 	if ret != 0 {
 		glog.Fatal("Failed to listen for incoming connections.")
 	}
 	glog.Warningf("[APP SERVER LISTENING] [", localIp, ":", *appPort, "]")
 
-	// Create the rpcInterface object.
 	rpcInterface := rpcInterface{wt, raftNode}
 
-	// Buffers to store the request and response.
 	request := make([]byte, maxWordLength)
 	response := new(bytes.Buffer)
-	// Continuously accept incoming requests from client, and handle them.
+
 	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
+
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxWordLength)
 		if recvBytes < 0 {
