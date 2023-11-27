@@ -215,15 +215,25 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 
 // HandleRaftCommand Send a Raft command to the Raft channel.
 // To be used for all operations except AppendEntriesPipeline.
-func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flow, msgType uint8, rpcId uint64, waitForResponse bool, start time.Time) error {
+func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flow, msgType uint8, rpcId uint64, waitForResponse bool, start time.Time, isHeartbeat bool) error {
 	ch := make(chan raft.RPCResponse, 1)
 	rpc := raft.RPC{
 		Command:  command,
 		RespChan: ch,
 		Reader:   data,
 	}
-	s.transport.consumeCh <- rpc
 
+	if isHeartbeat {
+		s.transport.heartbeatFnLock.Lock()
+		fn := s.transport.heartbeatFn
+		s.transport.heartbeatFnLock.Unlock()
+		if fn != nil {
+			fn(rpc)
+			goto RESP
+		}
+	}
+	s.transport.consumeCh <- rpc
+RESP:
 	if waitForResponse {
 		return s.GetResponseFromChannel(ch, flow, msgType, rpcId, start)
 	}
@@ -256,12 +266,16 @@ func (s *Server) HandleAppendEntriesRequest(payload []byte, rpcId uint64, flow f
 		glog.Errorf("HandleAppendEntriesRequest: failed to decode payload: %v", err)
 		return err
 	}
-
-	// Get the previous index from the AppendEntriesRequest
+	isHeartbeat := false
+	if appendEntriesRequest.Term != 0 && appendEntriesRequest.Leader != nil &&
+		appendEntriesRequest.PrevLogEntry == 0 && appendEntriesRequest.PrevLogTerm == 0 &&
+		len(appendEntriesRequest.Entries) == 0 && appendEntriesRequest.LeaderCommitIndex == 0 {
+		isHeartbeat = true
+	}
 	// prevIndex := appendEntriesRequest.PrevLogEntry
 	// glog.Info("Received AppendEntriesRequest with PrevLogEntry: ", prevIndex)
 
-	return s.HandleRaftCommand(&appendEntriesRequest, nil, flow, AppendEntriesRequest, rpcId, true, start)
+	return s.HandleRaftCommand(&appendEntriesRequest, nil, flow, AppendEntriesRequest, rpcId, true, start, isHeartbeat)
 }
 
 func (s *Server) HandleRequestVoteRequest(payload []byte, rpcId uint64, flow flow, start time.Time) error {
@@ -278,7 +292,7 @@ func (s *Server) HandleRequestVoteRequest(payload []byte, rpcId uint64, flow flo
 		return err
 	}
 
-	return s.HandleRaftCommand(&requestVoteRequest, nil, flow, RequestVoteRequest, rpcId, true, start)
+	return s.HandleRaftCommand(&requestVoteRequest, nil, flow, RequestVoteRequest, rpcId, true, start, false)
 }
 
 func (s *Server) HandleTimeoutNowRequest(payload []byte, rpcId uint64, flow flow, start time.Time) error {
@@ -295,7 +309,7 @@ func (s *Server) HandleTimeoutNowRequest(payload []byte, rpcId uint64, flow flow
 		return err
 	}
 
-	return s.HandleRaftCommand(&timeoutNowRequest, nil, flow, TimeoutNowRequest, rpcId, true, start)
+	return s.HandleRaftCommand(&timeoutNowRequest, nil, flow, TimeoutNowRequest, rpcId, true, start, false)
 }
 
 func (s *Server) HandleInstallSnapshotRequestStart(payload []byte, rpcId uint64, flow flow, start time.Time) error {
@@ -322,7 +336,7 @@ func (s *Server) HandleInstallSnapshotRequestStart(payload []byte, rpcId uint64,
 	s.snapshotReaders[flow] = &snapshotReaderObj
 	s.snapshotMutex.Unlock()
 
-	return s.HandleRaftCommand(&installSnapshotRequest, &snapshotReaderObj, flow, InstallSnapshotRequestStart, rpcId, false, start)
+	return s.HandleRaftCommand(&installSnapshotRequest, &snapshotReaderObj, flow, InstallSnapshotRequestStart, rpcId, false, start, false)
 }
 
 func (s *Server) HandleInstallSnapshotRequestBuffer(payload []byte, rpcId uint64, flow flow, start time.Time) error {
