@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -32,17 +31,7 @@ const (
 	AppendEntriesPipelineSend
 	AppendEntriesPipelineRecv
 	AppendEntriesPipelineClose
-	AppendEntriesRequestResponse
-	RequestVoteRequestResponse
-	TimeoutNowRequestResponse
-	InstallSnapshotRequestStartResponse
-	InstallSnapshotRequestBufferResponse
-	InstallSnapshotRequestCloseResponse
-	AppendEntriesPipelineStartResponse
-	AppendEntriesPipelineSendResponse
-	AppendEntriesPipelineRecvResponse
-	AppendEntriesPipelineCloseResponse
-	DummyResponse
+	Response
 	DummyMsg
 )
 
@@ -54,6 +43,8 @@ type TransportApi struct {
 	raftPort   int
 	hostname   string
 
+	numMessages int
+
 	sendChannelCtx    *machnet.MachnetChannelCtx
 	receiveChannelCtx *machnet.MachnetChannelCtx
 
@@ -64,13 +55,10 @@ type TransportApi struct {
 
 	flowsMtx sync.Mutex
 	flows    map[raft.ServerID]*flow
-	rpcId    uint64
-	mu       sync.Mutex
 }
 
-type RpcMessage struct {
+type rpcMessage struct {
 	MsgType uint8
-	RpcId   uint64
 	Payload []byte
 }
 
@@ -90,23 +78,22 @@ type appendFuture struct {
 
 	start    time.Time
 	request  *raft.AppendEntriesRequest
-	response raft.AppendEntriesResponse
+	response *raft.AppendEntriesResponse
 	err      error
 	done     chan struct{}
 }
 
 func NewTransport(localIp raft.ServerAddress, sendChannelCtx *machnet.MachnetChannelCtx, receiveChannelCtx *machnet.MachnetChannelCtx, raftPort int, hostname string) *TransportApi {
-	var trans = new(TransportApi)
+	var trans *TransportApi = new(TransportApi)
 
 	trans.localIp = localIp
 	trans.sendChannelCtx = sendChannelCtx
 	trans.receiveChannelCtx = receiveChannelCtx
-	trans.configJson = "../servers.json"
+	trans.configJson = "../../servers.json"
 	trans.raftPort = raftPort
 	trans.flows = make(map[raft.ServerID]*flow)
 	trans.rpcChan = make(chan raft.RPC, 100)
 	trans.hostname = hostname
-	trans.rpcId = 0
 
 	return trans
 }
@@ -123,7 +110,7 @@ func (t *TransportApi) LocalAddr() raft.ServerAddress {
 
 func (t *TransportApi) BootstrapPeers(numPeers int) {
 	t.flowsMtx.Lock()
-	for i := 0; i < numPeers; i++ {
+	for i := 0; i <= numPeers; i++ {
 		id := fmt.Sprintf("node%d", i)
 
 		if id == t.hostname {
@@ -136,12 +123,12 @@ func (t *TransportApi) BootstrapPeers(numPeers int) {
 		}
 
 		// Parse the json file to get the remote_ip.
-		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", id, "ipv4_addr")
-		glog.Infof("%s connecting to %s", t.localIp, remoteIp)
+		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", string(id), "ipv4_addr")
+
 		// Initiate connection to the remote host.
 		ret, f := machnet.Connect(t.sendChannelCtx, string(t.localIp), remoteIp, uint(t.raftPort))
 		if ret != 0 {
-			glog.Fatalf("Failed to connect to remote host: %s->%s", t.localIp, remoteIp)
+			glog.Fatal("Failed to connect to remote host")
 		}
 		t.flows[raft.ServerID(id)] = &f
 	}
@@ -175,14 +162,12 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 }
 
 // SendMachnetRpc Generic Machnet RPC handler.
-// Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using Machnet library functions.
-func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp RpcMessage, err error) {
+// Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using NSaaS library functions.
+func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp []byte, err error) {
 	// Get the flow to the remote host.
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	flow, err := t.getPeer(id)
 	if err != nil {
-		return RpcMessage{}, err
+		return nil, err
 	}
 
 	var buff bytes.Buffer
@@ -190,22 +175,24 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	dec := gob.NewDecoder(&buff)
 
 	// Enclose the payload into a rpcMessage and then encode into byte array.
-	var rpcId = t.rpcId
-	msg := RpcMessage{MsgType: rpcType, RpcId: rpcId, Payload: payload}
-	t.rpcId = 1 + t.rpcId
+	msg := rpcMessage{MsgType: rpcType, Payload: payload}
 	if err := enc.Encode(msg); err != nil {
-		return RpcMessage{}, err
+		return nil, err
 	}
 
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
-	start := time.Now()
-	glog.Warningf("SendMachnetRpc: sent: rpc_type: %d rpc_id: %+d at %+v", rpcType, rpcId, start)
+
+	t.numMessages += 1
+	glog.V(5).Info("Sending message type ", rpcType, " of size: ", msgLen, " numSent: ", t.numMessages)
+
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
-		return RpcMessage{}, errors.New("failed to send message to remote host")
+		return nil, errors.New("failed to send message to remote host")
 	}
+
+	glog.V(5).Info("Message sent, waiting for response.")
 
 	// Receive the response from the remote host on the flow.
 	responseBuff := make([]byte, maxMessageLength)
@@ -216,26 +203,34 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		recvBytes, _ = machnet.Recv(t.sendChannelCtx, &responseBuff[0], maxMessageLength)
 		if recvBytes < 0 {
 			glog.Error("Failed to receive response from remote host")
-			return RpcMessage{}, errors.New("failed to receive response from remote host")
+			return nil, errors.New("failed to receive response from remote host")
 		}
+	}
+
+	if rpcType == AppendEntriesPipelineRecv {
+		glog.V(3).Info("Received AEPRecv response: ", responseBuff[:recvBytes])
 	}
 
 	// Get the rpcMessage from the byte array by writing into buffer and then decoding.
 	buff.Reset()
 	if n, _ := buff.Write(responseBuff[:recvBytes]); n != recvBytes {
-		return RpcMessage{}, errors.New("failed to write response into buffer")
+		return nil, errors.New("failed to write response into buffer")
 	}
 
-	var response RpcMessage
+	var response rpcMessage
 	if err := dec.Decode(&response); err != nil {
-		glog.Error("Failed to decode response from remote host")
-		return RpcMessage{}, err
+		return nil, err
 	}
 
-	// glog.Info("Received RPC response from ", id, " of type ", response.MsgType)
-	glog.Warningf("SendMachnetRpc: received: rpc_type: %d rpc_id: %d took %+v", response.MsgType, response.RpcId, time.Since(start))
+	if rpcType == AppendEntriesRequest {
+		glog.V(3).Info("Received RPC response of length: ", len(response.Payload))
+	} else if rpcType == AppendEntriesPipelineRecv {
+		glog.V(3).Info("Received AppendEntriesPipeline response: ", response.Payload)
+	}
+	glog.V(5).Info("Received RPC response from ", id, " of type ", response.MsgType, " length: ", len(response.Payload))
+
 	// Return the payload of the response.
-	return response, nil
+	return response.Payload, nil
 }
 
 // AppendEntries sends the appropriate RPC to the target node.
@@ -250,33 +245,26 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 	}
 	reqBytes := buff.Bytes()
 
-	// Send Machnet RPC to remote host.
-	//glog.Infof("AppendEntries: sent request: %v to %v", args, target)
-	startSend := time.Now()
-	glog.Warningf("AppendEntries: AppendEntriesRequest %+v sent at %+v", args, startSend)
-	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
-	glog.Warningf("AppendEntries: AppendEntriesRequest %+v took %+v", args, time.Since(startSend))
-	glog.Infof("AppendEntries: rpc response: %+v", rpcResponse)
-	payloadBytes := rpcResponse.Payload
+	// Send NSaaS RPC to remote host.
+	recvBytes, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
 	if err != nil {
-		glog.Errorf("AppendEntries: failed to SendMachnetRPC")
 		return err
 	}
-	if len(payloadBytes) == 0 {
-		glog.Warningf("AppendEntries: received empty response")
+	numRecvBytes := len(recvBytes)
+	if numRecvBytes == 0 {
+		glog.V(3).Info("Received empty response from ", id)
 	}
 
 	// Decode the AppendEntriesResponse from the received payload.
 	buff.Reset()
-	if n, _ := buff.Write(payloadBytes); n != len(payloadBytes) {
+	if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
 		return errors.New("failed to write payload into buffer")
 	}
 
 	if err := dec.Decode(resp); err != nil {
-		glog.Errorf("AppendEntries: failed to decode: %v ", rpcResponse)
 		return err
 	}
-	//glog.Infof("AppendEntries: succeed ... return response: %v", resp)
+
 	return nil
 }
 
@@ -292,10 +280,8 @@ func (t *TransportApi) RequestVote(id raft.ServerID, target raft.ServerAddress, 
 	}
 	reqBytes := buff.Bytes()
 
-	// Send Machnet RPC to remote host.
-	rpcResponse, err := t.SendMachnetRpc(id, RequestVoteRequest, reqBytes)
-	glog.Infof("RequestVote: rpc response: %+v", rpcResponse)
-	recvBytes := rpcResponse.Payload
+	// Send NSaaS RPC to remote host.
+	recvBytes, err := t.SendMachnetRpc(id, RequestVoteRequest, reqBytes)
 	if err != nil {
 		return err
 	}
@@ -325,10 +311,8 @@ func (t *TransportApi) TimeoutNow(id raft.ServerID, target raft.ServerAddress, a
 	}
 	reqBytes := buff.Bytes()
 
-	// Send Machnet RPC to remote host.
-	rpcResponse, err := t.SendMachnetRpc(id, TimeoutNowRequest, reqBytes)
-	glog.Infof("TimeoutNow: rpc response: %+v", rpcResponse)
-	recvBytes := rpcResponse.Payload
+	// Send NSaaS RPC to remote host.
+	recvBytes, err := t.SendMachnetRpc(id, TimeoutNowRequest, reqBytes)
 	if err != nil {
 		return err
 	}
@@ -359,9 +343,8 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 	}
 	reqBytes := buff.Bytes()
 
-	// Send Machnet RPC to remote host. We don't care about the response as this is just to register the InstallSnapshot request.
-	rpcResponse, err := t.SendMachnetRpc(id, InstallSnapshotRequestStart, reqBytes)
-	glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
+	// Send NSaaS RPC to remote host. We don't care about the response as this is just to register the InstallSnapshot request.
+	_, err := t.SendMachnetRpc(id, InstallSnapshotRequestStart, reqBytes)
 	if err != nil {
 		return err
 	}
@@ -376,19 +359,16 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 			return err
 		}
 
-		// Send Machnet RPC to remote host.
-		rpcResponse, err = t.SendMachnetRpc(id, InstallSnapshotRequestBuffer, buf[:n])
-		glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
+		// Send NSaaS RPC to remote host.
+		_, err = t.SendMachnetRpc(id, InstallSnapshotRequestBuffer, buf[:n])
 		if err != nil {
 			return err
 		}
 	}
 
-	// Send Machnet RPC to remote host to close the InstallSnapshot stream. Use a dummy payload.
+	// Send NSaaS RPC to remote host to close the InstallSnapshot stream. Use a dummy payload.
 	dummyPayload := make([]byte, 1)
-	rpcResponse, err = t.SendMachnetRpc(id, InstallSnapshotRequestClose, dummyPayload)
-	glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
-	recvBytes := rpcResponse.Payload
+	recvBytes, err := t.SendMachnetRpc(id, InstallSnapshotRequestClose, dummyPayload)
 	if err != nil {
 		return err
 	}
@@ -406,9 +386,9 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 	return nil
 }
 
-// SetHeartbeatHandler is used to set up a heartbeat handler
+// SetHeartbeatHandler is used to setup a heartbeat handler
 // as a fast-pass. This is to avoid head-of-line blocking from
-// disk IO. If Transport does not support this, it can simply
+// disk IO. If a Transport does not support this, it can simply
 // ignore the call, and push the heartbeat onto the Consumer channel.
 func (t *TransportApi) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
 	t.heartbeatFuncMtx.Lock()
@@ -422,13 +402,11 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 	ctx := context.TODO()
 	_, cancel := context.WithCancel(ctx)
 
-	// Send Machnet RPC to remote host. Send a dummy payload.
+	// Send NSaaS RPC to remote host. Send a dummy payload.
 	// We don't care about the response as this is just to register the AppendEntriesPipeline request.
 	dummyPayload := make([]byte, 1)
-	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
-	glog.Infof("AppendEntriesPipeline: rpc response: %+v", rpcResponse)
+	_, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
 	if err != nil {
-		glog.Errorf("AppendEntriesPipeline not functioning properly")
 		cancel()
 		return nil, err
 	}
@@ -449,9 +427,10 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 // The send may block which is an effective form of back-pressure.
 func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) (raft.AppendFuture, error) {
 	af := &appendFuture{
-		start:   time.Now(),
-		request: req,
-		done:    make(chan struct{}),
+		start:    time.Now(),
+		request:  req,
+		response: resp,
+		done:     make(chan struct{}),
 	}
 
 	var buff bytes.Buffer
@@ -462,11 +441,9 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 		return nil, err
 	}
 	reqBytes := buff.Bytes()
-	start := time.Now()
-	glog.Warningf("AppendEntriesPipeline: rpc sent: %v at %+v", req, start)
-	// Send Machnet RPC to remote host. The response will be saved as a Future object.
-	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
-	glog.Warningf("AppendEntriesPipeline: rpc response: %+v took: %+v", rpcResponse, time.Since(start))
+
+	// Send NSaaS RPC to remote host. The response will be saved as a Future object.
+	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -491,13 +468,11 @@ func (r *raftPipelineAPI) Consumer() <-chan raft.AppendFuture {
 func (r *raftPipelineAPI) Close() error {
 	r.cancel()
 
-	// Send Machnet RPC to remote host. We don't care about the response as this is just to close AppendEntriesPipeline request.
+	// Send NSaaS RPC to remote host. We don't care about the response as this is just to close AppendEntriesPipeline request.
 	// Send a dummy payload.
 	dummyPayload := make([]byte, 1)
-	res, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineClose, dummyPayload)
-	glog.Infof("Close: received: %+v", res)
+	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineClose, dummyPayload)
 	if err != nil {
-		glog.Infof("Close: failed to send AppendEntriesPipelineClose")
 		return err
 	}
 
@@ -514,14 +489,10 @@ func (r *raftPipelineAPI) receiver() {
 
 		var resp raft.AppendEntriesResponse
 
-		// Send Machnet RPC to remote host. Send a dummy payload.
+		// Send NSaaS RPC to remote host. Send a dummy payload.
 		dummyPayload := make([]byte, 1)
-		start := time.Now()
-		glog.Warningf("Receiver: sent at %+v", start)
-		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
-		glog.Warningf("receiver: rpc response: %+v took: %+v", rpcResponse, time.Since(start))
-		recvBytes := rpcResponse.Payload
-		if err != nil {
+		recvBytes, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
+		if err == nil {
 			// Decode the AppendEntriesResponse from the received payload.
 			buff.Reset()
 			if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
@@ -534,7 +505,11 @@ func (r *raftPipelineAPI) receiver() {
 		if err != nil {
 			af.err = err
 		} else {
-			af.response = resp
+			// Copy resp to af.response.
+			af.response.Term = resp.Term
+			af.response.Success = resp.Success
+			af.response.LastLog = resp.LastLog
+			glog.V(3).Info("Received AppEntr response: ", resp)
 		}
 		close(af.done)
 		r.doneCh <- af
@@ -548,12 +523,7 @@ func (r *raftPipelineAPI) receiver() {
 // Note that it is not OK to call this method
 // twice concurrently on the same Future instance.
 func (f *appendFuture) Error() error {
-	start := time.Now()
-	return errors.New("dummy error")
-	glog.Warningf("Error: started to block at %+v", start)
-	pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	<-f.done
-	glog.Warningf("Error: finished blocking took %v", time.Since(start))
 	return f.err
 }
 
@@ -573,7 +543,7 @@ func (f *appendFuture) Request() *raft.AppendEntriesRequest {
 // This method must only be called after the Error
 // method returns, and will only be valid on success.
 func (f *appendFuture) Response() *raft.AppendEntriesResponse {
-	return &f.response
+	return f.response
 }
 
 // EncodePeer is used to serialize a peer's address.
