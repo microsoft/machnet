@@ -85,7 +85,7 @@ type appendFuture struct {
 func NewMachnetTransport(localIp raft.ServerAddress, channelCtx *machnet.MachnetChannelCtx, raftPort int, hostname string) *MachnetTransport {
 	return &MachnetTransport{
 		localIp:    localIp,
-		configJson: "./servers.json",
+		configJson: "../servers.json",
 		raftPort:   raftPort,
 		hostname:   hostname,
 		shutdownCh: make(chan struct{}),
