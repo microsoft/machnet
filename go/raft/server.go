@@ -222,7 +222,7 @@ func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flo
 		RespChan: ch,
 		Reader:   data,
 	}
-	s.transport.rpcChan <- rpc
+	s.transport.consumeCh <- rpc
 
 	if waitForResponse {
 		return s.GetResponseFromChannel(ch, flow, msgType, rpcId, start)
@@ -406,7 +406,7 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 		glog.Error("AppendEntriesRequest does not have a WithRPCHeader")
 	}
 
-	s.transport.rpcChan <- rpc
+	s.transport.consumeCh <- rpc
 
 	// Send a dummy response back to the Machnet Channel
 	//response := RpcMessage{

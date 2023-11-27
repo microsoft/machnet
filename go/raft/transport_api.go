@@ -38,12 +38,8 @@ const (
 	InstallSnapshotRequestStartResponse
 	InstallSnapshotRequestBufferResponse
 	InstallSnapshotRequestCloseResponse
-	AppendEntriesPipelineStartResponse
-	AppendEntriesPipelineSendResponse
 	AppendEntriesPipelineRecvResponse
-	AppendEntriesPipelineCloseResponse
 	DummyResponse
-	DummyMsg
 )
 
 const maxMessageLength = 4 * 1024
@@ -57,10 +53,13 @@ type TransportApi struct {
 	sendChannelCtx    *machnet.MachnetChannelCtx
 	receiveChannelCtx *machnet.MachnetChannelCtx
 
-	rpcChan          chan raft.RPC
-	heartbeatFunc    func(raft.RPC)
-	heartbeatFuncMtx sync.Mutex
-	heartbeatTimeout time.Duration
+	consumeCh       chan raft.RPC
+	heartbeatFn     func(raft.RPC)
+	heartbeatFnLock sync.Mutex
+
+	shutdown     bool
+	shutdownCh   chan struct{}
+	shutdownLock sync.Mutex
 
 	flowsMtx sync.Mutex
 	flows    map[raft.ServerID]*flow
@@ -104,16 +103,37 @@ func NewTransport(localIp raft.ServerAddress, sendChannelCtx *machnet.MachnetCha
 	trans.configJson = "../servers.json"
 	trans.raftPort = raftPort
 	trans.flows = make(map[raft.ServerID]*flow)
-	trans.rpcChan = make(chan raft.RPC, 100)
+	trans.consumeCh = make(chan raft.RPC, 100)
 	trans.hostname = hostname
 	trans.rpcId = 0
+	trans.shutdownCh = make(chan struct{})
 
 	return trans
 }
 
+// SetHeartbeatHandler is used to set up a heartbeat handler
+// as a fast-pass. This is to avoid head-of-line blocking from
+// disk IO. If Transport does not support this, it can simply
+// ignore the call, and push the heartbeat onto the Consumer channel.
+func (t *TransportApi) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
+	t.heartbeatFnLock.Lock()
+	defer t.heartbeatFnLock.Unlock()
+	t.heartbeatFn = cb
+}
+
+func (t *TransportApi) Close() error {
+	t.shutdownLock.Lock()
+	defer t.shutdownLock.Unlock()
+
+	if !t.shutdown {
+		t.shutdown = true
+	}
+	return nil
+}
+
 // Consumer Interface function that returns a channel that can be used to consume and respond to RPC requests.
 func (t *TransportApi) Consumer() <-chan raft.RPC {
-	return t.rpcChan
+	return t.consumeCh
 }
 
 // LocalAddr Interface function that is used to return our local address to distinguish from our peers.
@@ -406,16 +426,6 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 	}
 
 	return nil
-}
-
-// SetHeartbeatHandler is used to set up a heartbeat handler
-// as a fast-pass. This is to avoid head-of-line blocking from
-// disk IO. If Transport does not support this, it can simply
-// ignore the call, and push the heartbeat onto the Consumer channel.
-func (t *TransportApi) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
-	t.heartbeatFuncMtx.Lock()
-	t.heartbeatFunc = cb
-	t.heartbeatFuncMtx.Unlock()
 }
 
 // AppendEntriesPipeline returns an interface that can be used to pipeline
