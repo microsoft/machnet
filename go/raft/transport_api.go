@@ -90,7 +90,7 @@ type appendFuture struct {
 
 	start    time.Time
 	request  *raft.AppendEntriesRequest
-	response raft.AppendEntriesResponse
+	response *raft.AppendEntriesResponse
 	err      error
 	done     chan struct{}
 }
@@ -534,7 +534,7 @@ func (r *raftPipelineAPI) receiver() {
 		if err != nil {
 			af.err = err
 		} else {
-			af.response = resp
+			af.response = &resp
 		}
 		close(af.done)
 		r.doneCh <- af
@@ -573,7 +573,7 @@ func (f *appendFuture) Request() *raft.AppendEntriesRequest {
 // This method must only be called after the Error
 // method returns, and will only be valid on success.
 func (f *appendFuture) Response() *raft.AppendEntriesResponse {
-	return &f.response
+	return f.response
 }
 
 // EncodePeer is used to serialize a peer's address.

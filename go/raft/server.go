@@ -128,11 +128,8 @@ func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.
 	flow.SrcPort = tmpFlow.DstPort
 	flow.DstPort = tmpFlow.SrcPort
 
-	// glog.Info("Sending response to Machnet Channel: ", response.MsgType, " with length: ", responseLen)
-
 	elapsed := time.Since(start)
 	glog.Info("SendMachnetResponse: Total Rpc took: ", elapsed.Microseconds(), " us")
-	//glog.Infof("SendMachnetResponse: putting response on wire: %+v", responseBytes)
 	// Send to the remote host on the flow.
 	ret := machnet.SendMsg(s.transport.receiveChannelCtx, flow, &responseBytes[0], uint(responseLen))
 	if ret != 0 {
