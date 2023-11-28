@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"sync"
 	"time"
@@ -209,6 +210,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 			glog.Error("Failed to receive response from remote host")
 			return RpcMessage{}, errors.New("failed to receive response from remote host")
 		}
+		runtime.Gosched()
 	}
 
 	buff.Reset()
