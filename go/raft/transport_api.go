@@ -179,7 +179,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	flow, err := t.getPeer(id)
+	f, err := t.getPeer(id)
 	if err != nil {
 		return RpcMessage{}, err
 	}
@@ -201,7 +201,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	copy(copiedData, msgBytes)
 	start := time.Now()
 	glog.Infof("SendMachnetRpc[%d]: sent [%d] at %+v", rpcType, rpcId, start)
-	ret := machnet.SendMsg(t.sendChannelCtx, flow, &copiedData[0], uint(msgLen))
+	ret := machnet.SendMsg(t.sendChannelCtx, f, &copiedData[0], uint(msgLen))
 	glog.Infof("SendMachnetRpc[%d]: machnet.SendmMsg [%d] returned at %v took: %+v (msgLen: %d)", rpcType, rpcId, time.Now(), time.Since(start), msgLen)
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
