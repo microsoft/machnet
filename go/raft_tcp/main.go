@@ -111,10 +111,11 @@ func main() {
 			start := time.Now()
 
 			future := app.raft.Apply(rawBytes, 500*time.Millisecond)
+			glog.Infof("Main: block on future[%+v] at %+v", future, start)
 			if err := future.Error(); err != nil {
 				glog.Errorf("Main: failed to replicate : %s", err)
 			}
-
+			glog.Infof("Main: future returned success result, took: %+v", time.Since(start))
 			if _, err := conn.Write(rawBytes); err != nil {
 				glog.Errorf("Main: failed to write back: %+v", err)
 			}
