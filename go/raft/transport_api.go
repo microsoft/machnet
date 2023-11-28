@@ -135,10 +135,9 @@ func (t *TransportApi) BootstrapPeers(numPeers int) {
 			glog.Fatal("Failed to read config file")
 		}
 
-		// Parse the json file to get the remote_ip.
 		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", id, "ipv4_addr")
 		glog.Infof("%s connecting to %s", t.localIp, remoteIp)
-		// Initiate connection to the remote host.
+
 		ret, f := machnet.Connect(t.sendChannelCtx, string(t.localIp), remoteIp, uint(t.raftPort))
 		if ret != 0 {
 			glog.Fatalf("Failed to connect to remote host: %s->%s", t.localIp, remoteIp)
@@ -152,16 +151,14 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 	t.flowsMtx.Lock()
 	_, ok := t.flows[id]
 	if !ok {
-		// Read the contents of file config_json into a byte array.
+
 		jsonBytes, err := os.ReadFile(t.configJson)
 		if err != nil {
 			glog.Fatal("Failed to read config file")
 		}
 
-		// Parse the json file to get the remote_ip.
 		remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", string(id), "ipv4_addr")
 
-		// Initiate connection to the remote host.
 		glog.Info("Trying to connect to ", remoteIp, ":", t.raftPort, " from ", t.localIp)
 		ret, f := machnet.Connect(t.sendChannelCtx, string(t.localIp), remoteIp, uint(t.raftPort))
 		if ret != 0 {
@@ -177,7 +174,7 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 // SendMachnetRpc Generic Machnet RPC handler.
 // Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using Machnet library functions.
 func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp RpcMessage, err error) {
-	// Get the flow to the remote host.
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	flow, err := t.getPeer(id)
@@ -189,7 +186,6 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	enc := gob.NewEncoder(&buff)
 	dec := gob.NewDecoder(&buff)
 
-	// Enclose the payload into a rpcMessage and then encode into byte array.
 	var rpcId = t.rpcId
 	msg := RpcMessage{MsgType: rpcType, RpcId: rpcId, Payload: payload}
 	t.rpcId = 1 + t.rpcId
@@ -199,18 +195,14 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
-	start := time.Now()
-	glog.Warningf("SendMachnetRpc: sent: rpc_type: %d rpc_id: %+d at %+v", rpcType, rpcId, start)
-	// Send to the remote host on the flow.
+
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
 	}
 
-	// Receive the response from the remote host on the flow.
 	responseBuff := make([]byte, maxMessageLength)
 
-	// Run until we receive a response from the remote host.
 	recvBytes := 0
 	for recvBytes == 0 {
 		recvBytes, _ = machnet.Recv(t.sendChannelCtx, &responseBuff[0], maxMessageLength)
@@ -220,7 +212,6 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		}
 	}
 
-	// Get the rpcMessage from the byte array by writing into buffer and then decoding.
 	buff.Reset()
 	if n, _ := buff.Write(responseBuff[:recvBytes]); n != recvBytes {
 		return RpcMessage{}, errors.New("failed to write response into buffer")
@@ -232,9 +223,6 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		return RpcMessage{}, err
 	}
 
-	// glog.Info("Received RPC response from ", id, " of type ", response.MsgType)
-	glog.Warningf("SendMachnetRpc: received: rpc_type: %d rpc_id: %d took %+v", response.MsgType, response.RpcId, time.Since(start))
-	// Return the payload of the response.
 	return response, nil
 }
 
@@ -244,29 +232,19 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 	enc := gob.NewEncoder(&buff)
 	dec := gob.NewDecoder(&buff)
 
-	// Encode the AppendEntriesRequest into a byte array.
 	if err := enc.Encode(args); err != nil {
 		return err
 	}
 	reqBytes := buff.Bytes()
 
-	// Send Machnet RPC to remote host.
-	//glog.Infof("AppendEntries: sent request: %v to %v", args, target)
-	startSend := time.Now()
-	glog.Warningf("AppendEntries: AppendEntriesRequest %+v sent at %+v", args, startSend)
 	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
-	glog.Warningf("AppendEntries: AppendEntriesRequest %+v took %+v", args, time.Since(startSend))
-	glog.Infof("AppendEntries: rpc response: %+v", rpcResponse)
 	payloadBytes := rpcResponse.Payload
+
 	if err != nil {
 		glog.Errorf("AppendEntries: failed to SendMachnetRPC")
 		return err
 	}
-	if len(payloadBytes) == 0 {
-		glog.Warningf("AppendEntries: received empty response")
-	}
 
-	// Decode the AppendEntriesResponse from the received payload.
 	buff.Reset()
 	if n, _ := buff.Write(payloadBytes); n != len(payloadBytes) {
 		return errors.New("failed to write payload into buffer")
@@ -276,7 +254,6 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 		glog.Errorf("AppendEntries: failed to decode: %v ", rpcResponse)
 		return err
 	}
-	//glog.Infof("AppendEntries: succeed ... return response: %v", resp)
 	return nil
 }
 
@@ -286,21 +263,17 @@ func (t *TransportApi) RequestVote(id raft.ServerID, target raft.ServerAddress, 
 	enc := gob.NewEncoder(&buff)
 	dec := gob.NewDecoder(&buff)
 
-	// Encode the RequestVoteRequest into a byte array.
 	if err := enc.Encode(args); err != nil {
 		return err
 	}
 	reqBytes := buff.Bytes()
 
-	// Send Machnet RPC to remote host.
 	rpcResponse, err := t.SendMachnetRpc(id, RequestVoteRequest, reqBytes)
-	glog.Infof("RequestVote: rpc response: %+v", rpcResponse)
 	recvBytes := rpcResponse.Payload
 	if err != nil {
 		return err
 	}
 
-	// Decode the RequestVoteResponse from the received payload.
 	buff.Reset()
 	if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
 		return errors.New("failed to write payload into buffer")
@@ -319,21 +292,17 @@ func (t *TransportApi) TimeoutNow(id raft.ServerID, target raft.ServerAddress, a
 	enc := gob.NewEncoder(&buff)
 	dec := gob.NewDecoder(&buff)
 
-	// Encode the TimeoutNowRequest into a byte array.
 	if err := enc.Encode(args); err != nil {
 		return err
 	}
 	reqBytes := buff.Bytes()
 
-	// Send Machnet RPC to remote host.
 	rpcResponse, err := t.SendMachnetRpc(id, TimeoutNowRequest, reqBytes)
-	glog.Infof("TimeoutNow: rpc response: %+v", rpcResponse)
 	recvBytes := rpcResponse.Payload
 	if err != nil {
 		return err
 	}
 
-	// Decode the TimeoutNowResponse from the received payload.
 	buff.Reset()
 	if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
 		return errors.New("failed to write payload into buffer")
@@ -353,15 +322,12 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 	enc := gob.NewEncoder(&buff)
 	dec := gob.NewDecoder(&buff)
 
-	// Encode the InstallSnapshotRequest into a byte array.
 	if err := enc.Encode(req); err != nil {
 		return err
 	}
 	reqBytes := buff.Bytes()
 
-	// Send Machnet RPC to remote host. We don't care about the response as this is just to register the InstallSnapshot request.
 	rpcResponse, err := t.SendMachnetRpc(id, InstallSnapshotRequestStart, reqBytes)
-	glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
 	if err != nil {
 		return err
 	}
@@ -376,24 +342,19 @@ func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddre
 			return err
 		}
 
-		// Send Machnet RPC to remote host.
 		rpcResponse, err = t.SendMachnetRpc(id, InstallSnapshotRequestBuffer, buf[:n])
-		glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Send Machnet RPC to remote host to close the InstallSnapshot stream. Use a dummy payload.
 	dummyPayload := make([]byte, 1)
 	rpcResponse, err = t.SendMachnetRpc(id, InstallSnapshotRequestClose, dummyPayload)
-	glog.Infof("InstallSnapshot: rpc response: %+v", rpcResponse)
 	recvBytes := rpcResponse.Payload
 	if err != nil {
 		return err
 	}
 
-	// Decode the InstallSnapshotResponse from the received payload.
 	buff.Reset()
 	if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
 		return errors.New("failed to write payload into buffer")
@@ -425,8 +386,7 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 	// Send Machnet RPC to remote host. Send a dummy payload.
 	// We don't care about the response as this is just to register the AppendEntriesPipeline request.
 	dummyPayload := make([]byte, 1)
-	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
-	glog.Infof("AppendEntriesPipeline: rpc response: %+v", rpcResponse)
+	_, err := t.SendMachnetRpc(id, AppendEntriesPipelineStart, dummyPayload)
 	if err != nil {
 		glog.Errorf("AppendEntriesPipeline not functioning properly")
 		cancel()
@@ -457,16 +417,11 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	var buff bytes.Buffer
 	enc := gob.NewEncoder(&buff)
 
-	// Encode the AppendEntriesRequest into a byte array.
 	if err := enc.Encode(req); err != nil {
 		return nil, err
 	}
 	reqBytes := buff.Bytes()
-	start := time.Now()
-	glog.Warningf("AppendEntriesPipeline: rpc sent: %v at %+v", req, start)
-	// Send Machnet RPC to remote host. The response will be saved as a Future object.
-	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
-	glog.Warningf("AppendEntriesPipeline: rpc response: %+v took: %+v", rpcResponse, time.Since(start))
+	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -491,11 +446,8 @@ func (r *raftPipelineAPI) Consumer() <-chan raft.AppendFuture {
 func (r *raftPipelineAPI) Close() error {
 	r.cancel()
 
-	// Send Machnet RPC to remote host. We don't care about the response as this is just to close AppendEntriesPipeline request.
-	// Send a dummy payload.
 	dummyPayload := make([]byte, 1)
-	res, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineClose, dummyPayload)
-	glog.Infof("Close: received: %+v", res)
+	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineClose, dummyPayload)
 	if err != nil {
 		glog.Infof("Close: failed to send AppendEntriesPipelineClose")
 		return err
@@ -514,15 +466,10 @@ func (r *raftPipelineAPI) receiver() {
 
 		var resp raft.AppendEntriesResponse
 
-		// Send Machnet RPC to remote host. Send a dummy payload.
 		dummyPayload := make([]byte, 1)
-		start := time.Now()
-		glog.Warningf("Receiver: sent at %+v", start)
 		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
-		glog.Warningf("receiver: rpc response: %+v took: %+v", rpcResponse, time.Since(start))
 		recvBytes := rpcResponse.Payload
 		if err == nil {
-			// Decode the AppendEntriesResponse from the received payload.
 			buff.Reset()
 			if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
 				err = errors.New("failed to write payload into buffer")

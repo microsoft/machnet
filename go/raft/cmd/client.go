@@ -36,31 +36,26 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	// Start Machnet channel.
 	ret := machnet.Init()
 	if ret != 0 {
 		glog.Fatal("Failed to initialize the Machnet library.")
 	}
 
-	// Define a pointer variable channelCtx to store the output of C.machnet_attach()
 	var channelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 
 	if channelCtx == nil {
 		glog.Fatal("Failed to attach to the channel.")
 	}
 
-	// Read the contents of file config_json into a byte array.
 	jsonBytes, err := os.ReadFile(*configJson)
 	if err != nil {
 		glog.Fatal("Failed to read config file.")
 	}
 
-	// Parse the json file to get the local ip and remote ip.
 	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
 	remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *remoteHostname, "ipv4_addr")
 	glog.Info("Trying to connect to ", remoteIp, ":", *appPort, " from ", localIp)
 
-	// Initiate connection to the remote host.
 	var flow machnet.MachnetFlow
 	ret, flow = machnet.Connect(channelCtx, localIp, remoteIp, uint(*appPort))
 	if ret != 0 {
@@ -68,7 +63,6 @@ func main() {
 	}
 	glog.Info("[CONNECTED] [", localIp, " <-> ", remoteIp, ":", *appPort, "]")
 
-	// Generate random words and send them to the remote host.
 	babbler := babble.NewBabbler()
 	babbler.Count = 1
 
@@ -82,7 +76,6 @@ func main() {
 			continue
 		}
 
-		// Time the SendMsg() call.
 		start := time.Now()
 		ret := machnet.SendMsg(channelCtx, flow, &wordBytes[0], uint(wordLen))
 		glog.Infof("Sent %s at %+v", word, time.Now())
@@ -90,10 +83,8 @@ func main() {
 			glog.Fatal("Failed to send word.")
 		}
 
-		// Receive the response from the remote host on the flow.
 		responseBuff := make([]byte, 64)
 
-		// Keep reading until we get a message from the same flow.
 		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64)
 		for recvBytes == 0 {
 			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 64)
@@ -115,8 +106,5 @@ func main() {
 			histogram.Reset()
 			lastRecordedTime = time.Now()
 		}
-
-		// Sleep for 1ms.
-		// time.Sleep(1 * time.Millisecond)
 	}
 }

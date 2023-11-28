@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"github.com/golang/glog"
-	"os"
-	"runtime/pprof"
 	"time"
 
 	"github.com/hashicorp/go-msgpack/codec"
@@ -103,7 +101,6 @@ func (s *BuffStore) StoreLog(log *raft.Log) error {
 func (s *BuffStore) StoreLogs(logs []*raft.Log) error {
 	start := time.Now()
 	glog.Warningf("StoreLogs: started at %+v", start)
-	pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	for _, log := range logs {
 		if err := s.StoreLog(log); err != nil {
 			return err
