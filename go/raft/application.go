@@ -4,12 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/hashicorp/raft"
 	"io"
 	"strings"
 	"sync"
-	"time"
-
-	"github.com/hashicorp/raft"
 )
 
 // WordTracker keeps track of the three longest words it ever saw.
@@ -93,17 +91,17 @@ func (s *snapshot) Release() {
 }
 
 func (r rpcInterface) AddWord(word string) (uint64, error) {
-	start := time.Now()
-	glog.Warningf("AddWord[%s]: started raft Apply at %+v", word, start)
+	//start := time.Now()
+	//glog.Warningf("AddWord[%s]: started raft Apply at %+v", word, start)
 	f := r.raft.Apply([]byte(word), 0) // 10*time.Microsecond)
-	glog.Warningf("AddWord[%s]: Apply took: %+v returned future: %+v", word, time.Since(start), f)
-	start = time.Now()
-	glog.Warningf("AddWord[%s]: block on future at %+v", word, start)
+	//glog.Warningf("AddWord[%s]: Apply took: %+v returned future: %+v", word, time.Since(start), f)
+	//start = time.Now()
+	//glog.Warningf("AddWord[%s]: block on future at %+v", word, start)
 	if err := f.Error(); err != nil {
 		glog.Warningf("Error: couldn't block")
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
-	glog.Warningf("AddWord[%s]: future returned success result, took: %+v", word, time.Since(start))
+	//glog.Warningf("AddWord[%s]: future returned success result, took: %+v", word, time.Since(start))
 	return f.Index(), nil
 }
 
