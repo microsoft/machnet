@@ -102,7 +102,7 @@ func (r rpcInterface) AddWord(word []byte) (uint64, error) {
 		glog.Warningf("Error: couldn't block")
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
-	glog.Warningf("AddWord: future returned success result, took: %+v", time.Since(start))
+	glog.Warningf("AddWord: future returned success result at %v, took: %+v", time.Now(), time.Since(start))
 	return f.Index(), nil
 }
 

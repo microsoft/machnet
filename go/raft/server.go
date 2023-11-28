@@ -201,6 +201,8 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 			return err
 		}
 		msgType = AppendEntriesPipelineRecvResponse
+		glog.Infof("Sent [%d] AEPRecv Resp at %v", rpcId, time.Now())
+
 	default:
 		return errors.New("GetResponseFromChannel: Unknown message type")
 	}
@@ -383,6 +385,8 @@ func (s *Server) HandleAppendEntriesPipelineStart(rpcId uint64, flow flow, start
 
 func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, flow flow, start time.Time) error {
 
+	glog.Infof("Received [%d] AEPSend Req at %v", rpcId, time.Now())
+
 	var buff bytes.Buffer
 	dec := gob.NewDecoder(&buff)
 
@@ -420,10 +424,15 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 		RpcId:   rpcId,
 		Payload: []byte{},
 	}
+
+	glog.Infof("Sent [%d] AEPSend Resp at %v", rpcId, time.Now())
+
 	return s.SendMachnetResponse(response, flow, start)
 }
 
 func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start time.Time) error {
+
+	glog.Infof("Received [%d] AEPRecv Req at %v", rpcId, time.Now())
 
 	s.pipelineMutex.Lock()
 	if pendingResponse, ok := s.pendingPipelineResponses[flow]; ok {

@@ -80,11 +80,11 @@ type raftPipelineAPI struct {
 
 	cancel        func()
 	inflightChMtx sync.Mutex
-	inflightCh    chan *appendFuture
+	inflightCh    chan *AFuture
 	doneCh        chan raft.AppendFuture
 }
 
-type appendFuture struct {
+type AFuture struct {
 	raft.AppendFuture
 
 	start    time.Time
@@ -194,7 +194,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
-
+	glog.Infof("SendMachnetRpc: sent [%d] at %+v", rpcId, time.Now())
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
@@ -221,7 +221,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		glog.Error("Failed to decode response from remote host")
 		return RpcMessage{}, err
 	}
-
+	glog.Infof("SendMachnetRpc: received [%d] at %+v", response.RpcId, time.Now())
 	return response, nil
 }
 
@@ -397,7 +397,7 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 		id:         id,
 		ctx:        ctx,
 		cancel:     cancel,
-		inflightCh: make(chan *appendFuture, 20),
+		inflightCh: make(chan *AFuture, 20),
 		doneCh:     make(chan raft.AppendFuture, 20),
 	}
 	go pipelineObject.receiver()
@@ -407,7 +407,7 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 // AppendEntries is used to add another request to the pipeline.
 // The send may block which is an effective form of back-pressure.
 func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) (raft.AppendFuture, error) {
-	af := &appendFuture{
+	af := &AFuture{
 		start:    time.Now(),
 		request:  req,
 		response: resp,
@@ -485,6 +485,7 @@ func (r *raftPipelineAPI) receiver() {
 			af.response.Success = resp.Success
 			af.response.LastLog = resp.LastLog
 		}
+		glog.Infof("Received %v at %v", rpcResponse.RpcId, time.Now())
 		close(af.done)
 		r.doneCh <- af
 	}
@@ -496,7 +497,7 @@ func (r *raftPipelineAPI) receiver() {
 // calls will return the same value.
 // Note that it is not OK to call this method
 // twice concurrently on the same Future instance.
-func (f *appendFuture) Error() error {
+func (f *AFuture) Error() error {
 	start := time.Now()
 	return errors.New("dummy error")
 	glog.Warningf("Error: started to block at %+v", start)
@@ -508,20 +509,20 @@ func (f *appendFuture) Error() error {
 
 // Start returns the time that the append request was started.
 // It is always OK to call this method.
-func (f *appendFuture) Start() time.Time {
+func (f *AFuture) Start() time.Time {
 	return f.start
 }
 
 // Request holds the parameters of the AppendEntries call.
 // It is always OK to call this method.
-func (f *appendFuture) Request() *raft.AppendEntriesRequest {
+func (f *AFuture) Request() *raft.AppendEntriesRequest {
 	return f.request
 }
 
 // Response holds the results of the AppendEntries call.
 // This method must only be called after the Error
 // method returns, and will only be valid on success.
-func (f *appendFuture) Response() *raft.AppendEntriesResponse {
+func (f *AFuture) Response() *raft.AppendEntriesResponse {
 	return f.response
 }
 
