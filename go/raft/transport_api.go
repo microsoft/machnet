@@ -200,7 +200,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	start := time.Now()
 	glog.Infof("SendMachnetRpc: sent [%d] at %+v", rpcId, start)
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
-	glog.Infof("SendMachnetRpc: machnet.SendmMsg [%d] took: %+v (msgLen: %d)", rpcId, time.Since(start), msgLen)
+	glog.Infof("SendMachnetRpc: machnet.SendmMsg [%d] returned at %v took: %+v (msgLen: %d)", rpcId, time.Now(), time.Since(start), msgLen)
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
 	}
