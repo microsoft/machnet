@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"log"
@@ -28,6 +29,11 @@ var (
 )
 
 const maxRequestSize = 2048
+
+type Payload struct {
+	Key   string
+	Value string
+}
 
 func main() {
 	flag.Parse()
@@ -194,6 +200,19 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 		// Handle the request.
 		if recvBytes > 0 {
+			var buf bytes.Buffer
+			dec := gob.NewDecoder(&buf)
+
+			buf.Write(request[:recvBytes])
+			var responsePayload Payload
+
+			if err := dec.Decode(&responsePayload); err != nil {
+				glog.Errorf("Failed to decode response")
+				continue
+			}
+
+			glog.Infof("Get the response: %+v", responsePayload)
+
 			start := time.Now()
 			index, _ := rpcInterface.AddWord(request[:recvBytes])
 			//glog.Warningf("Replicated %s in %d us", string(request[:recvBytes]), time.Since(start).Microseconds())
