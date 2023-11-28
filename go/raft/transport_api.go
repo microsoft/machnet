@@ -521,7 +521,7 @@ func (r *raftPipelineAPI) receiver() {
 		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
 		glog.Warningf("receiver: rpc response: %+v took: %+v", rpcResponse, time.Since(start))
 		recvBytes := rpcResponse.Payload
-		if err != nil {
+		if err == nil {
 			// Decode the AppendEntriesResponse from the received payload.
 			buff.Reset()
 			if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
