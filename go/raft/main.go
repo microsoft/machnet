@@ -27,7 +27,7 @@ var (
 	leader        = flag.Bool("leader", false, "Whether to start the node as a leader")
 )
 
-const maxWordLength = 64
+const maxRequestSize = 2048
 
 func main() {
 	flag.Parse()
@@ -181,13 +181,13 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 	rpcInterface := rpcInterface{wt, raftNode}
 
-	request := make([]byte, maxWordLength)
+	request := make([]byte, maxRequestSize)
 	response := new(bytes.Buffer)
 
 	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
 	for {
-		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxWordLength)
+		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxRequestSize)
 		if recvBytes < 0 {
 			glog.Fatal("Failed to receive data from client.")
 		}
@@ -195,8 +195,8 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 		// Handle the request.
 		if recvBytes > 0 {
 			start := time.Now()
-			index, _ := rpcInterface.AddWord(string(request[:recvBytes]))
-			glog.Warningf("Replicated %s in %d us", string(request[:recvBytes]), time.Since(start).Microseconds())
+			index, _ := rpcInterface.AddWord(request[:recvBytes])
+			//glog.Warningf("Replicated %s in %d us", string(request[:recvBytes]), time.Since(start).Microseconds())
 
 			tmpFlow := flow
 			flow.SrcIp = tmpFlow.DstIp
@@ -205,7 +205,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			flow.DstPort = tmpFlow.SrcPort
 
 			response.Reset()
-			response.Grow(64)
+			response.Grow(recvBytes)
 			err := binary.Write(response, binary.LittleEndian, index)
 			if err != nil {
 				glog.Errorf("Failed to create response:", err)
@@ -218,7 +218,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			if ret != 0 {
 				glog.Error("Failed to send data to client.")
 			}
-			glog.Warningf("Sent %s 's index [%d] at %+v", string(request[:recvBytes]), index, time.Now())
+			//glog.Warningf("Sent %s 's index [%d] at %+v", string(request[:recvBytes]), index, time.Now())
 			elapsed := time.Since(start)
 			_ = histogram.RecordValue(elapsed.Nanoseconds())
 

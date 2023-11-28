@@ -1,8 +1,12 @@
 package main
 
 import (
-	"encoding/binary"
+	"bytes"
+	"encoding/gob"
 	"flag"
+	"fmt"
+	"math"
+	"math/rand"
 	"os"
 	"runtime/pprof"
 	"time"
@@ -11,7 +15,6 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/golang/glog"
 	"github.com/microsoft/machnet"
-	"github.com/tjarratt/babble"
 )
 
 var (
@@ -20,7 +23,14 @@ var (
 	appPort        = flag.Int("app_port", 888, "Port to listen on for application traffic.")
 	configJson     = flag.String("config_json", "../servers.json", "Path to the JSON file containing the hosts config.")
 	cpuProfile     = flag.String("cpuProfile", "", "write cpu profile to file")
+	keySize        = flag.Int("key_size", 16, "Key size")
+	valueSize      = flag.Int("value_size", 64, "Value size")
 )
+
+type Payload struct {
+	Key   string
+	Value string
+}
 
 func main() {
 	flag.Parse()
@@ -31,75 +41,83 @@ func main() {
 		}
 		err = pprof.StartCPUProfile(f)
 		if err != nil {
-			glog.Errorf("Couldn't start CPU profiler: %v", err)
+			glog.Errorf("Main: failed to create cpu profile: %+v", err)
 		}
 		defer pprof.StopCPUProfile()
 	}
 
+	jsonBytes, err := os.ReadFile(*configJson)
+	if err != nil {
+		glog.Fatalf("Main: failed to read config file: %v", err)
+	}
+
+	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
+	remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *remoteHostname, "ipv4_addr")
+
+	glog.Info("MAin: trying to connect to ", remoteIp, ":", *appPort, " from ", localIp)
+
 	ret := machnet.Init()
 	if ret != 0 {
-		glog.Fatal("Failed to initialize the Machnet library.")
+		glog.Fatal("Main: failed to initialize the Machnet library.")
 	}
 
 	var channelCtx *machnet.MachnetChannelCtx = machnet.Attach() // TODO: Defer machnet.Detach()?
 
 	if channelCtx == nil {
-		glog.Fatal("Failed to attach to the channel.")
+		glog.Fatal("Main: failed to attach to the channel.")
 	}
-
-	jsonBytes, err := os.ReadFile(*configJson)
-	if err != nil {
-		glog.Fatal("Failed to read config file.")
-	}
-
-	localIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *localHostname, "ipv4_addr")
-	remoteIp, _ := jsonparser.GetString(jsonBytes, "hosts_config", *remoteHostname, "ipv4_addr")
-	glog.Info("Trying to connect to ", remoteIp, ":", *appPort, " from ", localIp)
 
 	var flow machnet.MachnetFlow
 	ret, flow = machnet.Connect(channelCtx, localIp, remoteIp, uint(*appPort))
 	if ret != 0 {
-		glog.Fatal("Failed to connect to remote host.")
+		glog.Fatal("Main: failed to connect to remote host.")
 	}
-	glog.Info("[CONNECTED] [", localIp, " <-> ", remoteIp, ":", *appPort, "]")
-
-	babbler := babble.NewBabbler()
-	babbler.Count = 1
+	glog.Info("Main: connected ", localIp, " <-> ", remoteIp, ":", *appPort, "]")
 
 	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
+
 	for {
-		word := babbler.Babble()
-		wordBytes := []byte(word)
-		wordLen := len(wordBytes)
-		if wordLen == 0 {
+		key := generateRandomKey(*keySize)
+		value := generateRandomValue(*valueSize)
+		payload := Payload{
+			key, value,
+		}
+
+		glog.Infof("Main: sanity: payload: %+v", payload)
+
+		var buf bytes.Buffer
+		enc := gob.NewEncoder(&buf)
+
+		if err := enc.Encode(payload); err != nil {
+			glog.Errorf("Main: failed to encode payload: %+v", err)
 			continue
 		}
 
+		payloadBytes := buf.Bytes()
+		payloadLen := uint(len(payloadBytes))
+
 		start := time.Now()
-		ret := machnet.SendMsg(channelCtx, flow, &wordBytes[0], uint(wordLen))
-		glog.Infof("Sent %s at %+v", word, time.Now())
+
+		ret := machnet.SendMsg(channelCtx, flow, &payloadBytes[0], payloadLen)
 		if ret != 0 {
-			glog.Fatal("Failed to send word.")
+			glog.Error("Main: failed to send payload")
+			continue
 		}
 
 		responseBuff := make([]byte, 64)
-
 		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64)
 		for recvBytes == 0 {
 			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 64)
 		}
 
-		elapsed := time.Since(start)
-		glog.Info("Added word: ", word, " [", elapsed.Microseconds(), " us]"+" index: ", binary.LittleEndian.Uint64(responseBuff[:8]))
-		err := histogram.RecordValue(elapsed.Microseconds())
-		if err != nil {
-			glog.Errorf("couldn't record value to histogram: %v", err)
+		if err := histogram.RecordValue(time.Since(start).Microseconds()); err != nil {
+			glog.Errorf("Main: failed to record value to histogram: %v", err)
 		}
 
 		if time.Since(lastRecordedTime) > 1*time.Second {
 			percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-			glog.Infof("[RTT: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us, Words added: %d]",
+			glog.Infof("[RTT: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us,  RPS: %d]",
 				float64(percentileValues[50.0]), float64(percentileValues[95.0]),
 				float64(percentileValues[99.0]), float64(percentileValues[99.9]),
 				histogram.TotalCount())
@@ -107,4 +125,23 @@ func main() {
 			lastRecordedTime = time.Now()
 		}
 	}
+}
+
+func generateRandomKey(length int) string {
+	source := rand.NewSource(time.Now().UnixNano())
+	randRange := rand.New(source)
+	max_ := int(math.Pow10(length)) - 1
+	number := randRange.Intn(max_)
+	return fmt.Sprintf("%0*d", length, number)
+}
+
+func generateRandomValue(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	source := rand.NewSource(time.Now().UnixNano())
+	randRange := rand.New(source)
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[randRange.Intn(len(charset))]
+	}
+	return string(b)
 }
