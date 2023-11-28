@@ -43,7 +43,6 @@ const (
 	AppendEntriesPipelineRecvResponse
 	AppendEntriesPipelineCloseResponse
 	DummyResponse
-	DummyMsg
 )
 
 const maxMessageLength = 4 * 1024
@@ -90,7 +89,7 @@ type appendFuture struct {
 
 	start    time.Time
 	request  *raft.AppendEntriesRequest
-	response raft.AppendEntriesResponse
+	response *raft.AppendEntriesResponse
 	err      error
 	done     chan struct{}
 }
@@ -175,8 +174,8 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 // Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using Machnet library functions.
 func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp RpcMessage, err error) {
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	//t.mu.Lock()
+	//defer t.mu.Unlock()
 	flow, err := t.getPeer(id)
 	if err != nil {
 		return RpcMessage{}, err
@@ -409,9 +408,10 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 // The send may block which is an effective form of back-pressure.
 func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) (raft.AppendFuture, error) {
 	af := &appendFuture{
-		start:   time.Now(),
-		request: req,
-		done:    make(chan struct{}),
+		start:    time.Now(),
+		request:  req,
+		response: resp,
+		done:     make(chan struct{}),
 	}
 
 	var buff bytes.Buffer
@@ -481,7 +481,9 @@ func (r *raftPipelineAPI) receiver() {
 		if err != nil {
 			af.err = err
 		} else {
-			af.response = resp
+			af.response.Term = resp.Term
+			af.response.Success = resp.Success
+			af.response.LastLog = resp.LastLog
 		}
 		close(af.done)
 		r.doneCh <- af
@@ -520,7 +522,7 @@ func (f *appendFuture) Request() *raft.AppendEntriesRequest {
 // This method must only be called after the Error
 // method returns, and will only be valid on success.
 func (f *appendFuture) Response() *raft.AppendEntriesResponse {
-	return &f.response
+	return f.response
 }
 
 // EncodePeer is used to serialize a peer's address.

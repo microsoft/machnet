@@ -13,6 +13,12 @@ import (
 	"github.com/microsoft/machnet"
 )
 
+type PendingResponse struct {
+	ch         chan raft.RPCResponse
+	numPending int
+	toClose    bool
+}
+
 type Server struct {
 	transport *TransportApi
 
@@ -24,7 +30,7 @@ type Server struct {
 	pendingSnapshotResponses map[flow]chan raft.RPCResponse
 
 	// Assumption: There is only one pending pipeline channel per flow.
-	pendingPipelineResponses map[flow]chan raft.RPCResponse
+	pendingPipelineResponses map[flow]PendingResponse
 	pipelineMutex            sync.Mutex
 }
 
@@ -69,8 +75,16 @@ func NewServer(transport *TransportApi) *Server {
 		snapshotReaders: make(map[flow]*snapshotReader),
 
 		pendingSnapshotResponses: make(map[flow]chan raft.RPCResponse),
-		pendingPipelineResponses: make(map[flow]chan raft.RPCResponse),
+		pendingPipelineResponses: make(map[flow]PendingResponse),
 	}
+}
+
+func IsHeartbeat(command interface{}) bool {
+	req, ok := command.(*raft.AppendEntriesRequest)
+	if !ok {
+		return false
+	}
+	return req.Term != 0 && req.PrevLogEntry == 0 && req.PrevLogTerm == 0 && len(req.Entries) == 0 && req.LeaderCommitIndex == 0
 }
 
 // StartServer Listens for incoming connection from leader, and start the Recv thread.
@@ -351,7 +365,11 @@ func (s *Server) HandleAppendEntriesPipelineStart(rpcId uint64, flow flow, start
 	ch := make(chan raft.RPCResponse, 1024)
 
 	s.pipelineMutex.Lock()
-	s.pendingPipelineResponses[flow] = ch
+	s.pendingPipelineResponses[flow] = PendingResponse{
+		ch:         ch,
+		numPending: 0,
+		toClose:    false,
+	}
 	s.pipelineMutex.Unlock()
 
 	response := RpcMessage{
@@ -377,19 +395,25 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 		return err
 	}
 
-	ch := s.pendingPipelineResponses[flow]
-	rpc := raft.RPC{
-		Command:  &appendEntriesRequest,
-		RespChan: ch,
-		Reader:   nil,
+	s.pipelineMutex.Lock()
+	if pendingResponse, ok := s.pendingPipelineResponses[flow]; ok {
+		pendingResponse.numPending += 1
+		s.pendingPipelineResponses[flow] = pendingResponse
+
+		rpc := raft.RPC{
+			Command:  &appendEntriesRequest,
+			RespChan: pendingResponse.ch,
+			Reader:   nil,
+		}
+
+		_, ok := rpc.Command.(raft.WithRPCHeader)
+		if !ok {
+			glog.Errorf("HandleAppendEntriesPipelineSend: appendEntriesRequest does not have a WithRPCHeader")
+		}
+		s.transport.rpcChan <- rpc
 	}
 
-	_, ok := rpc.Command.(raft.WithRPCHeader)
-	if !ok {
-		glog.Error("AppendEntriesRequest does not have a WithRPCHeader")
-	}
-
-	s.transport.rpcChan <- rpc
+	s.pipelineMutex.Unlock()
 
 	response := RpcMessage{
 		MsgType: AppendEntriesPipelineSendResponse,
@@ -401,25 +425,37 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 
 func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start time.Time) error {
 
-	ch, exists := s.pendingPipelineResponses[flow]
-	if !exists {
-		glog.Warning("HandleAppendEntriesPipelineRecv: receive on closed pipeline! ")
-		response := RpcMessage{
-			MsgType: AppendEntriesPipelineCloseResponse,
-			RpcId:   rpcId,
-			Payload: []byte{},
-		}
-		return s.SendMachnetResponse(response, flow, start)
+	s.pipelineMutex.Lock()
+	if pendingResponse, ok := s.pendingPipelineResponses[flow]; ok {
+		pendingResponse.numPending -= 1
+		s.pendingPipelineResponses[flow] = pendingResponse
 
+		if err := s.GetResponseFromChannel(pendingResponse.ch, flow, AppendEntriesPipelineRecv, rpcId, start); err != nil {
+			return err
+		}
+
+		if pendingResponse.numPending == 0 && pendingResponse.toClose {
+			delete(s.pendingPipelineResponses, flow)
+			close(pendingResponse.ch)
+		}
 	}
-	return s.GetResponseFromChannel(ch, flow, AppendEntriesPipelineRecv, rpcId, start)
+	s.pipelineMutex.Unlock()
+
+	return nil
 }
 
 func (s *Server) HandleAppendEntriesPipelineClose(rpcId uint64, flow flow, start time.Time) error {
 
-	ch := s.pendingPipelineResponses[flow]
-	delete(s.pendingPipelineResponses, flow)
-	close(ch)
+	s.pipelineMutex.Lock()
+	if pendingResponse, ok := s.pendingPipelineResponses[flow]; ok {
+		if pendingResponse.numPending > 0 {
+			pendingResponse.toClose = true
+		} else {
+			delete(s.pendingPipelineResponses, flow)
+			close(pendingResponse.ch)
+		}
+	}
+	s.pipelineMutex.Unlock()
 
 	response := RpcMessage{
 		MsgType: AppendEntriesPipelineCloseResponse,
@@ -430,7 +466,6 @@ func (s *Server) HandleAppendEntriesPipelineClose(rpcId uint64, flow flow, start
 }
 
 func (s *Server) HandleRPCs() {
-
 	for {
 		requestBuff := make([]byte, maxMessageLength)
 		recvBytes, flow := machnet.Recv(s.transport.receiveChannelCtx, &requestBuff[0], maxMessageLength)
@@ -449,6 +484,14 @@ func (s *Server) HandleRPCs() {
 			continue
 		}
 
+		if IsHeartbeat(request.Payload) {
+			glog.Info("Received Heartbeat")
+			response := RpcMessage{MsgType: DummyResponse, Payload: []byte{}}
+
+			if err := s.SendMachnetResponse(response, flow, start); err != nil {
+				glog.Errorf("Failed to send heartbeat response back: %+v", err)
+			}
+		}
 		switch request.MsgType {
 
 		case AppendEntriesRequest:
