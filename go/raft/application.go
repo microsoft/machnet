@@ -94,16 +94,16 @@ func (s *snapshot) Release() {
 
 func (r rpcInterface) AddWord(word string) (uint64, error) {
 	start := time.Now()
-	glog.Warningf("AddWord: started raft Apply at %+v", start)
+	glog.Warningf("AddWord[%s]: started raft Apply at %+v", word, start)
 	f := r.raft.Apply([]byte(word), 0) // 10*time.Microsecond)
-	glog.Warningf("AddWord: Apply took: %+v returned future: %+v", time.Since(start), f)
+	glog.Warningf("AddWord[%s]: Apply took: %+v returned future: %+v", word, time.Since(start), f)
 	start = time.Now()
-	glog.Warningf("AddWord: block on future at %+v", start)
+	glog.Warningf("AddWord[%s]: block on future at %+v", word, start)
 	if err := f.Error(); err != nil {
 		glog.Warningf("Error: couldn't block")
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
-	glog.Warningf("AddWord: future returned success result, took: %+v", time.Since(start))
+	glog.Warningf("AddWord[%s]: future returned success result, took: %+v", word, time.Since(start))
 	return f.Index(), nil
 }
 
