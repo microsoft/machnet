@@ -3,12 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/golang/glog"
-	"sync"
-	"time"
-
 	"github.com/hashicorp/go-msgpack/codec"
 	"github.com/hashicorp/raft"
+	"sync"
 )
 
 var ErrKeyNotFound error
@@ -118,14 +115,14 @@ func (s *BuffStore) StoreLog(log *raft.Log) error {
 }
 
 func (s *BuffStore) StoreLogs(logs []*raft.Log) error {
-	start := time.Now()
-	glog.Warningf("StoreLogs: started at %+v", start)
+	//start := time.Now()
+	//glog.Warningf("StoreLogs: started at %+v", start)
 	for _, log := range logs {
 		if err := s.StoreLog(log); err != nil {
 			return err
 		}
 	}
-	glog.Warningf("StoreLogs: took %+v", time.Since(start))
+	//glog.Warningf("StoreLogs: took %+v", time.Since(start))
 	return nil
 }
 
