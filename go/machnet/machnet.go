@@ -92,11 +92,11 @@ func Listen(ctx *MachnetChannelCtx, local_ip string, local_port uint) int {
 // Send message on the flow.
 // NOTE: Currently, only one iov is supported.
 func SendMsg(ctx *MachnetChannelCtx, flow MachnetFlow, base *uint8, iov_len uint) int {
+	start := time.Now()
+	fmt.Printf("SendMsg: called C binding at %+v\n", start)
 	var iov C.MachnetIovec_t
 	iov.base = unsafe.Pointer(base)
 	iov.len = C.size_t(iov_len)
-	start := time.Now()
-	fmt.Printf("SendMsg: called C binding at %+v\n", start)
 	ret := C.__machnet_sendmsg_go((*C.MachnetChannelCtx_t)(ctx), iov, 1, convert_net_flow_c(flow))
 	fmt.Printf("SendMsg: C binding returned at %+v took: %+v\n", time.Now(), time.Since(start))
 	return (int)(ret)
