@@ -9,7 +9,7 @@ require (
 	github.com/buger/jsonparser v1.1.1
 	github.com/golang/glog v1.1.2
 	github.com/hashicorp/go-msgpack v0.5.5
-	github.com/hashicorp/raft v1.5.0
+	github.com/hashicorp/raft v1.1.0
 	github.com/microsoft/machnet v1.0.0
 	github.com/tjarratt/babble v0.0.0-20210505082055-cbca2a4833c1
 )
