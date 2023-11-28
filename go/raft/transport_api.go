@@ -202,6 +202,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	copy(copiedData, msgBytes)
 
 	file, _ := os.Create(fmt.Sprintf("%d.trace", rpcId))
+
 	trace.Start(file)
 
 	start := time.Now()
@@ -212,6 +213,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		return RpcMessage{}, errors.New("failed to send message to remote host")
 	}
 	trace.Stop()
+	file.Close()
 	responseBuff := make([]byte, maxMessageLength)
 	start = time.Now()
 	glog.Infof("SendMachnetRpc[%d]: start polling for recv [%d] at %+v", rpcType, rpcId, start)
