@@ -239,7 +239,10 @@ func bounce(task *taskCtx, stats *stats) {
 	flowInfo.DstPort = tmpFlow.SrcPort
 
 	// Prepare to send back the message.
+	start := time.Now()
+	glog.Infof("Called machnet.SendMsg at %+v", start)
 	ret := machnet.SendMsg(channelCtx, flowInfo, &task.rxMsg[0], uint(msgSize))
+	glog.Infof("machnet.SendMsg returned at %+v took: %+v", time.Now(), time.Since(start))
 	if ret == 0 {
 		stats.txSuccess += 1
 		stats.txBytes += uint64(msgSize)
