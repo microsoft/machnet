@@ -180,6 +180,15 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	var rpcId = t.rpcId
+	file, _ := os.Create(fmt.Sprintf("%d.trace", rpcId))
+	defer file.Close()
+	glog.Infof("SendMachnetRpc[%d]: id(%d) trace profile to %v at %v", rpcType, rpcId, file, time.Now())
+
+	trace.Start(file)
+	defer trace.Stop()
+
 	f, err := t.getPeer(id)
 	if err != nil {
 		return RpcMessage{}, err
@@ -189,7 +198,6 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	enc := gob.NewEncoder(&buff)
 	dec := gob.NewDecoder(&buff)
 
-	var rpcId = t.rpcId
 	msg := RpcMessage{MsgType: rpcType, RpcId: rpcId, Payload: payload}
 	t.rpcId = 1 + t.rpcId
 	if err := enc.Encode(msg); err != nil {
@@ -201,10 +209,6 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	copiedData := make([]byte, msgLen)
 	copy(copiedData, msgBytes)
 
-	file, _ := os.Create(fmt.Sprintf("%d.trace", rpcId))
-	glog.Infof("SendMachnetRpc[%d]: id(%d) trace profile to %v at %v", rpcType, rpcId, file, time.Now())
-	trace.Start(file)
-
 	start := time.Now()
 	//glog.Infof("SendMachnetRpc[%d]: sent [%d] at %+v", rpcType, rpcId, start)
 	ret := machnet.SendMsg(t.sendChannelCtx, f, &copiedData[0], uint(msgLen))
@@ -212,8 +216,6 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
 	}
-	trace.Stop()
-	file.Close()
 	responseBuff := make([]byte, maxMessageLength)
 	start = time.Now()
 	glog.Infof("SendMachnetRpc[%d]: start polling for recv [%d] at %+v", rpcType, rpcId, start)
