@@ -174,6 +174,8 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 // SendMachnetRpc Generic Machnet RPC handler.
 // Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using Machnet library functions.
 func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp RpcMessage, err error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -195,14 +197,17 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
-	glog.Infof("SendMachnetRpc: sent [%d] at %+v", rpcId, time.Now())
+	start := time.Now()
+	glog.Infof("SendMachnetRpc: sent [%d] at %+v", rpcId, start)
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
+	glog.Infof("SendMachnetRpc: machnet.SendmMsg [%d] took: %+v (msgLen: %d)", rpcId, time.Since(start), msgLen)
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
 	}
 
 	responseBuff := make([]byte, maxMessageLength)
-
+	start = time.Now()
+	glog.Infof("SendMachnetRpc: start polling for recv [%d] at %+v", rpcId, start)
 	recvBytes := 0
 	for recvBytes == 0 {
 		recvBytes, _ = machnet.Recv(t.sendChannelCtx, &responseBuff[0], maxMessageLength)
@@ -210,7 +215,6 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 			glog.Error("Failed to receive response from remote host")
 			return RpcMessage{}, errors.New("failed to receive response from remote host")
 		}
-		runtime.Gosched()
 	}
 
 	buff.Reset()
@@ -223,7 +227,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		glog.Error("Failed to decode response from remote host")
 		return RpcMessage{}, err
 	}
-	glog.Infof("SendMachnetRpc: received [%d] at %+v", response.RpcId, time.Now())
+	glog.Infof("SendMachnetRpc: received [%d] at %+v took(starting from polling):%v ", response.RpcId, time.Now(), time.Since(start))
 	return response, nil
 }
 
