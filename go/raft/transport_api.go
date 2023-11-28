@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 	"sync"
 	"time"
 
@@ -199,6 +200,10 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	msgLen := len(msgBytes)
 	copiedData := make([]byte, msgLen)
 	copy(copiedData, msgBytes)
+
+	file, _ := os.Create(fmt.Sprintf("%d.trace", rpcId))
+	trace.Start(file)
+
 	start := time.Now()
 	glog.Infof("SendMachnetRpc[%d]: sent [%d] at %+v", rpcType, rpcId, start)
 	ret := machnet.SendMsg(t.sendChannelCtx, f, &copiedData[0], uint(msgLen))
@@ -206,7 +211,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
 	}
-
+	trace.Stop()
 	responseBuff := make([]byte, maxMessageLength)
 	start = time.Now()
 	glog.Infof("SendMachnetRpc[%d]: start polling for recv [%d] at %+v", rpcType, rpcId, start)
