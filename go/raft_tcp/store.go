@@ -3,6 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/golang/glog"
+	"sync"
+	"time"
+
 	"github.com/hashicorp/go-msgpack/codec"
 	"github.com/hashicorp/raft"
 )
@@ -40,8 +44,12 @@ func uint64ToBytes(u uint64) []byte {
 
 // BuffStore Make an in-memory buffer store implementation of LogStore and StableStore for raft.
 type BuffStore struct {
-	entries    map[uint64][]byte
-	indexQueue []uint64
+	entries     map[uint64][]byte
+	entriesLock sync.RWMutex
+
+	indexQueue     []uint64
+	indexQueueLock sync.RWMutex
+
 	maxEntries int
 }
 
@@ -58,6 +66,9 @@ func (s *BuffStore) FirstIndex() (uint64, error) {
 		return 0, nil
 	}
 
+	s.indexQueueLock.RLock()
+	defer s.indexQueueLock.RUnlock()
+
 	return s.indexQueue[0], nil
 }
 
@@ -66,10 +77,16 @@ func (s *BuffStore) LastIndex() (uint64, error) {
 		return 0, nil
 	}
 
+	s.indexQueueLock.RLock()
+	defer s.indexQueueLock.RUnlock()
+
 	return s.indexQueue[len(s.indexQueue)-1], nil
 }
 
 func (s *BuffStore) GetLog(index uint64, log *raft.Log) error {
+	s.entriesLock.RLock()
+	defer s.entriesLock.RUnlock()
+
 	if val, ok := s.entries[index]; ok {
 		return decodeMsgPack(val, log)
 	}
@@ -82,6 +99,11 @@ func (s *BuffStore) StoreLog(log *raft.Log) error {
 	if err != nil {
 		return err
 	}
+
+	s.entriesLock.Lock()
+	defer s.entriesLock.Unlock()
+	s.indexQueueLock.Lock()
+	defer s.indexQueueLock.Unlock()
 
 	s.entries[log.Index] = val.Bytes()
 	s.indexQueue = append(s.indexQueue, log.Index)
@@ -96,15 +118,23 @@ func (s *BuffStore) StoreLog(log *raft.Log) error {
 }
 
 func (s *BuffStore) StoreLogs(logs []*raft.Log) error {
+	start := time.Now()
+	glog.Warningf("StoreLogs: started at %+v", start)
 	for _, log := range logs {
 		if err := s.StoreLog(log); err != nil {
 			return err
 		}
 	}
+	glog.Warningf("StoreLogs: took %+v", time.Since(start))
 	return nil
 }
 
 func (s *BuffStore) DeleteRange(min, max uint64) error {
+	s.entriesLock.Lock()
+	defer s.entriesLock.Unlock()
+	s.indexQueueLock.Lock()
+	defer s.indexQueueLock.Unlock()
+
 	for i := min; i <= max; i++ {
 		delete(s.entries, i)
 		// Remove the index from the queue.
@@ -122,6 +152,10 @@ func (s *BuffStore) DeleteRange(min, max uint64) error {
 func (s *BuffStore) Set(key []byte, val []byte) error {
 	// Convert the key to uint64.
 	keyInt := bytesToUint64(key)
+
+	s.entriesLock.Lock()
+	defer s.entriesLock.Unlock()
+
 	s.entries[keyInt] = val
 	return nil
 }
@@ -129,6 +163,10 @@ func (s *BuffStore) Set(key []byte, val []byte) error {
 func (s *BuffStore) Get(key []byte) ([]byte, error) {
 	// Convert the key to uint64.
 	keyInt := bytesToUint64(key)
+
+	s.entriesLock.RLock()
+	defer s.entriesLock.RUnlock()
+
 	if val, ok := s.entries[keyInt]; ok {
 		return append([]byte(nil), val...), nil
 	}
