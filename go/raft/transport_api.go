@@ -197,17 +197,19 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
+	copiedData := make([]byte, msgLen)
+	copy(copiedData, msgBytes)
 	start := time.Now()
-	glog.Infof("SendMachnetRpc: sent [%d] at %+v", rpcId, start)
-	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
-	glog.Infof("SendMachnetRpc: machnet.SendmMsg [%d] returned at %v took: %+v (msgLen: %d)", rpcId, time.Now(), time.Since(start), msgLen)
+	glog.Infof("SendMachnetRpc[%d]: sent [%d] at %+v", rpcType, rpcId, start)
+	ret := machnet.SendMsg(t.sendChannelCtx, flow, &copiedData[0], uint(msgLen))
+	glog.Infof("SendMachnetRpc[%d]: machnet.SendmMsg [%d] returned at %v took: %+v (msgLen: %d)", rpcType, rpcId, time.Now(), time.Since(start), msgLen)
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
 	}
 
 	responseBuff := make([]byte, maxMessageLength)
 	start = time.Now()
-	glog.Infof("SendMachnetRpc: start polling for recv [%d] at %+v", rpcId, start)
+	glog.Infof("SendMachnetRpc[%d]: start polling for recv [%d] at %+v", rpcType, rpcId, start)
 	recvBytes := 0
 	for recvBytes == 0 {
 		recvBytes, _ = machnet.Recv(t.sendChannelCtx, &responseBuff[0], maxMessageLength)
@@ -227,7 +229,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		glog.Error("Failed to decode response from remote host")
 		return RpcMessage{}, err
 	}
-	glog.Infof("SendMachnetRpc: received [%d] at %+v took(starting from polling):%v ", response.RpcId, time.Now(), time.Since(start))
+	glog.Infof("SendMachnetRpc[%d]: received [%d] at %+v took(starting from polling):%v ", rpcType, response.RpcId, time.Now(), time.Since(start))
 	return response, nil
 }
 
