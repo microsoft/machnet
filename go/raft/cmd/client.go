@@ -78,13 +78,12 @@ func main() {
 	lastRecordedTime := time.Now()
 
 	for {
+
 		key := generateRandomKey(*keySize)
 		value := generateRandomValue(*valueSize)
 		payload := Payload{
 			key, value,
 		}
-
-		glog.Infof("Main: sanity: payload: %+v", payload)
 
 		var buf bytes.Buffer
 		enc := gob.NewEncoder(&buf)
