@@ -219,6 +219,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 			payload := response.Bytes()
 
+			glog.Infof("Sending response back, called machnet.SendMsg at %v", time.Now())
 			ret := machnet.SendMsg(channelCtx, flow, &payload[0], 64)
 			if ret != 0 {
 				glog.Error("Failed to send data to client.")
