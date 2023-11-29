@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"io"
 	"runtime"
 	"sync"
@@ -33,6 +34,8 @@ type Server struct {
 	// Assumption: There is only one pending pipeline channel per flow.
 	pendingPipelineResponses map[flow]PendingResponse
 	pipelineMutex            sync.Mutex
+	histogram                *hdrhistogram.Histogram
+	lastRecordedTime         time.Time
 }
 
 type snapshotReader struct {
@@ -77,6 +80,8 @@ func NewServer(transport *TransportApi) *Server {
 
 		pendingSnapshotResponses: make(map[flow]chan raft.RPCResponse),
 		pendingPipelineResponses: make(map[flow]PendingResponse),
+		histogram:                hdrhistogram.New(1, 1000000, 3),
+		lastRecordedTime:         time.Now(),
 	}
 }
 
@@ -140,20 +145,32 @@ func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.
 	flow.SrcPort = tmpFlow.DstPort
 	flow.DstPort = tmpFlow.SrcPort
 
-	elapsed := time.Since(start)
-	glog.Info("SendMachnetResponse: Total Rpc took: ", elapsed.Microseconds(), " us")
+	//elapsed := time.Since(start)
+	//glog.Info("SendMachnetResponse: Total Rpc took: ", elapsed.Microseconds(), " us")
 
 	ret := machnet.SendMsg(s.transport.receiveChannelCtx, flow, &responseBytes[0], uint(responseLen))
+
 	if ret != 0 {
 		return errors.New("SendMachnetResponse: failed to send message to remote host")
 	}
-
+	err := s.histogram.RecordValue(time.Since(start).Microseconds())
+	if err != nil {
+		glog.Errorf("Failed to record to histogram")
+	}
+	if time.Since(s.lastRecordedTime) > 1*time.Second {
+		percentileValues := s.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+		glog.Warningf("RPC processing time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d",
+			float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+			float64(percentileValues[99.0]), float64(percentileValues[99.9]), s.histogram.TotalCount())
+		s.histogram.Reset()
+		s.lastRecordedTime = time.Now()
+	}
 	return nil
 }
 
 func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, msgType uint8, rpcId uint64, start time.Time) error {
-	raftStart := time.Now()
-	glog.Info("GetResponseFromChannel: waiting for response from Raft channel...")
+	//raftStart := time.Now()
+	//glog.Info("GetResponseFromChannel: waiting for response from Raft channel...")
 	resp := <-ch
 	if resp.Error != nil {
 		glog.Error("GetResponseFromChannel: couldn't handle Rpc; error: ", resp.Error)
@@ -218,8 +235,8 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 		return err
 	}
 
-	raftElapsed := time.Since(raftStart)
-	glog.Info("GetResponseFromChannel: Raft Rpc took: ", raftElapsed.Microseconds(), " us")
+	//raftElapsed := time.Since(raftStart)
+	//glog.Info("GetResponseFromChannel: Raft Rpc took: ", raftElapsed.Microseconds(), " us")
 
 	return nil
 }
