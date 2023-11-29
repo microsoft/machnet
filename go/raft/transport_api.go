@@ -183,7 +183,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	var rpcId = t.rpcId
 	file, _ := os.Create(fmt.Sprintf("%d.trace", rpcId))
 	defer file.Close()
-	glog.Infof("SendMachnetRpc[%d]: id(%d) trace profile to %v at %v", rpcType, rpcId, file, time.Now())
+	//glog.Infof("SendMachnetRpc[%d]: id(%d) trace profile to %v at %v", rpcType, rpcId, file, time.Now())
 
 	trace.Start(file)
 	defer trace.Stop()
@@ -501,7 +501,7 @@ func (r *raftPipelineAPI) receiver() {
 			af.response.Success = resp.Success
 			af.response.LastLog = resp.LastLog
 		}
-		glog.Infof("Received %v at %v", rpcResponse.RpcId, time.Now())
+		//glog.Infof("Received %v at %v", rpcResponse.RpcId, time.Now())
 		close(af.done)
 		r.doneCh <- af
 	}
