@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"io"
+	"runtime"
 	"sync"
 	"time"
 
@@ -473,6 +474,7 @@ func (s *Server) HandleRPCs() {
 			glog.Errorf("Failed to receive message from Machnet Channel.")
 			continue
 		} else if recvBytes == 0 {
+			runtime.Gosched()
 			continue
 		}
 

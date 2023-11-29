@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
@@ -193,6 +194,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	lastRecordedTime := time.Now()
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxRequestSize)
+		runtime.Gosched()
 		if recvBytes < 0 {
 			glog.Fatal("Failed to receive data from client.")
 		}
