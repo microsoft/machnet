@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"runtime/pprof"
-	"runtime/trace"
 	"sync"
 	"time"
 
@@ -181,12 +180,12 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	//defer t.mu.Unlock()
 
 	var rpcId = t.rpcId
-	file, _ := os.Create(fmt.Sprintf("%d.trace", rpcId))
-	defer file.Close()
+	//file, _ := os.Create(fmt.Sprintf("%d.trace", rpcId))
+	//defer file.Close()
 	//glog.Infof("SendMachnetRpc[%d]: id(%d) trace profile to %v at %v", rpcType, rpcId, file, time.Now())
 
-	trace.Start(file)
-	defer trace.Stop()
+	//trace.Start(file)
+	//defer trace.Stop()
 
 	f, err := t.getPeer(id)
 	if err != nil {
