@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
 	"sync"
@@ -175,11 +174,11 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 // SendMachnetRpc Generic Machnet RPC handler.
 // Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using Machnet library functions.
 func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp RpcMessage, err error) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	//runtime.LockOSThread()
+	//defer runtime.UnlockOSThread()
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	//t.mu.Lock()
+	//defer t.mu.Unlock()
 
 	var rpcId = t.rpcId
 	file, _ := os.Create(fmt.Sprintf("%d.trace", rpcId))
