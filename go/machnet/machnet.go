@@ -8,8 +8,10 @@ package machnet
 // #include "../../src/ext/machnet_common.h"
 import "C"
 import (
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -90,6 +92,7 @@ func Listen(ctx *MachnetChannelCtx, local_ip string, local_port uint) int {
 // Send message on the flow.
 // NOTE: Currently, only one iov is supported.
 func SendMsg(ctx *MachnetChannelCtx, flow MachnetFlow, base *uint8, iov_len uint) int {
+	fmt.Printf("Entered machnet.SendMsg at %v\n", time.Now())
 	var iov C.MachnetIovec_t
 	iov.base = unsafe.Pointer(base)
 	iov.len = C.size_t(iov_len)
