@@ -195,7 +195,8 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
-	glog.Infof("Called machnet.SendMsg at %v", time.Now())
+	start := time.Now()
+	glog.Infof("Called machnet.SendMsg at %v", start)
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
@@ -213,6 +214,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		runtime.Gosched()
 	}
 
+	glog.Infof("Received response at %v, took : %v", time.Now(), time.Since(start))
 	buff.Reset()
 	if n, _ := buff.Write(responseBuff[:recvBytes]); n != recvBytes {
 		return RpcMessage{}, errors.New("failed to write response into buffer")
