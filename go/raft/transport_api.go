@@ -226,7 +226,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	}
 	if time.Since(t.lastRecordedTime) > 1*time.Second {
 		percentileValues := t.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-		glog.Warningf("RPC processing time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d",
+		glog.Warningf("[RPC processing time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d]",
 			float64(percentileValues[50.0]), float64(percentileValues[95.0]),
 			float64(percentileValues[99.0]), float64(percentileValues[99.9]), t.histogram.TotalCount())
 		t.histogram.Reset()
@@ -486,7 +486,7 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	//r.histogram.RecordValue(time.Since(start).Microseconds())
 	if time.Since(r.lastRecordedTime) > 1*time.Second {
 		percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-		glog.Warningf("[ AE pipeline time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d]",
+		glog.Warningf("[AE pipeline time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d]",
 			float64(percentileValues[50.0]), float64(percentileValues[95.0]),
 			float64(percentileValues[99.0]), float64(percentileValues[99.9]), r.histogram.TotalCount())
 		r.histogram.Reset()

@@ -96,23 +96,23 @@ func (s *snapshot) Release() {
 
 func (r *rpcInterface) AddWord(word []byte, num int) (uint64, error) {
 	start := time.Now()
-	glog.Warningf("AddWord[%d]: started raft Apply at %+v", num, start)
+	//glog.Warningf("AddWord[%d]: started raft Apply at %+v", num, start)
 	f := r.raft.Apply(word, 0) // 10*time.Microsecond)
-	glog.Warningf("AddWord[%d]: Apply took: %+v returned future: %+v", num, time.Since(start), f)
-	start = time.Now()
-	glog.Warningf("AddWord[%d]: block on future at %+v", num, start)
+	//glog.Warningf("AddWord[%d]: Apply took: %+v returned future: %+v", num, time.Since(start), f)
+	//start = time.Now()
+	//glog.Warningf("AddWord[%d]: block on future at %+v", num, start)
 	if err := f.Error(); err != nil {
 		glog.Warningf("Error: couldn't block: %v", err)
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
-	glog.Warningf("AddWord[%d]: success on future[%+v] at %+v, took: %v", num, f, time.Now(), time.Since(start))
+	//glog.Warningf("AddWord[%d]: success on future[%+v] at %+v, took: %v", num, f, time.Now(), time.Since(start))
 	err := r.histogram.RecordValue(time.Since(start).Microseconds())
 	if err != nil {
 		glog.Errorf("Failed to record to histogram")
 	}
 	if time.Since(r.lastRecordedTime) > 1*time.Second {
 		percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-		glog.Warningf("Future wait time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d ",
+		glog.Warningf("[Future wait time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d]",
 
 			float64(percentileValues[50.0]), float64(percentileValues[95.0]),
 			float64(percentileValues[99.0]), float64(percentileValues[99.9]), r.histogram.TotalCount())
