@@ -419,8 +419,8 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 		id:               id,
 		ctx:              ctx,
 		cancel:           cancel,
-		inflightCh:       make(chan *AFuture, 20),
-		doneCh:           make(chan raft.AppendFuture, 20),
+		inflightCh:       make(chan *AFuture),
+		doneCh:           make(chan raft.AppendFuture),
 		histogram:        hdrhistogram.New(1, 100000000, 3),
 		lastRecordedTime: time.Now(),
 	}
@@ -484,6 +484,7 @@ func (r *raftPipelineAPI) Close() error {
 }
 
 func (r *raftPipelineAPI) receiver() {
+	start := time.Now()
 	for af := range r.inflightCh {
 		var buff bytes.Buffer
 		dec := gob.NewDecoder(&buff)
@@ -491,7 +492,7 @@ func (r *raftPipelineAPI) receiver() {
 		var resp raft.AppendEntriesResponse
 
 		dummyPayload := make([]byte, 1)
-		start := time.Now()
+		//start := time.Now()
 		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
 		r.histogram.RecordValue(time.Since(start).Microseconds())
 		recvBytes := rpcResponse.Payload
