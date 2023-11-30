@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"runtime/trace"
 	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
@@ -36,6 +38,7 @@ type Payload struct {
 }
 
 func main() {
+
 	flag.Parse()
 
 	wt := &WordTracker{}
@@ -89,7 +92,13 @@ func main() {
 	}
 
 	server := NewServer(transport)
-	server.StartServer()
+	file, _ := os.Create("main.trace")
+	trace.Start(file)
+	defer trace.Stop()
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+	<-signalChan
+	go server.StartServer()
 }
 
 func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
