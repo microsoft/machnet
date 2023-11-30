@@ -45,7 +45,7 @@ const (
 	DummyResponse
 )
 
-const maxMessageLength = 4 * 1024
+const maxMessageLength = 1024 //4 * 1024
 
 type TransportApi struct {
 	localIp    raft.ServerAddress
