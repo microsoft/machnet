@@ -178,8 +178,8 @@ func (t *TransportApi) getPeer(id raft.ServerID) (flow, error) {
 // Encodes the given payload and rpcType into a rpcMessage and sends it to the remote host using Machnet library functions.
 func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload []byte) (resp RpcMessage, err error) {
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	//t.mu.Lock()
+	//defer t.mu.Unlock()
 	flow, err := t.getPeer(id)
 	if err != nil {
 		return RpcMessage{}, err

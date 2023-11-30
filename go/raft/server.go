@@ -35,6 +35,7 @@ type Server struct {
 	pipelineMutex            sync.Mutex
 	histogram                *hdrhistogram.Histogram
 	lastRecordedTime         time.Time
+	msgCounts                map[uint8]int
 }
 
 type snapshotReader struct {
@@ -81,6 +82,7 @@ func NewServer(transport *TransportApi) *Server {
 		pendingPipelineResponses: make(map[flow]PendingResponse),
 		histogram:                hdrhistogram.New(1, 1000000, 3),
 		lastRecordedTime:         time.Now(),
+		msgCounts:                make(map[uint8]int),
 	}
 }
 
@@ -127,6 +129,7 @@ func DecodeRPCMessage(data []byte) (RpcMessage, error) {
 // response (rpcMessage): The response to be sent.
 // flow (flow): The flow that received the original RPC. SendMachnetResponse will send the response on the reverse flow.
 func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.Time) error {
+	s.msgCounts[response.MsgType]++
 	var buff bytes.Buffer
 	enc := gob.NewEncoder(&buff)
 
@@ -158,11 +161,15 @@ func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.
 	}
 	if time.Since(s.lastRecordedTime) > 1*time.Second {
 		percentileValues := s.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-		glog.Warningf("RPC processing time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d",
+		glog.Warningf("[RPC processing time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d]",
 			float64(percentileValues[50.0]), float64(percentileValues[95.0]),
 			float64(percentileValues[99.0]), float64(percentileValues[99.9]), s.histogram.TotalCount())
 		s.histogram.Reset()
 		s.lastRecordedTime = time.Now()
+		for msgType, count := range s.msgCounts {
+			glog.Warningf("[M-%d: %d]", msgType, count)
+			s.msgCounts[msgType] = 0
+		}
 	}
 	return nil
 }
@@ -398,7 +405,7 @@ func (s *Server) HandleAppendEntriesPipelineStart(rpcId uint64, flow flow, start
 	return s.SendMachnetResponse(response, flow, start)
 }
 
-func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, flow flow, start time.Time) error {
+func (s *Server) HandleAppendEntriesPipeline(payload []byte, rpcId uint64, flow flow, start time.Time) error {
 
 	var buff bytes.Buffer
 	dec := gob.NewDecoder(&buff)
@@ -412,8 +419,8 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 		return err
 	}
 
-	s.pipelineMutex.Lock()
-	defer s.pipelineMutex.Unlock()
+	//s.pipelineMutex.Lock()
+	//defer s.pipelineMutex.Unlock()
 	if pendingResponse, ok := s.pendingPipelineResponses[flow]; ok {
 		//pendingResponse.numPending += 1
 		//s.pendingPipelineResponses[flow] = pendingResponse
@@ -426,13 +433,35 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 
 		_, ok := rpc.Command.(raft.WithRPCHeader)
 		if !ok {
-			glog.Errorf("HandleAppendEntriesPipelineSend: appendEntriesRequest does not have a WithRPCHeader")
+			glog.Errorf("HandleAppendEntriesPipeline: appendEntriesRequest does not have a WithRPCHeader")
 		}
 		s.transport.rpcChan <- rpc
 		// wait for answer
-		if err := s.GetResponseFromChannel(pendingResponse.ch, flow, AppendEntriesPipeline, rpcId, start); err != nil {
+		resp := <-pendingResponse.ch
+		if resp.Error != nil {
+			glog.Error("GetResponseFromChannel: couldn't handle Rpc; error: ", resp.Error)
+			return resp.Error
+		}
+
+		var buff bytes.Buffer
+		enc := gob.NewEncoder(&buff)
+		payload := resp.Response.(*raft.AppendEntriesResponse)
+		if err := enc.Encode(*payload); err != nil {
 			return err
 		}
+		msgType := AppendEntriesPipelineResponse
+		response := RpcMessage{
+			MsgType: msgType,
+			RpcId:   rpcId,
+			Payload: buff.Bytes(),
+		}
+		if err := s.SendMachnetResponse(response, flow, start); err != nil {
+			glog.Errorf("GetResponseFromChannel: failed to SendMachnetResponse: %v", err)
+			return err
+		}
+		//if err := s.GetResponseFromChannel(pendingResponse.ch, flow, AppendEntriesPipeline, rpcId, start); err != nil {
+		//	return err
+		//}
 	}
 
 	//s.pipelineMutex.Unlock()
@@ -563,9 +592,9 @@ func (s *Server) HandleRPCs() {
 			}
 
 		case AppendEntriesPipeline:
-			err := s.HandleAppendEntriesPipelineSend(request.Payload, request.RpcId, flow, start)
+			err := s.HandleAppendEntriesPipeline(request.Payload, request.RpcId, flow, start)
 			if err != nil {
-				glog.Errorf("HandleAppendEntriesPipelineSend failed: %v", err)
+				glog.Errorf("HandleAppendEntriesPipeline failed: %v", err)
 			}
 
 		case AppendEntriesPipelineClose:
