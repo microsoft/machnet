@@ -185,7 +185,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	}
 	glog.Warningf("[APP SERVER LISTENING] [", localIp, ":", *appPort, "]")
 
-	rpcInterface := rpcInterface{wt, raftNode}
+	rpcInterface := rpcInterface{wt, raftNode, hdrhistogram.New(1, 100000000, 3), time.Now()}
 
 	request := make([]byte, maxRequestSize)
 	response := new(bytes.Buffer)

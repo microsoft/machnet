@@ -3,11 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/golang/glog"
 	"github.com/hashicorp/raft"
 	"io"
 	"strings"
 	"sync"
+	"time"
 )
 
 // WordTracker keeps track of the three longest words it ever saw.
@@ -17,8 +19,10 @@ type WordTracker struct {
 }
 
 type rpcInterface struct {
-	WordTracker *WordTracker
-	raft        *raft.Raft
+	WordTracker      *WordTracker
+	raft             *raft.Raft
+	histogram        *hdrhistogram.Histogram
+	lastRecordedTime time.Time
 }
 
 type snapshot struct {
@@ -90,8 +94,8 @@ func (s *snapshot) Persist(sink raft.SnapshotSink) error {
 func (s *snapshot) Release() {
 }
 
-func (r rpcInterface) AddWord(word []byte) (uint64, error) {
-	//start := time.Now()
+func (r *rpcInterface) AddWord(word []byte) (uint64, error) {
+	start := time.Now()
 	//glog.Warningf("AddWord[%s]: started raft Apply at %+v", word, start)
 	f := r.raft.Apply(word, 0) // 10*time.Microsecond)
 	//glog.Warningf("AddWord[%s]: Apply took: %+v returned future: %+v", word, time.Since(start), f)
@@ -101,11 +105,25 @@ func (r rpcInterface) AddWord(word []byte) (uint64, error) {
 		glog.Warningf("Error: couldn't block")
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
-	//glog.Warningf("AddWord[%s]: future returned success result, took: %+v", word, time.Since(start))
+	err := r.histogram.RecordValue(time.Since(start).Microseconds())
+	if err != nil {
+		glog.Errorf("Failed to record to histogram")
+	}
+	if time.Since(r.lastRecordedTime) > 1*time.Second {
+		percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+		glog.Warningf("Future wait time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d ",
+
+			float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+			float64(percentileValues[99.0]), float64(percentileValues[99.9]), r.histogram.TotalCount())
+		r.histogram.Reset()
+		r.lastRecordedTime = time.Now()
+		//glog.Warningf("LatRecordedTime updated: %v", r.lastRecordedTime)
+	}
+	//glog.Warningf("AddWord: future returned success result, took: %+v", time.Since(start))
 	return f.Index(), nil
 }
 
-func (r rpcInterface) GetWords() (*wordsResponse, error) {
+func (r *rpcInterface) GetWords() (*wordsResponse, error) {
 	r.WordTracker.mtx.RLock()
 	defer r.WordTracker.mtx.RUnlock()
 	return &wordsResponse{
