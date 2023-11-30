@@ -247,13 +247,13 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			}
 			//glog.Warningf("Sent %s 's index [%d] at %+v", string(request[:recvBytes]), index, time.Now())
 			elapsed := time.Since(start)
-			_ = histogram.RecordValue(elapsed.Nanoseconds())
+			_ = histogram.RecordValue(elapsed.Microseconds())
 
 			if time.Since(lastRecordedTime) > 1*time.Second {
 				percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
 				glog.Warningf("[Processing Time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
-					float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
-					float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000)
+					float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+					float64(percentileValues[99.0]), float64(percentileValues[99.9]))
 				histogram.Reset()
 				lastRecordedTime = time.Now()
 			}
