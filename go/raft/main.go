@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/trace"
 	"time"
 
@@ -106,6 +107,7 @@ func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
 	c.LocalID = raft.ServerID(id)
 	// c.LogLevel = "WARN"
 
+	c.MaxAppendEntries = 1
 	// Increase the timeouts.
 	//c.CommitTimeout = 1 * time.Second
 	//c.LeaderLeaseTimeout = 1 * time.Minute
@@ -204,7 +206,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	rNum := 0
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxRequestSize)
-		//runtime.Gosched()
+		runtime.Gosched()
 		if recvBytes < 0 {
 			glog.Fatal("Failed to receive data from client.")
 		}
