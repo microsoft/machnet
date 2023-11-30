@@ -105,7 +105,7 @@ func (r *rpcInterface) AddWord(word []byte, num int) (uint64, error) {
 		glog.Warningf("Error: couldn't block: %v", err)
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
-	glog.Warningf("AddWord[%d]: success on future at %+v, took: %v", num, start, time.Since(start))
+	glog.Warningf("AddWord[%d]: success on future[%+v] at %+v, took: %v", num, f, time.Now(), time.Since(start))
 	err := r.histogram.RecordValue(time.Since(start).Microseconds())
 	if err != nil {
 		glog.Errorf("Failed to record to histogram")

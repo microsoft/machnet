@@ -257,7 +257,6 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 		return err
 	}
 	reqBytes := buff.Bytes()
-
 	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
 	payloadBytes := rpcResponse.Payload
 
@@ -445,6 +444,7 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 		return nil, err
 	}
 	reqBytes := buff.Bytes()
+	glog.Warningf("AE pipeline sent %+v at %v", *req, af.start)
 	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
 	if err != nil {
 		return nil, err
@@ -476,6 +476,8 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 		af.response.Success = res.Success
 		af.response.LastLog = res.LastLog
 	}
+
+	glog.Warningf("AE pipeline received %+v at %v took: %v", rpcResponse, time.Now(), time.Since(af.start))
 
 	close(af.done)
 	//start := time.Now()
