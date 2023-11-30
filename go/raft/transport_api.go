@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"runtime"
-	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -519,12 +518,12 @@ func (r *raftPipelineAPI) receiver() {
 // Note that it is not OK to call this method
 // twice concurrently on the same Future instance.
 func (f *AFuture) Error() error {
-	start := time.Now()
-	return errors.New("dummy error")
-	glog.Warningf("Error: started to block at %+v", start)
-	pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+	//start := time.Now()
+	//return errors.New("dummy error")
+	//glog.Warningf("Error: started to block at %+v", start)
+	//pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	<-f.done
-	glog.Warningf("Error: finished blocking took %v", time.Since(start))
+	//glog.Warningf("Error: finished blocking took %v", time.Since(start))
 	return f.err
 }
 
