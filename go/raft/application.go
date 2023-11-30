@@ -102,7 +102,7 @@ func (r *rpcInterface) AddWord(word []byte) (uint64, error) {
 	//start = time.Now()
 	//glog.Warningf("AddWord[%s]: block on future at %+v", word, start)
 	if err := f.Error(); err != nil {
-		glog.Warningf("Error: couldn't block")
+		glog.Warningf("Error: couldn't block: %v", err)
 		return 0, errors.New("raft.Apply(): " + err.Error())
 	}
 	err := r.histogram.RecordValue(time.Since(start).Microseconds())
