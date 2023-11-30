@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
-	"encoding/gob"
 	"errors"
 	"github.com/HdrHistogram/hdrhistogram-go"
+	"github.com/hashicorp/go-msgpack/codec"
 	"io"
 	"sync"
 	"time"
@@ -109,8 +109,8 @@ func (s *Server) StartServer() {
 
 func DecodeRPCMessage(data []byte) (RpcMessage, error) {
 	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
+	//dec := gob.NewDecoder(&buff)
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	if n, _ := buff.Write(data); n != len(data) {
 		return RpcMessage{}, errors.New("failed to write response into buffer")
 	}
@@ -131,8 +131,8 @@ func DecodeRPCMessage(data []byte) (RpcMessage, error) {
 func (s *Server) SendMachnetResponse(response RpcMessage, flow flow, start time.Time) error {
 	s.msgCounts[response.MsgType]++
 	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-
+	//enc := gob.NewEncoder(&buff)
+	enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
 	if err := enc.Encode(response); err != nil {
 		glog.Errorf("SendMachnetResponse: failed to encode response: %v", err)
 		return err
@@ -184,8 +184,8 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 	}
 
 	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-
+	//enc := gob.NewEncoder(&buff)
+	enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
 	switch msgType {
 	case AppendEntriesRequest:
 		payload := resp.Response.(*raft.AppendEntriesResponse)
@@ -278,8 +278,8 @@ func (s *Server) HandleRaftCommand(command interface{}, data io.Reader, flow flo
 func (s *Server) HandleAppendEntriesRequest(payload []byte, rpcId uint64, flow flow, start time.Time) error {
 
 	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
+	//dec := gob.NewDecoder(&buff)
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	var appendEntriesRequest raft.AppendEntriesRequest
 	if n, _ := buff.Write(payload); n != len(payload) {
 		return errors.New("failed to write payload into buffer")
@@ -296,8 +296,8 @@ func (s *Server) HandleAppendEntriesRequest(payload []byte, rpcId uint64, flow f
 func (s *Server) HandleRequestVoteRequest(payload []byte, rpcId uint64, flow flow, start time.Time) error {
 
 	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
+	//dec := gob.NewDecoder(&buff)
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	var requestVoteRequest raft.RequestVoteRequest
 	if n, _ := buff.Write(payload); n != len(payload) {
 		return errors.New("failed to write payload into buffer")
@@ -313,8 +313,8 @@ func (s *Server) HandleRequestVoteRequest(payload []byte, rpcId uint64, flow flo
 func (s *Server) HandleTimeoutNowRequest(payload []byte, rpcId uint64, flow flow, start time.Time) error {
 
 	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
+	//dec := gob.NewDecoder(&buff)
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	var timeoutNowRequest raft.TimeoutNowRequest
 	if n, _ := buff.Write(payload); n != len(payload) {
 		return errors.New("failed to write payload into buffer")
@@ -330,8 +330,8 @@ func (s *Server) HandleTimeoutNowRequest(payload []byte, rpcId uint64, flow flow
 func (s *Server) HandleInstallSnapshotRequestStart(payload []byte, rpcId uint64, flow flow, start time.Time) error {
 
 	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
+	//dec := gob.NewDecoder(&buff)
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	var installSnapshotRequest raft.InstallSnapshotRequest
 	if n, _ := buff.Write(payload); n != len(payload) {
 		return errors.New("failed to write payload into buffer")
@@ -408,8 +408,8 @@ func (s *Server) HandleAppendEntriesPipelineStart(rpcId uint64, flow flow, start
 func (s *Server) HandleAppendEntriesPipeline(payload []byte, rpcId uint64, flow flow, start time.Time) error {
 
 	var buff bytes.Buffer
-	dec := gob.NewDecoder(&buff)
-
+	//dec := gob.NewDecoder(&buff)
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	var appendEntriesRequest raft.AppendEntriesRequest
 	if n, _ := buff.Write(payload); n != len(payload) {
 		return errors.New("failed to write payload into buffer")
@@ -444,7 +444,8 @@ func (s *Server) HandleAppendEntriesPipeline(payload []byte, rpcId uint64, flow 
 		}
 
 		var buff bytes.Buffer
-		enc := gob.NewEncoder(&buff)
+		//enc := gob.NewEncoder(&buff)
+		enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
 		payload := resp.Response.(*raft.AppendEntriesResponse)
 		if err := enc.Encode(*payload); err != nil {
 			return err

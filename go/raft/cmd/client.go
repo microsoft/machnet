@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
-	"encoding/gob"
 	"flag"
 	"fmt"
+	"github.com/hashicorp/go-msgpack/codec"
 	"math"
 	"math/rand"
 	"os"
@@ -86,8 +86,8 @@ func main() {
 		}
 
 		var buf bytes.Buffer
-		enc := gob.NewEncoder(&buf)
-
+		//enc := gob.NewEncoder(&buf)
+		enc := codec.NewEncoder(&buf, &codec.MsgpackHandle{})
 		if err := enc.Encode(payload); err != nil {
 			glog.Errorf("Main: failed to encode payload: %+v", err)
 			continue

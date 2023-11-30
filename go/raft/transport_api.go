@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/HdrHistogram/hdrhistogram-go"
+	"github.com/hashicorp/go-msgpack/codec"
 	"io"
 	"os"
 	"sync"
@@ -189,9 +189,10 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	}
 
 	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	dec := gob.NewDecoder(&buff)
-
+	//enc := gob.NewEncoder(&buff)
+	//dec := gob.NewDecoder(&buff)
+	enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	var rpcId = t.rpcId
 	msg := RpcMessage{MsgType: rpcType, RpcId: rpcId, Payload: payload}
 	t.rpcId = 1 + t.rpcId
@@ -256,9 +257,10 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 // AppendEntries sends the appropriate RPC to the target node.
 func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
 	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	dec := gob.NewDecoder(&buff)
-
+	//enc := gob.NewEncoder(&buff)
+	//dec := gob.NewDecoder(&buff)
+	enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	if err := enc.Encode(args); err != nil {
 		return err
 	}
@@ -286,9 +288,10 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 // RequestVote sends the appropriate RPC to the target node.
 func (t *TransportApi) RequestVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestVoteRequest, resp *raft.RequestVoteResponse) error {
 	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	dec := gob.NewDecoder(&buff)
-
+	//enc := gob.NewEncoder(&buff)
+	//dec := gob.NewDecoder(&buff)
+	enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	if err := enc.Encode(args); err != nil {
 		return err
 	}
@@ -315,9 +318,10 @@ func (t *TransportApi) RequestVote(id raft.ServerID, target raft.ServerAddress, 
 // TimeoutNow is used to start a leadership transfer to the target node.
 func (t *TransportApi) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse) error {
 	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	dec := gob.NewDecoder(&buff)
-
+	//enc := gob.NewEncoder(&buff)
+	//dec := gob.NewDecoder(&buff)
+	enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	if err := enc.Encode(args); err != nil {
 		return err
 	}
@@ -345,9 +349,10 @@ func (t *TransportApi) TimeoutNow(id raft.ServerID, target raft.ServerAddress, a
 // the ReadCloser and streamed to the client.
 func (t *TransportApi) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, req *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader) error {
 	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	dec := gob.NewDecoder(&buff)
-
+	//enc := gob.NewEncoder(&buff)
+	//dec := gob.NewDecoder(&buff)
+	enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	if err := enc.Encode(req); err != nil {
 		return err
 	}
@@ -444,7 +449,8 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	}
 
 	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
+	enc := codec.NewEncoder(&buff, &codec.MsgpackHandle{})
+	//enc := gob.NewEncoder(&buff)
 
 	if err := enc.Encode(req); err != nil {
 		return nil, err
@@ -458,8 +464,8 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	}
 
 	buff.Reset()
-	dec := gob.NewDecoder(&buff)
-
+	//dec := gob.NewDecoder(&buff)
+	dec := codec.NewDecoder(&buff, &codec.MsgpackHandle{})
 	var res raft.AppendEntriesResponse
 
 	//dummyPayload := make([]byte, 1)
