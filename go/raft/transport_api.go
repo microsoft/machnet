@@ -444,7 +444,8 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 		return nil, err
 	}
 	reqBytes := buff.Bytes()
-	glog.Warningf("AE pipeline sent %+v at %v", *req, af.start)
+	//glog.Warningf("AE pipeline sent %+v at %v", *req, af.start)
+	start := time.Now()
 	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
 	if err != nil {
 		return nil, err
@@ -458,7 +459,7 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	dummyPayload := make([]byte, 1)
 	//start := time.Now()
 	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
-	//r.histogram.RecordValue(time.Since(start).Microseconds())
+	r.histogram.RecordValue(time.Since(start).Microseconds())
 	recvBytes := rpcResponse.Payload
 	if err == nil {
 		buff.Reset()
@@ -477,20 +478,20 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 		af.response.LastLog = res.LastLog
 	}
 
-	glog.Warningf("AE pipeline received %+v at %v took: %v", rpcResponse, time.Now(), time.Since(af.start))
+	//glog.Warningf("AE pipeline received %+v at %v took: %v", rpcResponse, time.Now(), time.Since(af.start))
 
 	close(af.done)
 	//start := time.Now()
 	r.doneCh <- af
 	//r.histogram.RecordValue(time.Since(start).Microseconds())
-	//if time.Since(r.lastRecordedTime) > 1*time.Second {
-	//	percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-	//	glog.Warningf("[ Receiver reaction time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
-	//		float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
-	//		float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000)
-	//	r.histogram.Reset()
-	//	r.lastRecordedTime = time.Now()
-	//}
+	if time.Since(r.lastRecordedTime) > 1*time.Second {
+		percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+		glog.Warningf("[ AE pipeline time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d]",
+			float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+			float64(percentileValues[99.0]), float64(percentileValues[99.9]), r.histogram.TotalCount())
+		r.histogram.Reset()
+		r.lastRecordedTime = time.Now()
+	}
 	//r.inflightChMtx.Lock()
 	//select {
 	//case <-r.ctx.Done():
