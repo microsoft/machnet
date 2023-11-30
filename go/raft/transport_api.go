@@ -454,7 +454,7 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	select {
 	case <-r.ctx.Done():
 	default:
-		glog.Warningf("AEPipelineSend at", time.Now())
+		glog.Warningf("AEPipelineSend at %v", time.Now())
 		r.inflightCh <- af
 	}
 	r.inflightChMtx.Unlock()
