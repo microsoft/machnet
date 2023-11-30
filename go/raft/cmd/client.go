@@ -123,6 +123,7 @@ func main() {
 			histogram.Reset()
 			lastRecordedTime = time.Now()
 		}
+		time.Sleep(1 + time.Second)
 	}
 }
 
