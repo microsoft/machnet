@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"io"
 	"os"
 	"runtime"
@@ -62,10 +63,12 @@ type TransportApi struct {
 	heartbeatFuncMtx sync.Mutex
 	heartbeatTimeout time.Duration
 
-	flowsMtx sync.Mutex
-	flows    map[raft.ServerID]*flow
-	rpcId    uint64
-	mu       sync.Mutex
+	flowsMtx         sync.Mutex
+	flows            map[raft.ServerID]*flow
+	rpcId            uint64
+	mu               sync.Mutex
+	histogram        *hdrhistogram.Histogram
+	lastRecordedTime time.Time
 }
 
 type RpcMessage struct {
@@ -107,6 +110,8 @@ func NewTransport(localIp raft.ServerAddress, sendChannelCtx *machnet.MachnetCha
 	trans.rpcChan = make(chan raft.RPC, 100)
 	trans.hostname = hostname
 	trans.rpcId = 0
+	trans.histogram = hdrhistogram.New(1, 100000000, 3)
+	trans.lastRecordedTime = time.Now()
 
 	return trans
 }
@@ -196,7 +201,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 	msgBytes := buff.Bytes()
 	msgLen := len(msgBytes)
 	start := time.Now()
-	glog.Infof("Called machnet.SendMsg at %v", start)
+	//glog.Infof("Called machnet.SendMsg at %v", start)
 	ret := machnet.SendMsg(t.sendChannelCtx, flow, &msgBytes[0], uint(msgLen))
 	if ret != 0 {
 		return RpcMessage{}, errors.New("failed to send message to remote host")
@@ -214,7 +219,20 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 		runtime.Gosched()
 	}
 
-	glog.Infof("Received response at %v, took : %v", time.Now(), time.Since(start))
+	//glog.Infof("Received response at %v, took : %v", time.Now(), time.Since(start))
+	err = t.histogram.RecordValue(time.Since(start).Microseconds())
+	if err != nil {
+		glog.Error("Failed to record to histogram")
+	}
+	if time.Since(t.lastRecordedTime) > 1*time.Second {
+		percentileValues := t.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+		glog.Warningf("RPC processing time: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d",
+			float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+			float64(percentileValues[99.0]), float64(percentileValues[99.9]), t.histogram.TotalCount())
+		t.histogram.Reset()
+		t.lastRecordedTime = time.Now()
+	}
+
 	buff.Reset()
 	if n, _ := buff.Write(responseBuff[:recvBytes]); n != recvBytes {
 		return RpcMessage{}, errors.New("failed to write response into buffer")
