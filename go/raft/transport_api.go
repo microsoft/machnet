@@ -29,8 +29,7 @@ const (
 	InstallSnapshotRequestBuffer
 	InstallSnapshotRequestClose
 	AppendEntriesPipelineStart
-	AppendEntriesPipelineSend
-	AppendEntriesPipelineRecv
+	AppendEntriesPipeline
 	AppendEntriesPipelineClose
 	AppendEntriesRequestResponse
 	RequestVoteRequestResponse
@@ -39,8 +38,7 @@ const (
 	InstallSnapshotRequestBufferResponse
 	InstallSnapshotRequestCloseResponse
 	AppendEntriesPipelineStartResponse
-	AppendEntriesPipelineSendResponse
-	AppendEntriesPipelineRecvResponse
+	AppendEntriesPipelineResponse
 	AppendEntriesPipelineCloseResponse
 	DummyResponse
 )
@@ -446,7 +444,7 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	reqBytes := buff.Bytes()
 	//glog.Warningf("AE pipeline sent %+v at %v", *req, af.start)
 	start := time.Now()
-	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
+	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipeline, reqBytes)
 	if err != nil {
 		return nil, err
 	}

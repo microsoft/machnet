@@ -212,12 +212,12 @@ func (s *Server) GetResponseFromChannel(ch <-chan raft.RPCResponse, flow flow, m
 			return err
 		}
 		msgType = InstallSnapshotRequestCloseResponse
-	case AppendEntriesPipelineRecv:
+	case AppendEntriesPipeline:
 		payload := resp.Response.(*raft.AppendEntriesResponse)
 		if err := enc.Encode(*payload); err != nil {
 			return err
 		}
-		msgType = AppendEntriesPipelineRecvResponse
+		msgType = AppendEntriesPipelineResponse
 	default:
 		return errors.New("GetResponseFromChannel: Unknown message type")
 	}
@@ -430,7 +430,7 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 		}
 		s.transport.rpcChan <- rpc
 		// wait for answer
-		if err := s.GetResponseFromChannel(pendingResponse.ch, flow, AppendEntriesPipelineRecv, rpcId, start); err != nil {
+		if err := s.GetResponseFromChannel(pendingResponse.ch, flow, AppendEntriesPipeline, rpcId, start); err != nil {
 			return err
 		}
 	}
@@ -448,26 +448,26 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 	return nil
 }
 
-func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start time.Time) error {
-
-	s.pipelineMutex.Lock()
-	if pendingResponse, ok := s.pendingPipelineResponses[flow]; ok {
-		pendingResponse.numPending -= 1
-		s.pendingPipelineResponses[flow] = pendingResponse
-
-		if err := s.GetResponseFromChannel(pendingResponse.ch, flow, AppendEntriesPipelineRecv, rpcId, start); err != nil {
-			return err
-		}
-
-		if pendingResponse.numPending == 0 && pendingResponse.toClose {
-			delete(s.pendingPipelineResponses, flow)
-			close(pendingResponse.ch)
-		}
-	}
-	s.pipelineMutex.Unlock()
-
-	return nil
-}
+//func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start time.Time) error {
+//
+//	s.pipelineMutex.Lock()
+//	if pendingResponse, ok := s.pendingPipelineResponses[flow]; ok {
+//		pendingResponse.numPending -= 1
+//		s.pendingPipelineResponses[flow] = pendingResponse
+//
+//		if err := s.GetResponseFromChannel(pendingResponse.ch, flow, AppendEntriesPipelineRecv, rpcId, start); err != nil {
+//			return err
+//		}
+//
+//		if pendingResponse.numPending == 0 && pendingResponse.toClose {
+//			delete(s.pendingPipelineResponses, flow)
+//			close(pendingResponse.ch)
+//		}
+//	}
+//	s.pipelineMutex.Unlock()
+//
+//	return nil
+//}
 
 func (s *Server) HandleAppendEntriesPipelineClose(rpcId uint64, flow flow, start time.Time) error {
 
@@ -562,16 +562,10 @@ func (s *Server) HandleRPCs() {
 				glog.Errorf("HandleAppendEntriesPipelineStart failed: %v", err)
 			}
 
-		case AppendEntriesPipelineSend:
+		case AppendEntriesPipeline:
 			err := s.HandleAppendEntriesPipelineSend(request.Payload, request.RpcId, flow, start)
 			if err != nil {
 				glog.Errorf("HandleAppendEntriesPipelineSend failed: %v", err)
-			}
-
-		case AppendEntriesPipelineRecv:
-			err := s.HandleAppendEntriesPipelineRecv(request.RpcId, flow, start)
-			if err != nil {
-				glog.Errorf("HandleAppendEntriesPipelineRecv failed: %v", err)
 			}
 
 		case AppendEntriesPipelineClose:
