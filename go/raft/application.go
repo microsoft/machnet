@@ -94,9 +94,9 @@ func (s *snapshot) Persist(sink raft.SnapshotSink) error {
 func (s *snapshot) Release() {
 }
 
-func (r *rpcInterface) AddWord(word []byte) (uint64, error) {
+func (r *rpcInterface) AddWord(word []byte, num int) (uint64, error) {
 	start := time.Now()
-	//glog.Warningf("AddWord[%s]: started raft Apply at %+v", word, start)
+	glog.Warningf("AddWord[%d]: started raft Apply at %+v", num, start)
 	f := r.raft.Apply(word, 0) // 10*time.Microsecond)
 	//glog.Warningf("AddWord[%s]: Apply took: %+v returned future: %+v", word, time.Since(start), f)
 	//start = time.Now()

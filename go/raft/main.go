@@ -218,7 +218,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			f, _ := os.Create(fmt.Sprintf("req%d.trace", rNum))
 			trace.Start(f)
 
-			index, _ := rpcInterface.AddWord(request[:recvBytes])
+			index, _ := rpcInterface.AddWord(request[:recvBytes], rNum)
 
 			trace.Stop()
 			f.Close()
