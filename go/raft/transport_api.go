@@ -80,9 +80,9 @@ type raftPipelineAPI struct {
 	id  raft.ServerID
 	ctx context.Context
 
-	cancel           func()
-	inflightChMtx    sync.Mutex
-	inflightCh       chan *AFuture
+	cancel func()
+	//inflightChMtx    sync.Mutex
+	//inflightCh       chan *AFuture
 	doneCh           chan raft.AppendFuture
 	histogram        *hdrhistogram.Histogram
 	lastRecordedTime time.Time
@@ -414,11 +414,11 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 	}
 
 	pipelineObject := raftPipelineAPI{
-		t:                t,
-		id:               id,
-		ctx:              ctx,
-		cancel:           cancel,
-		inflightCh:       make(chan *AFuture),
+		t:      t,
+		id:     id,
+		ctx:    ctx,
+		cancel: cancel,
+		//inflightCh:       make(chan *AFuture),
 		doneCh:           make(chan raft.AppendFuture),
 		histogram:        hdrhistogram.New(1, 100000000, 3),
 		lastRecordedTime: time.Now(),
@@ -446,7 +446,7 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	reqBytes := buff.Bytes()
 	//glog.Warningf("AE pipeline sent %+v at %v", *req, af.start)
 	start := time.Now()
-	_, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
+	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineSend, reqBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -456,10 +456,10 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 
 	var res raft.AppendEntriesResponse
 
-	dummyPayload := make([]byte, 1)
+	//dummyPayload := make([]byte, 1)
 	//start := time.Now()
-	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
-	r.histogram.RecordValue(time.Since(start).Microseconds())
+	//rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
+	//r.histogram.RecordValue(time.Since(start).Microseconds())
 	recvBytes := rpcResponse.Payload
 	if err == nil {
 		buff.Reset()
@@ -484,6 +484,7 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	//start := time.Now()
 	r.doneCh <- af
 	//r.histogram.RecordValue(time.Since(start).Microseconds())
+	r.histogram.RecordValue(time.Since(start).Microseconds())
 	if time.Since(r.lastRecordedTime) > 1*time.Second {
 		percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
 		glog.Warningf("[AE pipeline time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us RPS: %d]",
@@ -520,57 +521,57 @@ func (r *raftPipelineAPI) Close() error {
 		return err
 	}
 
-	r.inflightChMtx.Lock()
-	close(r.inflightCh)
-	r.inflightChMtx.Unlock()
+	//r.inflightChMtx.Lock()
+	//close(r.inflightCh)
+	//r.inflightChMtx.Unlock()
 	return nil
 }
 
-func (r *raftPipelineAPI) receiver() {
-	//start := time.Now()
-	for af := range r.inflightCh {
-		r.histogram.RecordValue(time.Since(af.timestamp).Microseconds())
-		var buff bytes.Buffer
-		dec := gob.NewDecoder(&buff)
-
-		var resp raft.AppendEntriesResponse
-
-		dummyPayload := make([]byte, 1)
-		//start := time.Now()
-		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
-		//r.histogram.RecordValue(time.Since(start).Microseconds())
-		recvBytes := rpcResponse.Payload
-		if err == nil {
-			buff.Reset()
-			if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
-				err = errors.New("failed to write payload into buffer")
-			} else {
-				err = dec.Decode(&resp)
-			}
-		}
-
-		if err != nil {
-			af.err = err
-		} else {
-			af.response.Term = resp.Term
-			af.response.Success = resp.Success
-			af.response.LastLog = resp.LastLog
-		}
-
-		close(af.done)
-		//start := time.Now()
-		r.doneCh <- af
-		//r.histogram.RecordValue(time.Since(start).Microseconds())
-		if time.Since(r.lastRecordedTime) > 1*time.Second {
-			percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-			glog.Warningf("[ Receiver reaction time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
-				float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
-				float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000)
-			r.histogram.Reset()
-			r.lastRecordedTime = time.Now()
-		}
-	}
-}
+//  func (r *raftPipelineAPI) receiver() {
+//	//start := time.Now()
+//	for af := range r.inflightCh {
+//		r.histogram.RecordValue(time.Since(af.timestamp).Microseconds())
+//		var buff bytes.Buffer
+//		dec := gob.NewDecoder(&buff)
+//
+//		var resp raft.AppendEntriesResponse
+//
+//		dummyPayload := make([]byte, 1)
+//		//start := time.Now()
+//		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
+//		//r.histogram.RecordValue(time.Since(start).Microseconds())
+//		recvBytes := rpcResponse.Payload
+//		if err == nil {
+//			buff.Reset()
+//			if n, _ := buff.Write(recvBytes); n != len(recvBytes) {
+//				err = errors.New("failed to write payload into buffer")
+//			} else {
+//				err = dec.Decode(&resp)
+//			}
+//		}
+//
+//		if err != nil {
+//			af.err = err
+//		} else {
+//			af.response.Term = resp.Term
+//			af.response.Success = resp.Success
+//			af.response.LastLog = resp.LastLog
+//		}
+//
+//		close(af.done)
+//		//start := time.Now()
+//		r.doneCh <- af
+//		//r.histogram.RecordValue(time.Since(start).Microseconds())
+//		if time.Since(r.lastRecordedTime) > 1*time.Second {
+//			percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+//			glog.Warningf("[ Receiver reaction time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
+//				float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
+//				float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000)
+//			r.histogram.Reset()
+//			r.lastRecordedTime = time.Now()
+//		}
+//	}
+//}
 
 // Error blocks until the future arrives and then
 // returns the error status of the future.

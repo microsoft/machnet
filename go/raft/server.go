@@ -413,9 +413,10 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 	}
 
 	s.pipelineMutex.Lock()
+	defer s.pipelineMutex.Unlock()
 	if pendingResponse, ok := s.pendingPipelineResponses[flow]; ok {
-		pendingResponse.numPending += 1
-		s.pendingPipelineResponses[flow] = pendingResponse
+		//pendingResponse.numPending += 1
+		//s.pendingPipelineResponses[flow] = pendingResponse
 
 		rpc := raft.RPC{
 			Command:  &appendEntriesRequest,
@@ -428,16 +429,23 @@ func (s *Server) HandleAppendEntriesPipelineSend(payload []byte, rpcId uint64, f
 			glog.Errorf("HandleAppendEntriesPipelineSend: appendEntriesRequest does not have a WithRPCHeader")
 		}
 		s.transport.rpcChan <- rpc
+		// wait for answer
+		if err := s.GetResponseFromChannel(pendingResponse.ch, flow, AppendEntriesPipelineRecv, rpcId, start); err != nil {
+			return err
+		}
 	}
 
-	s.pipelineMutex.Unlock()
+	//s.pipelineMutex.Unlock()
 
-	response := RpcMessage{
-		MsgType: AppendEntriesPipelineSendResponse,
-		RpcId:   rpcId,
-		Payload: []byte{},
-	}
-	return s.SendMachnetResponse(response, flow, start)
+	// send it back
+
+	//response := RpcMessage{
+	//	MsgType: AppendEntriesPipelineSendResponse,
+	//	RpcId:   rpcId,
+	//	Payload: []byte{},
+	//}
+	//return s.SendMachnetResponse(response, flow, start)
+	return nil
 }
 
 func (s *Server) HandleAppendEntriesPipelineRecv(rpcId uint64, flow flow, start time.Time) error {
