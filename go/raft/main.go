@@ -217,13 +217,13 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 			start := time.Now()
 
 			rNum += 1
-			f, _ := os.Create(fmt.Sprintf("req%d.trace", rNum))
-			trace.Start(f)
+			//f, _ := os.Create(fmt.Sprintf("req%d.trace", rNum))
+			//trace.Start(f)
 
 			index, _ := rpcInterface.AddWord(request[:recvBytes], rNum)
 
 			trace.Stop()
-			f.Close()
+			//f.Close()
 
 			tmpFlow := flow
 			flow.SrcIp = tmpFlow.DstIp
