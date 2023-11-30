@@ -65,6 +65,7 @@ type TransportApi struct {
 	mu               sync.Mutex
 	histogram        *hdrhistogram.Histogram
 	lastRecordedTime time.Time
+	msgCounts        map[uint8]int
 }
 
 type RpcMessage struct {
@@ -110,6 +111,7 @@ func NewTransport(localIp raft.ServerAddress, sendChannelCtx *machnet.MachnetCha
 	trans.rpcId = 0
 	trans.histogram = hdrhistogram.New(1, 100000000, 3)
 	trans.lastRecordedTime = time.Now()
+	trans.msgCounts = make(map[uint8]int)
 
 	return trans
 }
@@ -180,6 +182,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	//t.mu.Lock()
 	//defer t.mu.Unlock()
+	t.msgCounts[rpcType]++
 	flow, err := t.getPeer(id)
 	if err != nil {
 		return RpcMessage{}, err
@@ -229,6 +232,10 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 			float64(percentileValues[99.0]), float64(percentileValues[99.9]), t.histogram.TotalCount())
 		t.histogram.Reset()
 		t.lastRecordedTime = time.Now()
+		for msgType, count := range t.msgCounts {
+			glog.Warningf("[M-%d: %d]", msgType, count)
+			t.msgCounts[msgType] = 0
+		}
 	}
 
 	buff.Reset()
