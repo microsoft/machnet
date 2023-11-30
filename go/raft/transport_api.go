@@ -81,10 +81,12 @@ type raftPipelineAPI struct {
 	id  raft.ServerID
 	ctx context.Context
 
-	cancel        func()
-	inflightChMtx sync.Mutex
-	inflightCh    chan *AFuture
-	doneCh        chan raft.AppendFuture
+	cancel           func()
+	inflightChMtx    sync.Mutex
+	inflightCh       chan *AFuture
+	doneCh           chan raft.AppendFuture
+	histogram        *hdrhistogram.Histogram
+	lastRecordedTime time.Time
 }
 
 type AFuture struct {
@@ -414,12 +416,14 @@ func (t *TransportApi) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 	}
 
 	pipelineObject := raftPipelineAPI{
-		t:          t,
-		id:         id,
-		ctx:        ctx,
-		cancel:     cancel,
-		inflightCh: make(chan *AFuture, 20),
-		doneCh:     make(chan raft.AppendFuture, 20),
+		t:                t,
+		id:               id,
+		ctx:              ctx,
+		cancel:           cancel,
+		inflightCh:       make(chan *AFuture, 20),
+		doneCh:           make(chan raft.AppendFuture, 20),
+		histogram:        hdrhistogram.New(1, 100000000, 3),
+		lastRecordedTime: time.Now(),
 	}
 	go pipelineObject.receiver()
 	return &pipelineObject, nil
@@ -507,7 +511,17 @@ func (r *raftPipelineAPI) receiver() {
 			af.response.LastLog = resp.LastLog
 		}
 		close(af.done)
+		start := time.Now()
 		r.doneCh <- af
+		r.histogram.RecordValue(time.Since(start).Microseconds())
+		if time.Since(r.lastRecordedTime) > 1*time.Second {
+			percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+			glog.Warningf("[Channel Notification time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
+				float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
+				float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000)
+			r.histogram.Reset()
+			r.lastRecordedTime = time.Now()
+		}
 	}
 }
 
