@@ -9,7 +9,6 @@ import (
 	"github.com/HdrHistogram/hdrhistogram-go"
 	"io"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
@@ -217,7 +216,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 			glog.Error("Failed to receive response from remote host")
 			return RpcMessage{}, errors.New("failed to receive response from remote host")
 		}
-		runtime.Gosched()
+		//runtime.Gosched()
 	}
 
 	//glog.Infof("Received response at %v, took : %v", time.Now(), time.Since(start))

@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"runtime/trace"
 	"time"
 
@@ -205,7 +204,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 	rNum := 0
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxRequestSize)
-		runtime.Gosched()
+		//runtime.Gosched()
 		if recvBytes < 0 {
 			glog.Fatal("Failed to receive data from client.")
 		}

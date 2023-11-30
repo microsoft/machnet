@@ -6,7 +6,6 @@ import (
 	"errors"
 	"github.com/HdrHistogram/hdrhistogram-go"
 	"io"
-	"runtime"
 	"sync"
 	"time"
 
@@ -491,7 +490,7 @@ func (s *Server) HandleRPCs() {
 			glog.Errorf("Failed to receive message from Machnet Channel.")
 			continue
 		} else if recvBytes == 0 {
-			runtime.Gosched()
+			//runtime.Gosched()
 			continue
 		}
 
