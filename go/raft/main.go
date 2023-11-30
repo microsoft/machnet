@@ -93,9 +93,9 @@ func main() {
 
 	server := NewServer(transport)
 	go server.StartServer()
-	file, _ := os.Create("main.trace")
-	trace.Start(file)
-	defer trace.Stop()
+	//file, _ := os.Create("main.trace")
+	//trace.Start(file)
+	//defer trace.Stop()
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
@@ -202,6 +202,7 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 
 	histogram := hdrhistogram.New(1, 1000000, 3)
 	lastRecordedTime := time.Now()
+	rNum := 0
 	for {
 		recvBytes, flow := machnet.Recv(channelCtx, &request[0], maxRequestSize)
 		runtime.Gosched()
@@ -213,7 +214,15 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 		if recvBytes > 0 {
 
 			start := time.Now()
+
+			rNum += 1
+			f, _ := os.Create(fmt.Sprintf("req%d.trace", rNum))
+			trace.Start(f)
+
 			index, _ := rpcInterface.AddWord(request[:recvBytes])
+
+			trace.Stop()
+			f.Close()
 
 			tmpFlow := flow
 			flow.SrcIp = tmpFlow.DstIp
