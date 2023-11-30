@@ -91,7 +91,6 @@ type raftPipelineAPI struct {
 
 type AFuture struct {
 	raft.AppendFuture
-
 	start    time.Time
 	request  *raft.AppendEntriesRequest
 	response *raft.AppendEntriesResponse
@@ -492,7 +491,9 @@ func (r *raftPipelineAPI) receiver() {
 		var resp raft.AppendEntriesResponse
 
 		dummyPayload := make([]byte, 1)
+		start := time.Now()
 		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipelineRecv, dummyPayload)
+		r.histogram.RecordValue(time.Since(start).Microseconds())
 		recvBytes := rpcResponse.Payload
 		if err == nil {
 			buff.Reset()
@@ -510,13 +511,14 @@ func (r *raftPipelineAPI) receiver() {
 			af.response.Success = resp.Success
 			af.response.LastLog = resp.LastLog
 		}
+
 		close(af.done)
-		start := time.Now()
+		//start := time.Now()
 		r.doneCh <- af
-		r.histogram.RecordValue(time.Since(start).Microseconds())
+		//r.histogram.RecordValue(time.Since(start).Microseconds())
 		if time.Since(r.lastRecordedTime) > 1*time.Second {
 			percentileValues := r.histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-			glog.Warningf("[Channel Notification time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
+			glog.Warningf("[ Receiver rpc time 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us]",
 				float64(percentileValues[50.0])/1000, float64(percentileValues[95.0])/1000,
 				float64(percentileValues[99.0])/1000, float64(percentileValues[99.9])/1000)
 			r.histogram.Reset()
