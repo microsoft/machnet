@@ -92,13 +92,14 @@ func main() {
 	}
 
 	server := NewServer(transport)
+	go server.StartServer()
 	file, _ := os.Create("main.trace")
 	trace.Start(file)
 	defer trace.Stop()
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
-	go server.StartServer()
+
 }
 
 func NewRaft(id string, fsm raft.FSM) (*raft.Raft, *TransportApi, error) {
