@@ -25,6 +25,7 @@ var msgNr uint64 = math.MaxUint64
 var activeGenerator = false
 var verify = false
 var latency = false
+var blocking uint = 0
 
 type stats struct {
 	txSuccess  uint64
@@ -84,6 +85,7 @@ func initFlags() {
 	flag.BoolVar(&activeGenerator, "active_generator", activeGenerator, "When 'true' this host is generating the traffic, otherwise it is bouncing.")
 	flag.BoolVar(&verify, "verify", verify, "When 'true' verify the payload of received messages.")
 	flag.BoolVar(&latency, "latency", latency, "When 'true' measure the latency of the messages.")
+	flag.UintVar(&blocking, "blocking", blocking, "whether to block or not")
 	flag.Parse()
 }
 
@@ -160,7 +162,7 @@ func tx(task *taskCtx, stats *stats) {
 func rx(task *taskCtx, stats *stats) {
 	channelCtx := task.ctx
 
-	err, _ := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), 1)
+	err, _ := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), blocking)
 	if err != 0 {
 		return
 	}
@@ -199,9 +201,9 @@ func ping(task *taskCtx, stats *stats, histogram *hdrhistogram.Histogram) {
 	}
 
 	// Keep reading until we get a message from the same flow.
-	err, _ := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), 1)
+	err, _ := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), blocking)
 	for err != 0 {
-		err, _ = machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), 1)
+		err, _ = machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), blocking)
 	}
 
 	// Stop timer.
@@ -224,7 +226,7 @@ func ping(task *taskCtx, stats *stats, histogram *hdrhistogram.Histogram) {
 func bounce(task *taskCtx, stats *stats) {
 	channelCtx := task.ctx
 
-	err, flowInfo := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), 1)
+	err, flowInfo := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), blocking)
 	if err != 0 {
 		return
 	}
