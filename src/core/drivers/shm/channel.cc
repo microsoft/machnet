@@ -21,7 +21,8 @@ ShmChannel::ShmChannel(const std::string channel_name,
       channel_fd_(channel_fd),
       cached_buf_indices(),
       cached_bufs(),
-      cached_buf_count(0) {}
+      cached_buf_count(0),
+      posted(0) {}
 
 ShmChannel::~ShmChannel() {
   __machnet_channel_destroy(

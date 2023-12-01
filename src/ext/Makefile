@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -fPIC
-LDFLAGS = -shared
+LDFLAGS = -shared -pthread
 LIBS = -luuid
 TARGET = libmachnet_shim.so
 SRCS = machnet.c

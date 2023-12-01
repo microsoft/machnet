@@ -4,13 +4,15 @@
 #include <glog/logging.h>
 #include <machnet.h>
 #include <machnet_common.h>
-#include <signal.h>
-#include <ttime.h>
 #include <unistd.h>
 #include <utils.h>
 
+#include <csignal>
 #include <numeric>
 #include <thread>
+#include <utility>
+
+DEFINE_uint32(blocking, 0, "Block on receive");
 
 static constexpr uint8_t kStackCpuCoreId = 3;
 static constexpr uint8_t kAppCpuCoreId = 5;
@@ -39,7 +41,7 @@ struct thread_conf {
   thread_conf(std::shared_ptr<ShmChannel> ch, uint8_t core_id,
               uint64_t messages_to_send, uint64_t tx_message_size,
               uint64_t messages_to_receive)
-      : channel(ch),
+      : channel(std::move(ch)),
         cpu_core(core_id),
         messages_to_send(messages_to_send),
         tx_message_size(tx_message_size),
@@ -107,7 +109,6 @@ void stack_loop(thread_conf *conf) {
       }
       continue;
     }
-
     buf = channel->MsgBufAlloc();
     if (buf == nullptr) {
       continue;
@@ -126,7 +127,6 @@ void stack_loop(thread_conf *conf) {
     // Send the message.
     ret = channel->EnqueueMessages(&buf, 1);
     if (ret != 1) {
-      LOG(ERROR) << "Couldn't enqueue message. ret: " << ret;
       channel->MsgBufFree(buf);
     }
     conf->messages_sent += ret;
@@ -159,15 +159,14 @@ void application_loop(thread_conf *conf) {
   while (!g_start.load()) {
     __asm__ volatile("pause" ::: "memory");
   }
-
   // Now start receiving messages.
   auto start = std::chrono::high_resolution_clock::now();
   while (!g_should_stop.load()) {
     // RX.
     MachnetFlow_t flow;
 
-    auto nbytes =
-        machnet_recv(channel->ctx(), rx_buffer.data(), rx_buffer.size(), &flow);
+    auto nbytes = machnet_recv(channel->ctx(), rx_buffer.data(),
+                               rx_buffer.size(), &flow, FLAGS_blocking);
     if (nbytes > 0) {
       conf->messages_received++;
       CHECK_EQ(nbytes, conf->tx_message_size);
@@ -284,11 +283,18 @@ void print_results(const thread_conf &stack_conf, const thread_conf &app_conf) {
                                                   1e9))
                        : 0.0)
             << std::endl;
+  if (FLAGS_blocking) {
+    std::cout << juggler::utils::Format(
+        "Stack notified Application side %d times", channel->GetPosted());
+    channel->ResetPosted();
+  }
   std::cout << std::endl;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   google::InitGoogleLogging("channel_bench");
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+
   FLAGS_logtostderr = 1;
   signal(SIGINT, [](int) { g_should_stop.store(true); });
 
@@ -306,7 +312,8 @@ int main() {
   std::vector<std::pair<uint64_t, uint64_t>> exp_config_vec;
 
   exp_config_vec.emplace_back(kMessagesToSend, 0);  // Stack -> app only
-  exp_config_vec.emplace_back(0, kMessagesToSend);  // App -> stack only
+  if (!FLAGS_blocking)
+    exp_config_vec.emplace_back(0, kMessagesToSend);  // App -> stack only
   exp_config_vec.emplace_back(kMessagesToSend, kMessagesToSend);  // Bi-dir
 
   LOG(INFO) << "Running channel_bench";
