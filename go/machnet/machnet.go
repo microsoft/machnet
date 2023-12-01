@@ -104,7 +104,7 @@ func SendMsg(ctx *MachnetChannelCtx, flow MachnetFlow, base *uint8, iov_len uint
 func Recv(ctx *MachnetChannelCtx, base *uint8, len uint, blocking uint) (int, MachnetFlow) {
 
 	var recv_len int
-	flow := C.__machnet_recv_go((*C.MachnetChannelCtx_t)(ctx), unsafe.Pointer(base), C.size_t(len), (*C.long)(unsafe.Pointer(&recv_len)), C.uint(blocking))
+	flow := C.__machnet_recv_go((*C.MachnetChannelCtx_t)(ctx), unsafe.Pointer(base), C.size_t(len), (*C.long)(unsafe.Pointer(&recv_len)), C.size_t(blocking))
 	return recv_len, convert_net_flow_go(&flow)
 }
 
@@ -115,7 +115,7 @@ func RecvMsg(ctx *MachnetChannelCtx, base *uint8, iov_len uint, blocking uint) (
 	iov.base = unsafe.Pointer(base)
 	iov.len = C.size_t(iov_len)
 
-	flow := C.__machnet_recvmsg_go((*C.MachnetChannelCtx_t)(ctx), iov, 1, C.uint(blocking))
+	flow := C.__machnet_recvmsg_go((*C.MachnetChannelCtx_t)(ctx), iov, 1, C.size_t(blocking))
 	if flow.dst_ip == 0 {
 		return -1, convert_net_flow_go(&flow)
 	} else {

@@ -23,7 +23,7 @@ int __machnet_sendmsg_go(const MachnetChannelCtx_t* ctx, MachnetIovec_t msg_iov,
 
 MachnetFlow_t __machnet_recvmsg_go(const MachnetChannelCtx_t* ctx,
                                    MachnetIovec_t msg_iov, long msg_iovlen,
-                                   uint32_t blocking) {
+                                   size_t blocking) {
   MachnetMsgHdr_t msghdr;
   msghdr.msg_iov = &msg_iov;
   msghdr.msg_iovlen = msg_iovlen;
@@ -43,7 +43,7 @@ MachnetFlow_t __machnet_recvmsg_go(const MachnetChannelCtx_t* ctx,
 
 MachnetFlow_t __machnet_recv_go(const MachnetChannelCtx_t* ctx, void* buf,
                                 size_t len, ssize_t* recv_len,
-                                uint32_t blocking) {
+                                size_t blocking) {
   MachnetFlow_t flow;
   ssize_t num_bytes = machnet_recv(ctx, buf, len, &flow, blocking);
 
