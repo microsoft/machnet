@@ -211,15 +211,15 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	responseBuff := make([]byte, maxMessageLength)
 
-	recvBytes := 0
-	for recvBytes == 0 {
-		recvBytes, _ = machnet.Recv(t.sendChannelCtx, &responseBuff[0], maxMessageLength, 1)
-		if recvBytes < 0 {
-			glog.Error("Failed to receive response from remote host")
-			return RpcMessage{}, errors.New("failed to receive response from remote host")
-		}
-		//runtime.Gosched()
+	//recvBytes := 0
+	//for recvBytes == 0 {
+	recvBytes, _ := machnet.Recv(t.sendChannelCtx, &responseBuff[0], maxMessageLength, 1)
+	if recvBytes < 0 {
+		glog.Error("Failed to receive response from remote host")
+		return RpcMessage{}, errors.New("failed to receive response from remote host")
 	}
+	//runtime.Gosched()
+	//}
 
 	//glog.Infof("Received response at %v, took : %v", time.Now(), time.Since(start))
 	err = t.histogram.RecordValue(time.Since(start).Microseconds())

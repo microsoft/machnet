@@ -257,6 +257,8 @@ func StartApplicationServer(wt *WordTracker, raftNode *raft.Raft) {
 				histogram.Reset()
 				lastRecordedTime = time.Now()
 			}
+		} else {
+			glog.Warningf("failed to block")
 		}
 	}
 }

@@ -529,6 +529,7 @@ func (s *Server) HandleRPCs() {
 			continue
 		} else if recvBytes == 0 {
 			//runtime.Gosched()
+			glog.Warningf("Failed to block")
 			continue
 		}
 
