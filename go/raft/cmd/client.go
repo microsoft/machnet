@@ -127,6 +127,7 @@ func main() {
 			for _, bin := range histogram.CumulativeDistribution() {
 				glog.Infof("%d,%f\n", bin.ValueAt, float64(bin.Count)/float64(histogram.TotalCount()))
 			}
+			break
 		}
 		//time.Sleep(1 * time.Second)
 	}
