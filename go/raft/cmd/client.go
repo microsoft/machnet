@@ -105,7 +105,7 @@ func main() {
 		}
 
 		responseBuff := make([]byte, 64)
-		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64, true)
+		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64, 1)
 		//for recvBytes == 0 {
 		//	recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 64)
 		//}

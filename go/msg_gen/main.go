@@ -160,7 +160,7 @@ func tx(task *taskCtx, stats *stats) {
 func rx(task *taskCtx, stats *stats) {
 	channelCtx := task.ctx
 
-	err, _ := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), true)
+	err, _ := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), 1)
 	if err != 0 {
 		return
 	}
@@ -199,9 +199,9 @@ func ping(task *taskCtx, stats *stats, histogram *hdrhistogram.Histogram) {
 	}
 
 	// Keep reading until we get a message from the same flow.
-	err, _ := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), true)
+	err, _ := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), 1)
 	for err != 0 {
-		err, _ = machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), true)
+		err, _ = machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), 1)
 	}
 
 	// Stop timer.
@@ -224,7 +224,7 @@ func ping(task *taskCtx, stats *stats, histogram *hdrhistogram.Histogram) {
 func bounce(task *taskCtx, stats *stats) {
 	channelCtx := task.ctx
 
-	err, flowInfo := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), true)
+	err, flowInfo := machnet.RecvMsg(channelCtx, &task.rxMsg[0], uint(msgSize), 1)
 	if err != 0 {
 		return
 	}

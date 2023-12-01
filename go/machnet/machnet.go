@@ -101,7 +101,7 @@ func SendMsg(ctx *MachnetChannelCtx, flow MachnetFlow, base *uint8, iov_len uint
 
 // Receive bytes on the channel.
 // Returns the number of bytes received and the flow. If error occurs, number of bytes received is -1.
-func Recv(ctx *MachnetChannelCtx, base *uint8, len uint, blocking bool) (int, MachnetFlow) {
+func Recv(ctx *MachnetChannelCtx, base *uint8, len uint, blocking uint) (int, MachnetFlow) {
 
 	var recv_len int
 	flow := C.__machnet_recv_go((*C.MachnetChannelCtx_t)(ctx), unsafe.Pointer(base), C.size_t(len), (*C.long)(unsafe.Pointer(&recv_len)), C.size_t(blocking))
@@ -110,7 +110,7 @@ func Recv(ctx *MachnetChannelCtx, base *uint8, len uint, blocking bool) (int, Ma
 
 // Receive message on the channel.
 // NOTE: Currently, only one iov is supported.
-func RecvMsg(ctx *MachnetChannelCtx, base *uint8, iov_len uint, blocking bool) (int, MachnetFlow) {
+func RecvMsg(ctx *MachnetChannelCtx, base *uint8, iov_len uint, blocking uint) (int, MachnetFlow) {
 	var iov C.MachnetIovec_t
 	iov.base = unsafe.Pointer(base)
 	iov.len = C.size_t(iov_len)
