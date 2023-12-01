@@ -458,7 +458,27 @@ func (r *raftPipelineAPI) AppendEntries(req *raft.AppendEntriesRequest, resp *ra
 	reqBytes := buff.Bytes()
 	//glog.Warningf("AE pipeline sent %+v at %v", *req, af.start)
 	start := time.Now()
-	rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipeline, reqBytes)
+	//rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipeline, reqBytes)
+	rpcResponseChan := make(chan RpcMessage, 1)
+	errChan := make(chan error, 1)
+
+	go func() {
+		// Making the function call inside the goroutine
+		rpcResponse, err := r.t.SendMachnetRpc(r.id, AppendEntriesPipeline, reqBytes)
+
+		// Send the results back via channels
+		rpcResponseChan <- rpcResponse
+		errChan <- err
+	}()
+
+	// Outside the goroutine, receive the values from the channels
+	rpcResponse := <-rpcResponseChan
+	err := <-errChan
+
+	// Close the channels if they are no longer needed
+	close(rpcResponseChan)
+	close(errChan)
+
 	if err != nil {
 		return nil, err
 	}
