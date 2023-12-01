@@ -166,6 +166,12 @@ func NewRaft(id string, fsm *kvFsm) (*raft.Raft, *raft.NetworkTransport, error) 
 	raftCfg := raft.DefaultConfig()
 	raftCfg.LocalID = raft.ServerID(id)
 
+	raftCfg.CommitTimeout = 1 * time.Millisecond
+	raftCfg.LeaderLeaseTimeout = 1 * time.Minute
+	raftCfg.HeartbeatTimeout = 1 * time.Minute
+	raftCfg.ElectionTimeout = 1 * time.Minute
+	raftCfg.ElectionTimeout = 2 * time.Minute
+
 	// Read the contents of file config_json into a byte array.
 	raftAddress, err := getRaftAddress(*localHostname)
 	if err != nil {
