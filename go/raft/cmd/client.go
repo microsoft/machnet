@@ -118,16 +118,21 @@ func main() {
 			glog.Errorf("Main: failed to record value to histogram: %v", err)
 		}
 
-		if time.Since(lastRecordedTime) > 1*time.Second {
-			percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
-			glog.Infof("[RTT: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us,  RPS: %d]",
-				float64(percentileValues[50.0]), float64(percentileValues[95.0]),
-				float64(percentileValues[99.0]), float64(percentileValues[99.9]),
-				histogram.TotalCount())
-			histogram.Reset()
-			lastRecordedTime = time.Now()
+		if time.Since(lastRecordedTime) > 100*time.Second {
+			//percentileValues := histogram.ValueAtPercentiles([]float64{50.0, 95.0, 99.0, 99.9})
+			//glog.Infof("[RTT: 50p %.3f us, 95p %.3f us, 99p %.3f us, 99.9p %.3f us,  RPS: %d]",
+			//	float64(percentileValues[50.0]), float64(percentileValues[95.0]),
+			//	float64(percentileValues[99.0]), float64(percentileValues[99.9]),
+			//	histogram.TotalCount())
+			//histogram.Reset()
+			//lastRecordedTime = time.Now()
+			// Iterate over histogram values
+			glog.Infof("Value -- CDF")
+			for _, bin := range histogram.CumulativeDistribution() {
+				glog.Infof("%d,%f\n", bin.ValueAt, float64(bin.Count)/float64(histogram.TotalCount()))
+			}
 		}
-		time.Sleep(1 * time.Second)
+		//time.Sleep(1 * time.Second)
 	}
 }
 
