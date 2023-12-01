@@ -265,7 +265,26 @@ func (t *TransportApi) AppendEntries(id raft.ServerID, target raft.ServerAddress
 		return err
 	}
 	reqBytes := buff.Bytes()
-	rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
+	//rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
+	rpcResponseChan := make(chan RpcMessage, 1)
+	errChan := make(chan error, 1)
+
+	go func() {
+		// Make the function call inside the goroutine
+		rpcResponse, err := t.SendMachnetRpc(id, AppendEntriesRequest, reqBytes)
+
+		// Send the results back to the main routine via channels
+		rpcResponseChan <- rpcResponse
+		errChan <- err
+	}()
+
+	// Receive the values from the channels
+	rpcResponse := <-rpcResponseChan
+	err := <-errChan
+
+	// Close the channels
+	close(rpcResponseChan)
+	close(errChan)
 	payloadBytes := rpcResponse.Payload
 
 	if err != nil {
