@@ -18,7 +18,10 @@ ShmChannel::ShmChannel(const std::string channel_name,
       ctx_(CHECK_NOTNULL(channel_ctx)),
       mem_size_(channel_mem_size),
       is_posix_shm_(is_posix_shm),
-      channel_fd_(channel_fd) {}
+      channel_fd_(channel_fd),
+      cached_buf_indices(),
+      cached_bufs(),
+      cached_buf_count(0) {}
 
 ShmChannel::~ShmChannel() {
   __machnet_channel_destroy(

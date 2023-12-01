@@ -127,6 +127,118 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
   return 0;
 }
 
+/**
+ * @brief Allocates a specified number of buffers for use, either directly from
+ * the global pool or from the application's buffer cache.
+ *
+ * This function allocates `cnt` number of buffers for the Machnet channel. If
+ * the count exceeds the number of cached buffers (`NUM_CACHED_BUFS`), the
+ * allocation is made directly from the global pool. For smaller allocations, it
+ * tries to fulfill the request from the application's buffer cache. If the
+ * cache is empty, it refills the cache from the global pool. If allocation from
+ * the global pool fails at any point, the function returns `NULL`.
+ *
+ * @param ctx Pointer to the MachnetChannelCtx_t structure that holds channel
+ * context information, including the application buffer cache.
+ * @param cnt The number of buffers to allocate.
+ * @return A pointer to the first MachnetRingSlot_t element of an array
+ * containing the allocated buffer indices if the allocation is successful;
+ * otherwise, `NULL`.
+ */
+static inline MachnetRingSlot_t *_machnet_buffers_alloc(
+    MachnetChannelCtx_t *ctx, uint32_t cnt) {
+  MachnetRingSlot_t *buffer_indices = __machnet_channel_buffer_index_table(ctx);
+
+  if (cnt > NUM_CACHED_BUFS) {
+    // This is a large bulk allocation, so we can bypass the application cache.
+    uint32_t ret =
+        __machnet_channel_buf_alloc_bulk(ctx, cnt, buffer_indices, NULL);
+    if (ret != cnt) {
+      return NULL;
+    }
+    return buffer_indices;
+  }
+
+  // Try to allocate from the application cache.
+  uint32_t index = 0;
+  while (index < cnt) {
+    if (unlikely(ctx->app_buffer_cache.count == 0)) {
+      // The cache is empty, so we need to allocate from the global pool.
+      ctx->app_buffer_cache.count += __machnet_channel_buf_alloc_bulk(
+          ctx, NUM_CACHED_BUFS, ctx->app_buffer_cache.indices, NULL);
+      if (unlikely(ctx->app_buffer_cache.count == 0)) {
+        // We failed to allocate from the global pool.
+        goto fail;
+      }
+    }
+
+    buffer_indices[index++] =
+        ctx->app_buffer_cache.indices[--ctx->app_buffer_cache.count];
+  }
+
+  return buffer_indices;
+
+fail:
+  // Bulk allocation has failed; return partial allocation to the application
+  // cache.
+  for (uint32_t i = 0; i < index; i++) {
+    ctx->app_buffer_cache.indices[ctx->app_buffer_cache.count++] =
+        buffer_indices[i];
+  }
+
+  return NULL;
+}
+
+/**
+ * @brief Releases a given number of buffers by either caching them or freeing
+ * them to the global pool.
+ *
+ * This function attempts to release a specified count of buffers back into the
+ * Machnet channel context's application buffer cache. If the cache is full,
+ * it will free half of the cached buffers to the global buffer pool. If after
+ * several retries it is unable to free buffers to the global pool, the function
+ * aborts the program execution.
+ *
+ * @param ctx Pointer to the MachnetChannelCtx_t structure that represents the
+ *        channel context which holds the application buffer cache.
+ * @param cnt The number of buffers to be released.
+ * @param buffer_indices Array of MachnetRingSlot_t that contains the indices of
+ * the buffers that need to be released.
+ *
+ * @warning If the function fails to free the buffers to the global pool after a
+ *          certain number of retries, it will output an error message to stderr
+ *          and call abort() to terminate program execution.
+ */
+static inline void _machnet_buffers_release(MachnetChannelCtx_t *ctx,
+                                            uint32_t cnt,
+                                            MachnetRingSlot_t *buffer_indices) {
+  uint32_t index = 0;
+  while (index < cnt) {
+    uint32_t retries = 5;
+    while (unlikely(ctx->app_buffer_cache.count == NUM_CACHED_BUFS)) {
+      // The cache is full, free to global pool.
+      uint32_t elements_to_free = ctx->app_buffer_cache.count / 2;
+      MachnetRingSlot_t *indices_to_free =
+          ctx->app_buffer_cache.indices + (NUM_CACHED_BUFS - elements_to_free);
+      ctx->app_buffer_cache.count -= __machnet_channel_buf_free_bulk(
+          ctx, elements_to_free, indices_to_free);
+
+      if (unlikely(retries-- == 0 &&
+                   ctx->app_buffer_cache.count == NUM_CACHED_BUFS)) {
+        /*
+         * XXX (ilias): If we reach here, we have failed to free the buffers to
+         * the global pool and we are going to leak them. Terminate execution.
+         */
+        fprintf(stderr, "ERROR: Failed to free buffers to global pool.\n");
+        abort();
+      }
+    }
+
+    ctx->app_buffer_cache.indices[ctx->app_buffer_cache.count++] =
+        buffer_indices[index++];
+  }
+}
+
 int machnet_init() {
   uuid_t zero_uuid;
   uuid_clear(zero_uuid);
@@ -203,10 +315,10 @@ int machnet_init() {
   }
 
   // It is important that we do not close the socket here. Closing the socket
-  // will trigger the controller to de-register the application and release all
-  // its allocated resources (shared memory channels, connections etc.). When
-  // this application quits, the controller will detect that the socket was
-  // closed and de-register the application.
+  // will trigger the controller to de-register the application and release
+  // all its allocated resources (shared memory channels, connections etc.).
+  // When this application quits, the controller will detect that the socket
+  // was closed and de-register the application.
 
   return resp.status;
 }
@@ -422,7 +534,7 @@ int machnet_send(const void *channel_ctx, MachnetFlow_t flow, const void *buf,
 int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   assert(channel_ctx != NULL);
   assert(msghdr != NULL);
-  const MachnetChannelCtx_t *ctx = (const MachnetChannelCtx_t *)channel_ctx;
+  MachnetChannelCtx_t *ctx = (MachnetChannelCtx_t *)channel_ctx;
 
   // Sanity checks on the full message size.
   if (unlikely(msghdr->msg_size > MACHNET_MSG_MAX_LEN || msghdr->msg_size == 0))
@@ -436,17 +548,16 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
   // them.
   const uint32_t buffers_nr =
       (msghdr->msg_size + kMsgBufPayloadMax - 1) / kMsgBufPayloadMax;
-
-  MachnetRingSlot_t *buf_index_table =
-      __machnet_channel_buffer_index_table(ctx);
-  if (__machnet_channel_buf_alloc_bulk(ctx, buffers_nr, buf_index_table,
-                                       NULL) != buffers_nr) {
+  MachnetRingSlot_t *buf_index_table = _machnet_buffers_alloc(ctx, buffers_nr);
+  if (buf_index_table == NULL) {
+    // We failed to allocate the buffers.
     return -1;
   }
 
   // Gather all message segments.
   uint32_t buffer_cur_index = 0;
   uint32_t total_bytes_copied = 0;
+  uint32_t new_buffer = 1;
   for (size_t iov_index = 0; iov_index < msghdr->msg_iovlen; iov_index++) {
     const MachnetIovec_t *segment_desc = &msghdr->msg_iov[iov_index];
     assert(segment_desc != NULL);
@@ -458,7 +569,10 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       MachnetMsgBuf_t *buffer =
           __machnet_channel_buf(ctx, buf_index_table[buffer_cur_index]);
       if (unlikely(buffer->magic != MACHNET_MSGBUF_MAGIC)) abort();
-
+      if (new_buffer) {
+        __machnet_channel_buf_init(buffer);
+        new_buffer = 0;
+      }
       // Copy the data.
       uint32_t nbytes_to_copy =
           MIN(seg_bytes, __machnet_channel_buf_tailroom(buffer));
@@ -473,6 +587,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       if ((__machnet_channel_buf_tailroom(buffer) == 0) && seg_bytes) {
         // The buffer is full, and we still have data to copy.
         buffer_cur_index++;  // Get the next buffer index.
+        new_buffer = 1;
         assert(buffer_cur_index < buffers_nr);
         buffer->next = buf_index_table[buffer_cur_index];
       }
@@ -542,10 +657,9 @@ ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
 int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
   assert(channel_ctx != NULL);
   assert(msghdr != NULL);
-  const MachnetChannelCtx_t *ctx = (const MachnetChannelCtx_t *)channel_ctx;
+  MachnetChannelCtx_t *ctx = (MachnetChannelCtx_t *)channel_ctx;
 
   const uint32_t kBufferBatchSize = 16;
-  uint32_t ret __attribute__((unused));
 
   // Deque a message from the ring.
   MachnetRingSlot_t buffer_index;
@@ -615,9 +729,8 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
 
       // Do a batch buffer release if we reached the threshold.
       if (buffer_indices_index == kBufferBatchSize) {
-        ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                              buffer_indices);
-        assert(ret == buffer_indices_index);
+        // release to the buf_ring
+        _machnet_buffers_release(ctx, buffer_indices_index, buffer_indices);
         buffer_indices_index = 0;
       }
     }
@@ -634,9 +747,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
   msghdr->flow_info = flow_info;
 
   // Free up any remaining buffers.
-  ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                        buffer_indices);
-  assert(ret == buffer_indices_index);
+  _machnet_buffers_release(ctx, buffer_indices_index, buffer_indices);
 
   // Success.
   return 1;
@@ -651,9 +762,7 @@ fail:
       buffer = NULL;
     }
     if (buffer == NULL || buffer_indices_index == kBufferBatchSize) {
-      ret = __machnet_channel_buf_free_bulk(ctx, buffer_indices_index,
-                                            buffer_indices);
-      assert(ret == buffer_indices_index);
+      _machnet_buffers_release(ctx, buffer_indices_index, buffer_indices);
       buffer_indices_index = 0;
     }
   }

@@ -126,6 +126,7 @@ void stack_loop(thread_conf *conf) {
     // Send the message.
     ret = channel->EnqueueMessages(&buf, 1);
     if (ret != 1) {
+      LOG(ERROR) << "Couldn't enqueue message. ret: " << ret;
       channel->MsgBufFree(buf);
     }
     conf->messages_sent += ret;
