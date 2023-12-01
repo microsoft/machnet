@@ -523,7 +523,7 @@ func (s *Server) HandleAppendEntriesPipelineClose(rpcId uint64, flow flow, start
 func (s *Server) HandleRPCs() {
 	for {
 		requestBuff := make([]byte, maxMessageLength)
-		recvBytes, flow := machnet.Recv(s.transport.receiveChannelCtx, &requestBuff[0], maxMessageLength)
+		recvBytes, flow := machnet.Recv(s.transport.receiveChannelCtx, &requestBuff[0], maxMessageLength, true)
 		if recvBytes < 0 {
 			glog.Errorf("Failed to receive message from Machnet Channel.")
 			continue

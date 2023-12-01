@@ -105,9 +105,13 @@ func main() {
 		}
 
 		responseBuff := make([]byte, 64)
-		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64)
-		for recvBytes == 0 {
-			recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 64)
+		recvBytes, _ := machnet.Recv(channelCtx, &responseBuff[0], 64, true)
+		//for recvBytes == 0 {
+		//	recvBytes, _ = machnet.Recv(channelCtx, &responseBuff[0], 64)
+		//}
+		if recvBytes != 64 {
+			glog.Error("Failed to read 64 bytes ... ")
+			continue
 		}
 
 		if err := histogram.RecordValue(time.Since(start).Microseconds()); err != nil {

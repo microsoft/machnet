@@ -213,7 +213,7 @@ func (t *TransportApi) SendMachnetRpc(id raft.ServerID, rpcType uint8, payload [
 
 	recvBytes := 0
 	for recvBytes == 0 {
-		recvBytes, _ = machnet.Recv(t.sendChannelCtx, &responseBuff[0], maxMessageLength)
+		recvBytes, _ = machnet.Recv(t.sendChannelCtx, &responseBuff[0], maxMessageLength, true)
 		if recvBytes < 0 {
 			glog.Error("Failed to receive response from remote host")
 			return RpcMessage{}, errors.New("failed to receive response from remote host")
