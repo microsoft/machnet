@@ -245,7 +245,7 @@ void MachnetTransportServer(uint8_t thread_id) {
       tx_msg_hdr->value = context.output;
     } else {
       tx_msg_hdr->value = 0;
-      // LOG(WARNING) << "Key not found";
+      LOG(WARNING) << "Key not found for " << msg_hdr->key;
     }
 
     ssize_t send_ret = machnet_send(channel, tx_flow, thread_ctx.tx_message.data(),

@@ -72,7 +72,6 @@ class ThreadCtx {
       : channel_ctx(CHECK_NOTNULL(channel_ctx)),
         flow(flow_info),
         key_start(0),
-        single_key_counter(0),
         stats() {
     // Fill-in max-sized messages, we'll send the actual size later
     rx_message.resize(sizeof(msg_hdr_t));
@@ -90,7 +89,6 @@ class ThreadCtx {
 
   ThreadCtx()
       : key_start(0),
-        single_key_counter(0),
         stats() {
     // Fill-in max-sized messages, we'll send the actual size later
     rx_message.resize(sizeof(msg_hdr_t));
@@ -107,7 +105,7 @@ class ThreadCtx {
   }
 
   ThreadCtx(int sock_fd)
-      : key_start(0), single_key_counter(0), sock_fd(sock_fd), stats() {
+      : key_start(0), sock_fd(sock_fd), stats() {
     // Fill-in max-sized messages, we'll send the actual size later
     rx_message.resize(sizeof(msg_hdr_t));
     tx_message.resize(sizeof(msg_hdr_t));
@@ -150,7 +148,6 @@ class ThreadCtx {
   size_t num_request_latency_samples;
   std::vector<msg_latency_info_t> msg_latency_info_vec;
   size_t key_start;
-  size_t single_key_counter;
   int sock_fd;
 
   struct {
@@ -213,13 +210,17 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   msg_hdr_t *msg_hdr =
       reinterpret_cast<msg_hdr_t *>(thread_ctx->tx_message.data());
   msg_hdr->window_slot = window_slot;
-  if (thread_ctx->single_key_counter == 8) {
-    thread_ctx->single_key_counter = 0;
-    msg_hdr->key = thread_ctx->key_start;
-  } else {
-    thread_ctx->single_key_counter++;
-    msg_hdr->key = thread_ctx->key_start++ % FLAGS_max_key_range;
-  }
+  // if (thread_ctx->single_key_counter == 8) {
+  //   thread_ctx->single_key_counter = 0;
+  //   msg_hdr->key = thread_ctx->key_start;
+  // } else {
+  //   thread_ctx->single_key_counter++;
+  //   thread_ctx->key_start++;
+  //   msg_hdr->key = thread_ctx->key_start % FLAGS_max_key_range;
+  // }
+
+  thread_ctx->key_start++;
+  msg_hdr->key = thread_ctx->key_start % FLAGS_max_key_range;
 
   msg_hdr->value = 0;
 

@@ -312,7 +312,7 @@ void ServerLoop(void *sock_fd) {
     const ssize_t rx_size = recv(thread_ctx.sock_fd, thread_ctx.rx_message.data(),
                                  thread_ctx.rx_message.size(), 0);
 
-    if (rx_size == 0) g_keep_running = 0;
+    // if (rx_size == 0) g_keep_running = 0;
     if (rx_size <= 0) continue;
 
     stats_cur.rx_count++;
@@ -339,7 +339,7 @@ void ServerLoop(void *sock_fd) {
       tx_msg_hdr->value = context.output;
     } else {
       tx_msg_hdr->value = 0;
-      // LOG(WARNING) << "Key not found";
+      LOG(WARNING) << "Key not found";
     }
 
     const int ret = send(thread_ctx.sock_fd, thread_ctx.tx_message.data(),
@@ -621,7 +621,7 @@ int main(int argc, char *argv[]) {
                    sizeof(server_addr));
     CHECK(ret == 0) << "Failed to bind on fd: " << sock_fd
                     << " bind() error: " << strerror(errno);
-    ret = listen(sock_fd, SOMAXCONN);
+    ret = listen(sock_fd, 10);
     CHECK(ret == 0) << "Failed to listen on fd: " << sock_fd
                     << " listen() error: " << strerror(errno);
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_port << "]";

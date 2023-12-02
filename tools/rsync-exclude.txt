@@ -1,0 +1,6 @@
+.git
+*.o
+build/*
+third_party/*
+src/apps/machnet/config.json
+.history/
