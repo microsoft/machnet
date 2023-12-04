@@ -171,7 +171,8 @@ void ReportStats(ThreadCtx *thread_ctx) {
     LOG(INFO) << "TX MPS: " << tx_mps << " (" << tx_gbps
               << " Gbps), RX MPS: " << rx_mps << " (" << rx_gbps
               << " Gbps), TX_DROP MPS: " << tx_drop_mps << ", "
-              << latency_stats_ss.str();
+              << latency_stats_ss.str() << ", number of clients: " <<
+              thread_ctx->clientSockets.size();
 
     thread_ctx->stats.last_measure_time = now;
     thread_ctx->stats.prev = thread_ctx->stats.current;
@@ -436,7 +437,8 @@ void ServerLoop(void *sock_fd) {
             << stats_cur.tx_success << " (" << stats_cur.tx_bytes
             << " Bytes), Drops: " << stats_cur.err_tx_drops
             << ", [RX] Received: " << stats_cur.rx_count << " ("
-            << stats_cur.rx_bytes << " Bytes)";
+            << stats_cur.rx_bytes << " Bytes)" << ", number of clients: "
+            << thread_ctx.clientSockets.size();
 }
 
 void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
