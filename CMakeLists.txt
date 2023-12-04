@@ -33,5 +33,14 @@ include_directories(SYSTEM third_party/HdrHistogram_c/include/)
 
 include_directories(SYSTEM third_party/xxHash)
 
+# For FASTER DB
+set (CMAKE_BUILD_TYPE Release)
+include_directories(SYSTEM third_party/FASTER/cc/src)
+include_directories(SYSTEM third_party/FASTER/cc/test)
+add_subdirectory(third_party/FASTER/cc/src)
+
+# include_directories(SYSTEM ${FASTER_INSTALL_DIR}/src/core)
+
+
 set(BUILD_TESTING ON)
 add_subdirectory(src)

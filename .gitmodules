@@ -14,3 +14,6 @@
 [submodule "third_party/xxHash"]
 	path = third_party/xxHash
 	url = https://github.com/Cyan4973/xxHash
+[submodule "third_party/FASTER"]
+	path = third_party/FASTER
+	url = git@github.com:sarsanaee/FASTER.git
