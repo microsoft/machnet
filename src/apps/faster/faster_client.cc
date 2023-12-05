@@ -30,13 +30,13 @@ DEFINE_uint32(tx_msg_size, 64,
               "Size of the message (request/response) to send.");
 DEFINE_uint32(msg_window, 8, "Maximum number of messages in flight.");
 DEFINE_uint64(msg_nr, UINT64_MAX, "Number of messages to send.");
-DEFINE_uint64(max_key_range, 10000, "Maximum key range to se");
+DEFINE_uint64(max_key_range, 1000, "Maximum key range to se");
 DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
             "bouncing.");
 DEFINE_bool(verify, false, "Verify payload of received messages.");
 DEFINE_string(transport, "", "machnet transport or UDP or TCP");
-DEFINE_uint64(num_keys, 1000, "Number of keys to request for");
+DEFINE_uint64(num_keys, 1000, "Number of keys to request for, NOT used for Machnet");
 
 
 static volatile int g_keep_running = 1;
