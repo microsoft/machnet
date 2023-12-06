@@ -5,7 +5,7 @@
 #define SRC_INCLUDE_FLOW_KEY_H_
 
 #include <ipv4.h>
-#include <udp.h>
+#include <machnet_pkthdr.h>
 
 namespace juggler {
 namespace net {
@@ -13,23 +13,24 @@ namespace flow {
 
 struct Listener {
   using Ipv4 = juggler::net::Ipv4;
-  using Udp = juggler::net::Udp;
+  using MachnetPktHdr = juggler::net::MachnetPktHdr;
   Listener(const Listener& other) = default;
 
   /**
    * @brief Construct a new Listener object.
    *
    * @param local_addr Local IP address (in network byte order).
-   * @param local_port Local UDP port (in network byte order).
+   * @param local_port Local Machnet port (in network byte order).
    */
-  Listener(const Ipv4::Address& local_addr, const Udp::Port& local_port)
+  Listener(const Ipv4::Address& local_addr,
+           const MachnetPktHdr::Port& local_port)
       : addr(local_addr), port(local_port) {}
 
   /**
    * @brief Construct a new Listener object.
    *
    * @param local_addr Local IP address (in host byte order).
-   * @param local_port Local UDP port (in host byte order).
+   * @param local_port Local Machnet port (in host byte order).
    */
   Listener(const uint32_t local_addr, const uint16_t local_port)
       : addr(local_addr), port(local_port) {}
@@ -39,17 +40,18 @@ struct Listener {
   }
 
   const Ipv4::Address addr;
-  const Udp::Port port;
+  const MachnetPktHdr::Port port;
 };
 static_assert(sizeof(Listener) == 6, "Listener size is not 6 bytes.");
 
 /**
  * @struct Key
- * @brief Flow key: corresponds to the 5-tuple (UDP is always the protocol).
+ * @brief Flow key: the equivalent of 5-tuple (UDP is always the protocol, but
+ * for this key we use Machnet-layer ports).
  */
 struct Key {
   using Ipv4 = juggler::net::Ipv4;
-  using Udp = juggler::net::Udp;
+  using MachnetPktHdr = juggler::net::MachnetPktHdr;
   Key(const Key& other) = default;
   /**
    * @brief Construct a new Key object.
@@ -59,8 +61,8 @@ struct Key {
    * @param remote_addr Remote IP address (in network byte order).
    * @param remote_port Remote UDP port (in network byte order).
    */
-  Key(const Ipv4::Address& local_addr, const Udp::Port& local_port,
-      const Ipv4::Address& remote_addr, const Udp::Port& remote_port)
+  Key(const Ipv4::Address& local_addr, const MachnetPktHdr::Port& local_port,
+      const Ipv4::Address& remote_addr, const MachnetPktHdr::Port& remote_port)
       : local_addr(local_addr),
         local_port(local_port),
         remote_addr(remote_addr),
@@ -94,9 +96,9 @@ struct Key {
   }
 
   const Ipv4::Address local_addr;
-  const Udp::Port local_port;
+  const MachnetPktHdr::Port local_port;
   const Ipv4::Address remote_addr;
-  const Udp::Port remote_port;
+  const MachnetPktHdr::Port remote_port;
 };
 static_assert(sizeof(Key) == 12, "Flow key size is not 12 bytes.");
 

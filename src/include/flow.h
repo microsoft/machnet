@@ -343,6 +343,7 @@ class Flow {
   using MachnetPktHdr = net::MachnetPktHdr;
   using ApplicationCallback =
       std::function<void(shm::Channel*, bool, const Key&)>;
+  using udp_port_pair = std::pair<Udp::Port, Udp::Port>;
 
   enum class State {
     kClosed,
@@ -376,18 +377,22 @@ class Flow {
    * @param remote_port Remote UDP port.
    * @param local_l2_addr Local L2 address.
    * @param remote_l2_addr Remote L2 address.
+   * @param udp_port_pairs UDP port pairs to use for the flow.
    * @param txring TX ring to send packets to.
    * @param channel Shared memory channel this flow is associated with.
    */
-  Flow(const Ipv4::Address& local_addr, const Udp::Port& local_port,
-       const Ipv4::Address& remote_addr, const Udp::Port& remote_port,
+  Flow(const Ipv4::Address& local_addr, const MachnetPktHdr::Port& local_port,
+       const Ipv4::Address& remote_addr, const MachnetPktHdr::Port& remote_port,
        const Ethernet::Address& local_l2_addr,
-       const Ethernet::Address& remote_l2_addr, dpdk::TxRing* txring,
+       const Ethernet::Address& remote_l2_addr,
+       std::vector<udp_port_pair> udp_port_pairs, dpdk::TxRing* txring,
        ApplicationCallback callback, shm::Channel* channel)
       : key_(local_addr, local_port, remote_addr, remote_port),
         local_l2_addr_(local_l2_addr),
         remote_l2_addr_(remote_l2_addr),
         state_(State::kClosed),
+        primary_udp_port_pair_(),
+        udp_port_pairs_(udp_port_pairs),
         txring_(CHECK_NOTNULL(txring)),
         callback_(std::move(callback)),
         channel_(CHECK_NOTNULL(channel)),
@@ -412,6 +417,13 @@ class Flow {
   const Key& key() const { return key_; }
 
   /**
+   * @brief Get the flow list of available UDP port pairs.
+   */
+  const std::vector<udp_port_pair>& udp_port_pairs() const {
+    return udp_port_pairs_;
+  }
+
+  /**
    * @brief Get the associated channel.
    */
   shm::Channel* channel() const { return channel_; }
@@ -422,23 +434,40 @@ class Flow {
   State state() const { return state_; }
 
   std::string ToString() const {
+    std::string udp_status;
+    if (state_ >= State::kSynReceived) {
+      udp_status +=
+          "\n\t\t\t[Active UDP pair] [" +
+          std::to_string(primary_udp_port_pair_.first.port.value()) + " <-> " +
+          std::to_string(primary_udp_port_pair_.second.port.value()) + "] ";
+    }
+    udp_status += "\n\t\t\t[UDP port pairs] {";
+    for (const auto& udp_port_pair : udp_port_pairs_) {
+      if (udp_port_pair == primary_udp_port_pair_) continue;
+      udp_status += " " + std::to_string(udp_port_pair.first.port.value()) +
+                    ":" + std::to_string(udp_port_pair.second.port.value()) +
+                    ",";
+    }
+    udp_status += " }";
+
     return utils::Format(
         "%s [%s] <-> [%s]\n\t\t\t%s\n\t\t\t[TX Queue] Pending "
         "MsgBufs: "
-        "%u",
+        "%u%s",
         key_.ToString().c_str(), StateToString(state_),
         channel_->GetName().c_str(), pcb_.ToString().c_str(),
-        tx_tracking_.NumUnsentMsgbufs());
+        tx_tracking_.NumUnsentMsgbufs(), udp_status.c_str());
   }
 
   bool Match(const dpdk::Packet* packet) const {
     const auto* ih = packet->head_data<Ipv4*>(sizeof(Ethernet));
-    const auto* udph = packet->head_data<Udp*>(sizeof(Ethernet) + sizeof(Ipv4));
+    const auto* machneth = packet->head_data<MachnetPktHdr*>(
+        sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
 
     return (ih->src_addr == key_.remote_addr &&
             ih->dst_addr == key_.local_addr &&
-            udph->src_port == key_.remote_port &&
-            udph->dst_port == key_.local_port);
+            machneth->src_port == key_.remote_port &&
+            machneth->dst_port == key_.local_port);
   }
 
   bool Match(const shm::MsgBuf* tx_msgbuf) const {
@@ -487,9 +516,13 @@ class Flow {
    */
   void InputPacket(const dpdk::Packet* packet) {
     // Parse the Machnet header of the packet.
-    const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
-    auto* machneth = packet->head_data<MachnetPktHdr*>(net_hdr_len);
+    const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4);
+    auto* udph = packet->head_data<Udp*>(net_hdr_len);
 
+    const auto pkt_udp_port_pair =
+        std::make_pair(udph->dst_port, udph->src_port);
+
+    auto* machneth = reinterpret_cast<MachnetPktHdr*>(udph + 1);
     // Sanity check on the Machnet header.
     // clang-format off
     if (machneth->magic.value() != MachnetPktHdr::kMagic) [[unlikely]] { // NOLINT
@@ -513,11 +546,21 @@ class Flow {
           // and mark the flow as established.
           pcb_.rcv_nxt = machneth->seqno.value();
           pcb_.advance_rcv_nxt();
+          primary_udp_port_pair_ = pkt_udp_port_pair;
           SendSynAck(pcb_.get_snd_nxt());
           state_ = State::kSynReceived;
         } else if (state_ == State::kSynReceived) {
           // If the flow is in SYN-RECEIVED state, our SYN-ACK packet was lost.
           // We need to retransmit it.
+          primary_udp_port_pair_ = pkt_udp_port_pair;
+          const auto pkt_has_valid_udp_port_pair = std::any_of(
+              udp_port_pairs_.begin(), udp_port_pairs_.end(),
+              [pkt_udp_port_pair](const udp_port_pair& udp_port_pair) {
+                return udp_port_pair == pkt_udp_port_pair;
+              });
+          if (!pkt_has_valid_udp_port_pair) {
+            udp_port_pairs_.emplace_back(pkt_udp_port_pair);
+          }
           SendSynAck(pcb_.snd_una);
         }
         break;
@@ -538,19 +581,59 @@ class Flow {
         }
 
         if (state_ == State::kSynSent) {
+          const auto pkt_has_valid_udp_port_pair = std::any_of(
+              udp_port_pairs_.begin(), udp_port_pairs_.end(),
+              [pkt_udp_port_pair](const udp_port_pair& udp_port_pair) {
+                return udp_port_pair == pkt_udp_port_pair;
+              });
+          if (!pkt_has_valid_udp_port_pair) [[unlikely]] {  // NOLINT
+            LOG(ERROR) << "SYN-ACK packet received with invalid UDP port pair: "
+                       << pkt_udp_port_pair.first.port.value() << " <-> "
+                       << pkt_udp_port_pair.second.port.value();
+            return;
+          }  // NOLINT
+
           pcb_.snd_una++;
           pcb_.rcv_nxt = machneth->seqno.value();
           pcb_.advance_rcv_nxt();
           pcb_.rto_maybe_reset();
+
+          VLOG(1) << "SYN-ACK packet received. Estblishing UDP port pair: "
+                  << pkt_udp_port_pair.first.port.value() << " <-> "
+                  << pkt_udp_port_pair.second.port.value();
+          primary_udp_port_pair_ = pkt_udp_port_pair;
           // Mark the flow as established.
           state_ = State::kEstablished;
           // Notify the application that the flow is established.
           callback_(channel(), true, key());
         }
+
+        if (primary_udp_port_pair_ != pkt_udp_port_pair) {
+          // We received a SYN-ACK packet on a different UDP port pair than the
+          // the active UDP pair. This is probably due to the burst connection
+          // opening mechanism we employ for RSS load balancing. For now we just
+          // ignore such packets.
+          VLOG(1) << "SYN-ACK packet received with invalid UDP port pair: "
+                  << pkt_udp_port_pair.first.port.value() << " <-> "
+                  << pkt_udp_port_pair.second.port.value();
+          return;
+        }
+
+        VLOG(1) << "Sending ACK for SYN-ACK packet. UDP port pair: "
+                << pkt_udp_port_pair.first.port.value() << " <-> "
+                << pkt_udp_port_pair.second.port.value();
         // Send an ACK packet.
         SendAck();
         break;
       case MachnetPktHdr::MachnetFlags::kRst: {
+        if (primary_udp_port_pair_ != pkt_udp_port_pair) {
+          // TODO(ilias): We should probably release that port pair here if we
+          // own it.
+          VLOG(1) << "RST packet received with invalid UDP port pair: "
+                  << udph->ToString();
+          return;
+        }
+
         const auto seqno = machneth->seqno.value();
         const auto expected_seqno = pcb_.rcv_nxt;
         if (swift::seqno_eq(seqno, expected_seqno)) {
@@ -559,16 +642,39 @@ class Flow {
         }
       } break;
       case MachnetPktHdr::MachnetFlags::kAck:
+        if (state_ != State::kSynReceived &&
+            primary_udp_port_pair_ != pkt_udp_port_pair) {
+          // TODO(ilias): We should probably release that port pair here if we
+          // own it.
+          LOG(ERROR) << "ACK packet received with invalid UDP port pair: "
+                     << udph->ToString();
+          return;
+        }
+
+        if (state_ == State::kSynReceived) {
+          primary_udp_port_pair_ = pkt_udp_port_pair;
+        }
+
         // ACK packet, update the flow.
         // update_flow(machneth);
         process_ack(machneth);
         break;
       case MachnetPktHdr::MachnetFlags::kData:
         // clang-format off
+        if (state_ == State::kSynReceived) [[unlikely]] {
+          process_ack(machneth);
+        }
         if (state_ != State::kEstablished) [[unlikely]] { // NOLINT
           // clang-format on
           LOG(ERROR) << "Data packet received for flow in state: "
                      << static_cast<int>(state_);
+          return;
+        }
+        if (primary_udp_port_pair_ != pkt_udp_port_pair) {
+          // TODO(ilias): We should probably release that port pair here if we
+          // own it.
+          LOG(ERROR) << "Data packet received with invalid UDP port pair: "
+                     << udph->ToString();
           return;
         }
         // Data packet, process the payload.
@@ -661,11 +767,12 @@ class Flow {
     packet->set_l3_len(sizeof(*ipv4h));
   }
 
-  void PrepareL4Header(dpdk::Packet* packet) {
+  void PrepareL4Header(dpdk::Packet* packet,
+                       const udp_port_pair& udp_port_pair) {
     // Prepare the L4 header.
     auto* udph = packet->head_data<Udp*>(sizeof(Ethernet) + sizeof(Ipv4));
-    udph->src_port = key_.local_port;
-    udph->dst_port = key_.remote_port;
+    udph->src_port = udp_port_pair.first;
+    udph->dst_port = udp_port_pair.second;
     udph->len = be16_t(packet->length() - sizeof(Ethernet) - sizeof(Ipv4));
     udph->cksum = be16_t(0);
     packet->offload_udpv4_csum();
@@ -677,6 +784,8 @@ class Flow {
     auto* machneth = packet->head_data<MachnetPktHdr*>(
         sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
     machneth->magic = be16_t(MachnetPktHdr::kMagic);
+    machneth->src_port = key_.local_port;
+    machneth->dst_port = key_.remote_port;
     machneth->net_flags = net_flags;
     machneth->msg_flags = msg_flags;
     machneth->seqno = be32_t(seqno);
@@ -686,7 +795,7 @@ class Flow {
     machneth->timestamp1 = be64_t(0);
   }
 
-  void SendControlPacket(uint32_t seqno,
+  void SendControlPacket(uint32_t seqno, const udp_port_pair& udp_port_pair,
                          const MachnetPktHdr::MachnetFlags& flags) {
     auto* packet = CHECK_NOTNULL(txring_->GetPacketPool()->PacketAlloc());
     dpdk::Packet::Reset(packet);
@@ -696,7 +805,7 @@ class Flow {
     CHECK_NOTNULL(packet->append(kControlPacketSize));
     PrepareL2Header(packet);
     PrepareL3Header(packet);
-    PrepareL4Header(packet);
+    PrepareL4Header(packet, udp_port_pair);
     PrepareMachnetHdr(packet, seqno, flags);
 
     // Send the packet.
@@ -704,20 +813,26 @@ class Flow {
   }
 
   void SendSyn(uint32_t seqno) {
-    SendControlPacket(seqno, MachnetPktHdr::MachnetFlags::kSyn);
+    for (const auto& udp_port_pair : udp_port_pairs_) {
+      SendControlPacket(seqno, udp_port_pair,
+                        MachnetPktHdr::MachnetFlags::kSyn);
+    }
   }
 
   void SendSynAck(uint32_t seqno) {
-    SendControlPacket(seqno, MachnetPktHdr::MachnetFlags::kSyn |
-                                 MachnetPktHdr::MachnetFlags::kAck);
+    SendControlPacket(
+        seqno, primary_udp_port_pair_,
+        MachnetPktHdr::MachnetFlags::kSyn | MachnetPktHdr::MachnetFlags::kAck);
   }
 
   void SendAck() {
-    SendControlPacket(pcb_.seqno(), MachnetPktHdr::MachnetFlags::kAck);
+    SendControlPacket(pcb_.seqno(), primary_udp_port_pair_,
+                      MachnetPktHdr::MachnetFlags::kAck);
   }
 
   void SendRst() {
-    SendControlPacket(pcb_.seqno(), MachnetPktHdr::MachnetFlags::kRst);
+    SendControlPacket(pcb_.seqno(), primary_udp_port_pair_,
+                      MachnetPktHdr::MachnetFlags::kRst);
   }
 
   /**
@@ -770,12 +885,14 @@ class Flow {
     // Prepare network headers.
     PrepareL2Header(packet);
     PrepareL3Header(packet);
-    PrepareL4Header(packet);
+    PrepareL4Header(packet, primary_udp_port_pair_);
 
     // Prepare the Machnet-specific header.
     auto* machneth = packet->head_data<MachnetPktHdr*>(
         sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
     machneth->magic = be16_t(MachnetPktHdr::kMagic);
+    machneth->src_port = key_.local_port;
+    machneth->dst_port = key_.remote_port;
     machneth->net_flags = MachnetPktHdr::MachnetFlags::kData;
     machneth->ackno = be32_t(UINT32_MAX);
     machneth->msg_flags = msg_buf->flags();
@@ -861,6 +978,7 @@ class Flow {
   void process_ack(const MachnetPktHdr* machneth) {
     auto ackno = machneth->ackno.value();
     if (swift::seqno_lt(ackno, pcb_.snd_una)) {
+      LOG(ERROR) << "ACK received for already acknowledged data.";
       return;
     } else if (swift::seqno_eq(ackno, pcb_.snd_una)) {
       // Duplicate ACK.
@@ -943,8 +1061,14 @@ class Flow {
   // A flow is identified by the 5-tuple (Proto is always UDP).
   const Ethernet::Address local_l2_addr_;
   const Ethernet::Address remote_l2_addr_;
+
   // Flow state.
   State state_;
+  // Primary active UDP port pair: First port is the local port, second port is
+  // the remote port.
+  udp_port_pair primary_udp_port_pair_;
+  // Vector of UDP port pairs allowed for use with this flow.
+  std::vector<udp_port_pair> udp_port_pairs_;
   // Pointer to the TX ring for the flow to send packets on.
   dpdk::TxRing* txring_;
   // Callback to be invoked when the flow is either established or closed.

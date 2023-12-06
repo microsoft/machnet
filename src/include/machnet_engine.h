@@ -37,38 +37,45 @@ namespace juggler {
  */
 class MachnetEngineSharedState {
  public:
+  using udp_port_pair = std::pair<net::Udp::Port, net::Udp::Port>;
+  static const size_t kUdpSrcPortMin = (1 << 10);  // 1024
+  static const size_t kUdpDstPortMin = 1;
   static const size_t kSrcPortMin = (1 << 10);      // 1024
   static const size_t kSrcPortMax = (1 << 16) - 1;  // 65535
   static constexpr size_t kSrcPortBitmapSize =
       (kSrcPortMax + 1) / sizeof(uint64_t) / 8;
+  static const size_t kUdpPortPairBatchNr = 32;
   explicit MachnetEngineSharedState(std::vector<uint8_t> rss_key,
                                     net::Ethernet::Address l2addr,
                                     std::vector<net::Ipv4::Address> ipv4_addrs)
       : rss_key_(rss_key), arp_handler_(l2addr, ipv4_addrs) {
     for (const auto &addr : ipv4_addrs) {
-      CHECK(ipv4_port_bitmap_.find(addr) == ipv4_port_bitmap_.end());
-      ipv4_port_bitmap_.insert({addr, std::vector<uint64_t>(1, UINT64_MAX)});
+      CHECK(ipv4_machnet_port_bitmap_.find(addr) ==
+            ipv4_machnet_port_bitmap_.end());
+      ipv4_machnet_port_bitmap_.insert(
+          {addr, std::vector<uint64_t>(1, UINT64_MAX)});
     }
   }
 
   const std::unordered_map<net::Ipv4::Address, std::vector<uint64_t>>
       &GetIpv4PortBitmap() const {
-    return ipv4_port_bitmap_;
+    return ipv4_machnet_port_bitmap_;
   }
 
   bool IsLocalIpv4Address(const net::Ipv4::Address &ipv4_addr) const {
-    return ipv4_port_bitmap_.find(ipv4_addr) != ipv4_port_bitmap_.end();
+    return ipv4_machnet_port_bitmap_.find(ipv4_addr) !=
+           ipv4_machnet_port_bitmap_.end();
   }
 
   /**
-   * @brief Allocates a source UDP port for a given IPv4 address based on a
+   * @brief Allocates a source Machnet port for a given IPv4 address based on a
    * specified predicate.
    *
-   * This function searches for an available source UDP port in the range of
+   * This function searches for an available source Machnet port in the range of
    * [kSrcPortMin, kSrcPortMax] that satisfies the provided predicate (lambda
    * function). If a suitable port is found, it is marked as used and returned
-   * as an std::optional<net::Udp::Port> value. If no suitable port is found,
-   * std::nullopt is returned.
+   * as an std::optional<net::MachnetPktHdr::Port> value. If no suitable port is
+   * found, std::nullopt is returned.
    *
    * @tparam F A type satisfying the Predicate concept, invocable with a
    * uint16_t argument.
@@ -77,8 +84,8 @@ class MachnetEngineSharedState {
    * @param lambda A predicate (lambda function) taking a uint16_t as input and
    * returning a bool. The function should return true if the input port number
    * is suitable for allocation. Default behavior is to accept any port.
-   * @return std::optional<net::Udp::Port> containing the allocated source port
-   * if found, or std::nullopt otherwise.
+   * @return std::optional<net::Machnet::Port> containing the allocated source
+   * port if found, or std::nullopt otherwise.
    *
    * Example usage:
    * @code
@@ -91,30 +98,29 @@ class MachnetEngineSharedState {
    * }
    * @endcode
    */
-  std::optional<net::Udp::Port> SrcPortAlloc(
+  std::optional<net::MachnetPktHdr::Port> SrcPortAlloc(
       const net::Ipv4::Address &ipv4_addr,
       std::predicate<uint16_t> auto &&lambda) {
     constexpr size_t bits_per_slot = sizeof(uint64_t) * 8;
-    auto it = ipv4_port_bitmap_.find(ipv4_addr);
-    if (it == ipv4_port_bitmap_.end()) {
+    auto it = ipv4_machnet_port_bitmap_.find(ipv4_addr);
+    if (it == ipv4_machnet_port_bitmap_.end()) {
       return std::nullopt;
     }
 
     // Helper lambda to find a free port.
     // Given a 64-bit wide slot in a bitmap (vector of uint64_t), find the first
     // available port that satisfies the lambda condition.
-    auto find_free_port = [&lambda, &bits_per_slot](
-                              auto &bitmap,
-                              size_t index) -> std::optional<net::Udp::Port> {
+    auto find_free_port = [&lambda, &bits_per_slot](auto &bitmap, size_t index)
+        -> std::optional<net::MachnetPktHdr::Port> {
       auto mask = ~0ULL;
       do {
         auto pos = __builtin_ffsll(bitmap[index] & mask);
         if (pos == 0) break;  // This slot is fully used.
         const size_t candidate_port = index * bits_per_slot + pos - 1;
-        if (candidate_port > kSrcPortMax) break;  // Illegal port.
+        if (candidate_port >= kSrcPortMax) break;  // Illegal port.
         if (lambda(candidate_port)) {
           bitmap[index] &= ~(1ULL << (pos - 1));
-          return net::Udp::Port(candidate_port);
+          return net::MachnetPktHdr::Port(candidate_port);
         }
         // If we reached the end of the slot and the port is not suitable,
         // abort.
@@ -155,69 +161,116 @@ class MachnetEngineSharedState {
   }
 
   /**
-   * @brief Releases a previously allocated UDP source port for the given IPv4
-   * address.
+   * @brief Releases a previously allocated Machnet source port for the given
+   * IPv4 address.
    *
    * This function releases a source port that was previously allocated using
    * the SrcPortAlloc function. After releasing the port, it becomes available
    * for future allocation.
    *
    * @param ipv4_addr The IPv4 address for which the source port was allocated.
-   * @param port The net::Udp::Port instance representing the allocated source
-   * port to be released.
+   * @param port The net::Machnet::Port instance representing the allocated
+   * source port to be released.
    *
+   * @attention This function operates on a Machnet-layer port, not a UDP port.
    * @note Thread-safe, as it uses a lock_guard to protect concurrent access to
    * the shared data.
    *
    * Example usage:
    * @code
    * net::Ipv4::Address ipv4_addr = ...;
-   * net::Udp::Port port = ...; // Previously allocated port
+   * net::MachnetPktHdr::Port port = ...; // Previously allocated port
    * SrcPortRelease(ipv4_addr, port); // Release the allocated port
    * @endcode
    */
   void SrcPortRelease(const net::Ipv4::Address &ipv4_addr,
-                      const net::Udp::Port &port) {
+                      const net::MachnetPktHdr::Port &port) {
     const std::lock_guard<std::mutex> lock(mtx_);
     SrcPortReleaseLocked(ipv4_addr, port);
   }
 
+  std::vector<udp_port_pair> UdpPairBulkAlloc(
+      const net::Ipv4::Address &ipv4_addr, size_t count = kUdpPortPairBatchNr) {
+    const std::lock_guard<std::mutex> lock(mtx_);
+
+    auto &active_udp_pair_set = ipv4_active_udp_port_pairs_[ipv4_addr];
+    constexpr uint64_t udp_pair_val_mask =
+        (kUdpSrcPortMin << 16) | kUdpDstPortMin;
+    uint64_t udp_pair_val = udp_pair_val_mask;
+
+    std::vector<udp_port_pair> udp_port_pairs;
+    while (udp_port_pairs.size() < count) {
+      auto udp_pair = std::make_pair(net::Udp::Port(udp_pair_val >> 16),
+                                     net::Udp::Port(udp_pair_val & 0xFFFF));
+      if (active_udp_pair_set.find(udp_pair) == active_udp_pair_set.end()) {
+        // Found a free port pair.
+        udp_port_pairs.emplace_back(udp_pair);
+        active_udp_pair_set.insert(udp_pair);
+      }
+
+      // Increment the port pair value.
+      ++udp_pair_val;
+
+      if (udp_pair_val >> 16 == kSrcPortMax) {
+        // We should have found enough ports by now.
+        LOG(ERROR) << "Failed to allocate " << count
+                   << " UDP port pairs. Found " << udp_port_pairs.size()
+                   << " instead.";
+        break;
+      }
+    }
+
+    return udp_port_pairs;
+  }
+
+  void UdpPairBulkRelease(const net::Ipv4::Address &ipv4_addr,
+                          const std::vector<udp_port_pair> &udp_port_pairs) {
+    const std::lock_guard<std::mutex> lock(mtx_);
+    auto &active_udp_pair_set = ipv4_active_udp_port_pairs_[ipv4_addr];
+    for (const auto &udp_port_pair : udp_port_pairs) {
+      active_udp_pair_set.erase(udp_port_pair);
+    }
+  }
+
   /**
-   * @brief Registers a listener on a specific IPv4 address and UDP port,
-   * associating the port with a receive queue.
+   * @brief Registers a listener on a specific IPv4 address and Machnet port,
+   * associating the port with an engine.
    *
    * This function attempts to register a listener on the provided IPv4 address
-   * and UDP port. If the port is available and not already in use, it will be
-   * associated with the specified receive queue, and the function will return
-   * true. If the port is already in use or the provided address and port are
-   * not valid, the function returns false.
+   * and Machnet port. If the port is available and not already in use, it will
+   * be associated with the specified engine, and the function will
+   * return true. If the port is already in use or the provided address and port
+   * are not valid, the function returns false.
    *
    * @param ipv4_addr The IPv4 address on which to register the listener.
-   * @param port The net::Udp::Port instance representing the source port to
-   * listen on.
-   * @param rx_queue_id The ID of the receive queue to associate with the
+   * @param port The net::MachnetPktHdr::Port instance representing the source
+   * port to listen on.
+   * @param engine_id The ID of the engine to associate with the
    * registered listener.
    *
    * @return A `bool` indicating whether the listener registration was
    * successful. Returns `true` if the port is available and the registration
    * operation is successful, `false` otherwise.
    *
+   * @attention This function receives Machnet-layer port, not UDP port.
    * @note Thread-safe, as it uses a lock_guard to protect concurrent access to
    * the shared data.
    *
    * Example usage:
    * @code
    * net::Ipv4::Address ipv4_addr = ...;
-   * net::Udp::Port port = ...;
-   * size_t rx_queue_id = ...;
-   * bool success = RegisterListener(ipv4_addr, port, rx_queue_id); // Attempt
+   * net::MachnetPktHdr::Port port = ...;
+   * size_t engine_id = ...;
+   * bool success = RegisterListener(ipv4_addr, port, engine_id); // Attempt
    * to register listener on the specified address and port
    * @endcode
    */
   bool RegisterListener(const net::Ipv4::Address &ipv4_addr,
-                        const net::Udp::Port &port, size_t rx_queue_id) {
+                        const net::MachnetPktHdr::Port &port,
+                        size_t engine_id) {
     const std::lock_guard<std::mutex> lock(mtx_);
-    if (ipv4_port_bitmap_.find(ipv4_addr) == ipv4_port_bitmap_.end()) {
+    if (ipv4_machnet_port_bitmap_.find(ipv4_addr) ==
+        ipv4_machnet_port_bitmap_.end()) {
       return false;
     }
 
@@ -225,7 +278,7 @@ class MachnetEngineSharedState {
     auto p = port.port.value();
     const auto slot = p / bits_per_slot;
     const auto bit = p % bits_per_slot;
-    auto &bitmap = ipv4_port_bitmap_[ipv4_addr];
+    auto &bitmap = ipv4_machnet_port_bitmap_[ipv4_addr];
     if (slot >= bitmap.size()) {
       // Allocate more elements in the bitmap.
       bitmap.resize(slot + 1, ~0ULL);
@@ -234,9 +287,8 @@ class MachnetEngineSharedState {
     if (!(bitmap[slot] & (1ULL << bit))) return false;
     bitmap[slot] &= ~(1ULL << bit);
 
-    // Add the port and engine to the listeners.
-    DCHECK(listeners_to_rxq.find({ipv4_addr, port}) == listeners_to_rxq.end());
-    listeners_to_rxq[{ipv4_addr, port}] = rx_queue_id;
+    // Add the port and engine to the listenersq.end());
+    listener_to_engine_map_[{ipv4_addr, port}] = engine_id;
 
     return true;
   }
@@ -265,14 +317,14 @@ class MachnetEngineSharedState {
    * @endcode
    */
   void UnregisterListener(const net::Ipv4::Address &ipv4_addr,
-                          const net::Udp::Port &port) {
+                          const net::MachnetPktHdr::Port &port) {
     const std::lock_guard<std::mutex> lock(mtx_);
-    auto it = listeners_to_rxq.find({ipv4_addr, port});
-    if (it == listeners_to_rxq.end()) {
+    auto it = listener_to_engine_map_.find({ipv4_addr, port});
+    if (it == listener_to_engine_map_.end()) {
       return;
     }
 
-    listeners_to_rxq.erase(it);
+    listener_to_engine_map_.erase(it);
     SrcPortReleaseLocked(ipv4_addr, port);
   }
 
@@ -301,6 +353,13 @@ class MachnetEngineSharedState {
     }
   };
 
+  struct hash_udp_port_pair {
+    template <typename T>
+    std::size_t operator()(const std::pair<T, T> &x) const {
+      return std::hash<T>()(x.first) ^ std::hash<T>()(x.second);
+    }
+  };
+
   /**
    * @brief Private method to release a previously allocated UDP source port.
    *
@@ -308,9 +367,9 @@ class MachnetEngineSharedState {
    * locked.
    */
   void SrcPortReleaseLocked(const net::Ipv4::Address &ipv4_addr,
-                            const net::Udp::Port &port) {
-    auto it = ipv4_port_bitmap_.find(ipv4_addr);
-    if (it == ipv4_port_bitmap_.end()) {
+                            const net::MachnetPktHdr::Port &port) {
+    auto it = ipv4_machnet_port_bitmap_.find(ipv4_addr);
+    if (it == ipv4_machnet_port_bitmap_.end()) {
       return;
     }
 
@@ -318,18 +377,23 @@ class MachnetEngineSharedState {
     auto p = port.port.value();
     const auto slot = p / bits_per_slot;
     const auto bit = p % bits_per_slot;
-    auto &bitmap = ipv4_port_bitmap_[ipv4_addr];
+    auto &bitmap = ipv4_machnet_port_bitmap_[ipv4_addr];
     bitmap[slot] |= (1ULL << bit);
   }
 
   const std::vector<uint8_t> rss_key_;
   ArpHandler arp_handler_;
   std::mutex mtx_{};
+  std::unordered_map<net::Ipv4::Address,
+                     std::unordered_set<udp_port_pair, hash_udp_port_pair>>
+      ipv4_active_udp_port_pairs_{};
+
+  // Bitmap of Machnet source ports allocated for each IPv4 address.
   std::unordered_map<net::Ipv4::Address, std::vector<uint64_t>>
-      ipv4_port_bitmap_{};
-  std::unordered_map<std::pair<net::Ipv4::Address, net::Udp::Port>, size_t,
-                     hash_ip_port_pair>
-      listeners_to_rxq{};
+      ipv4_machnet_port_bitmap_{};
+  std::unordered_map<std::pair<net::Ipv4::Address, net::MachnetPktHdr::Port>,
+                     size_t, hash_ip_port_pair>
+      listener_to_engine_map_{};
 };
 
 /**
@@ -343,6 +407,7 @@ class MachnetEngine {
   using Ipv4 = net::Ipv4;
   using Udp = net::Udp;
   using Icmp = net::Icmp;
+  using MachnetPktHdr = net::MachnetPktHdr;
   using Flow = net::flow::Flow;
   using PmdPort = juggler::dpdk::PmdPort;
   // Slow timer (periodic processing) interval in microseconds.
@@ -379,9 +444,9 @@ class MachnetEngine {
         last_periodic_timestamp_(0),
         periodic_ticks_(0) {
     for (const auto &[ipv4_addr, _] : shared_state_->GetIpv4PortBitmap()) {
-      listeners_.emplace(
-          ipv4_addr,
-          std::unordered_map<Udp::Port, std::shared_ptr<shm::Channel>>());
+      listeners_.emplace(ipv4_addr,
+                         std::unordered_map<MachnetPktHdr::Port,
+                                            std::shared_ptr<shm::Channel>>());
     }
   }
 
@@ -633,7 +698,7 @@ class MachnetEngine {
                 break;
               }
               const Ipv4::Address dst_addr(req.flow_info.dst_ip);
-              const Udp::Port dst_port(req.flow_info.dst_port);
+              const MachnetPktHdr::Port dst_port(req.flow_info.dst_port);
               LOG(INFO) << "Request to create flow " << src_addr.ToString()
                         << " -> "
                         << dst_addr.ToString() << ":" << dst_port.port.value();
@@ -647,7 +712,7 @@ class MachnetEngine {
             // clang-format off
             {
               const Ipv4::Address local_ip(req.listener_info.ip);
-              const Udp::Port local_port(req.listener_info.port);
+              const MachnetPktHdr::Port local_port(req.listener_info.port);
               if (!shared_state_->IsLocalIpv4Address(local_ip) ||
                   listeners_.find(local_ip) == listeners_.end()) {
               emit_completion(false);
@@ -697,7 +762,7 @@ class MachnetEngine {
 
       const Ipv4::Address src_addr(req.flow_info.src_ip);
       const Ipv4::Address dst_addr(req.flow_info.dst_ip);
-      const Udp::Port dst_port(req.flow_info.dst_port);
+      const MachnetPktHdr::Port dst_port(req.flow_info.dst_port);
 
       auto remote_l2_addr =
           shared_state_->GetL2Addr(txring_, src_addr, dst_addr);
@@ -707,53 +772,15 @@ class MachnetEngine {
         continue;
       }
 
-      // L2 address has been resolved. Allocate a source port.
-      auto rss_lambda = [src_addr, dst_addr, dst_port,
-                         rss_key = pmd_port_->GetRSSKey(), pmd_port = pmd_port_,
-                         rx_queue_id =
-                             rxring_->GetRingId()](uint16_t port) -> bool {
-        rte_thash_tuple ipv4_l3_l4_tuple;
-        ipv4_l3_l4_tuple.v4.src_addr = src_addr.address.value();
-        ipv4_l3_l4_tuple.v4.dst_addr = dst_addr.address.value();
-        ipv4_l3_l4_tuple.v4.sport = port;
-        ipv4_l3_l4_tuple.v4.dport = dst_port.port.value();
-
-        rte_thash_tuple reversed_ipv4_l3_l4_tuple;
-        reversed_ipv4_l3_l4_tuple.v4.src_addr = dst_addr.address.value();
-        reversed_ipv4_l3_l4_tuple.v4.dst_addr = src_addr.address.value();
-        reversed_ipv4_l3_l4_tuple.v4.sport = dst_port.port.value();
-        reversed_ipv4_l3_l4_tuple.v4.dport = port;
-
-        auto rss_hash =
-            rte_softrss(reinterpret_cast<uint32_t *>(&ipv4_l3_l4_tuple),
-                        RTE_THASH_V4_L4_LEN, rss_key.data());
-        auto reversed_rss_hash = rte_softrss(
-            reinterpret_cast<uint32_t *>(&reversed_ipv4_l3_l4_tuple),
-            RTE_THASH_V4_L4_LEN, rss_key.data());
-        if (pmd_port->GetRSSRxQueue(reversed_rss_hash) != rx_queue_id) {
-          return false;
-        }
-
-        if (pmd_port->GetRSSRxQueue(__builtin_bswap32(reversed_rss_hash)) !=
-            rx_queue_id) {
-          return false;
-        }
-
-        LOG(INFO) << "RSS hash for " << src_addr.ToString() << ":" << port
-                  << " -> " << dst_addr.ToString() << ":"
-                  << dst_port.port.value() << " is " << rss_hash
-                  << " and reversed " << reversed_rss_hash
-                  << " (queue: " << rx_queue_id << ")";
-
-        return true;
-      };
-
-      auto src_port = shared_state_->SrcPortAlloc(src_addr, rss_lambda);
+      auto src_port = shared_state_->SrcPortAlloc(
+          src_addr, [](uint16_t port) { return true; });
       if (!src_port.has_value()) {
         LOG(ERROR) << "Cannot allocate source port for " << src_addr.ToString();
         it = pending_requests_.erase(it);
         continue;
       }
+
+      auto udp_port_pair_v = shared_state_->UdpPairBulkAlloc(src_addr);
 
       auto application_callback = [req_id = req.id](
                                       shm::Channel *channel, bool success,
@@ -772,7 +799,7 @@ class MachnetEngine {
       const auto &flow_it =
           channel->CreateFlow(src_addr, src_port.value(), dst_addr, dst_port,
                               pmd_port_->GetL2Addr(), remote_l2_addr.value(),
-                              txring_, application_callback);
+                              udp_port_pair_v, txring_, application_callback);
       (*flow_it)->InitiateHandshake();
       active_flows_map_.emplace((*flow_it)->key(), flow_it);
       it = pending_requests_.erase(it);
@@ -792,6 +819,9 @@ class MachnetEngine {
         auto channel = (*flow_it)->channel();
         shared_state_->SrcPortRelease((*flow_it)->key().local_addr,
                                       (*flow_it)->key().local_port);
+        shared_state_->UdpPairBulkRelease((*flow_it)->key().local_addr,
+                                          (*flow_it)->udp_port_pairs());
+        (*flow_it)->ShutDown();
         channel->RemoveFlow(flow_it);
         it = active_flows_map_.erase(it);
         continue;
@@ -836,15 +866,18 @@ class MachnetEngine {
 
   void process_rx_ipv4(const juggler::dpdk::Packet *pkt, uint64_t now) {
     // Sanity ipv4 header check.
-    if (pkt->length() < sizeof(Ethernet) + sizeof(Ipv4)) [[unlikely]]
+    if (pkt->length() < sizeof(Ethernet) + sizeof(Ipv4) + sizeof(MachnetPktHdr))
+        [[unlikely]]
       return;
 
     const auto *eh = pkt->head_data<Ethernet *>();
     const auto *ipv4h = pkt->head_data<Ipv4 *>(sizeof(Ethernet));
     const auto *udph = pkt->head_data<Udp *>(sizeof(Ethernet) + sizeof(Ipv4));
+    const auto *machneth = pkt->head_data<MachnetPktHdr *>(
+        sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
 
-    const net::flow::Key pkt_key(ipv4h->dst_addr, udph->dst_port,
-                                 ipv4h->src_addr, udph->src_port);
+    const net::flow::Key pkt_key(ipv4h->dst_addr, machneth->dst_port,
+                                 ipv4h->src_addr, machneth->src_port);
     // Check ivp4 header length.
     // clang-format off
     if (pkt->length() != sizeof(Ethernet) + ipv4h->total_length.value()) [[unlikely]] { // NOLINT
@@ -871,22 +904,27 @@ class MachnetEngine {
         // Check if there is a listener on this port.
         const auto &local_ipv4_addr = ipv4h->dst_addr;
         const auto &local_udp_port = udph->dst_port;
+        const auto &remote_udp_port = udph->src_port;
+        const auto &local_machnet_port = machneth->dst_port;
         if (listeners_.find(local_ipv4_addr) != listeners_.end()) {
           // We have a listener on this port.
           const auto &listeners_on_ip = listeners_[local_ipv4_addr];
-          if (listeners_on_ip.find(local_udp_port) == listeners_on_ip.end()) {
-            LOG(INFO) << "Dropping packet with RSS hash: " << pkt->rss_hash()
-                      << " (be: " << __builtin_bswap32(pkt->rss_hash()) << ")"
-                      << " because there is no listener on port "
-                      << local_udp_port.port.value()
-                      << " (engine @rx_q_id: " << rxring_->GetRingId() << ")";
+          if (listeners_on_ip.find(local_machnet_port) ==
+              listeners_on_ip.end()) {
+            VLOG(1) << "Dropping packet with RSS hash: " << pkt->rss_hash()
+                    << " (be: " << __builtin_bswap32(pkt->rss_hash()) << ")"
+                    << " because there is no listener on port "
+                    << local_machnet_port.port.value() << "(UDP pair: {"
+                    << local_udp_port.port.value() << ", "
+                    << remote_udp_port.port.value() << "})"
+                    << " (engine @rx_q_id: " << rxring_->GetRingId() << ")";
             return;
           }
 
           // Create a new flow.
-          const auto &channel = listeners_on_ip.at(local_udp_port);
+          const auto &channel = listeners_on_ip.at(local_machnet_port);
           const auto &remote_ipv4_addr = ipv4h->src_addr;
-          const auto &remote_udp_port = udph->src_port;
+          const auto &remote_machnet_port = machneth->src_port;
 
           // Check if it is a SYN packet.
           const auto *machneth = pkt->head_data<net::MachnetPktHdr *>(
@@ -898,10 +936,13 @@ class MachnetEngine {
 
           auto empty_callback = [](shm::Channel *, bool,
                                    const net::flow::Key &) {};
+          std::vector<std::pair<Udp::Port, Udp::Port>> udp_port_pair_v;
+          udp_port_pair_v.emplace_back(local_udp_port, remote_udp_port);
+
           const auto &flow_it = channel->CreateFlow(
-              local_ipv4_addr, local_udp_port, remote_ipv4_addr,
-              remote_udp_port, pmd_port_->GetL2Addr(), eh->src_addr, txring_,
-              empty_callback);
+              local_ipv4_addr, local_machnet_port, remote_ipv4_addr,
+              remote_machnet_port, pmd_port_->GetL2Addr(), eh->src_addr,
+              udp_port_pair_v, txring_, empty_callback);
           active_flows_map_.insert({pkt_key, flow_it});
 
           // Handle the incoming packet.
@@ -1001,16 +1042,12 @@ class MachnetEngine {
   using channel_info =
       std::tuple<std::shared_ptr<shm::Channel>, std::promise<bool>>;
   using flow_info =
-      std::tuple<uint64_t, Ipv4::Address, Udp::Port, Ipv4::Address, Udp::Port,
-                 std::shared_ptr<shm::Channel>, std::promise<bool>>;
-  using listener_info =
-      std::tuple<Ipv4::Address, Udp::Port, std::shared_ptr<shm::Channel>,
+      std::tuple<uint64_t, Ipv4::Address, MachnetPktHdr::Port, Ipv4::Address,
+                 MachnetPktHdr::Port, std::shared_ptr<shm::Channel>,
                  std::promise<bool>>;
-  static const size_t kSrcPortMin = (1 << 10);      // 1024
-  static const size_t kSrcPortMax = (1 << 16) - 1;  // 65535
-  static constexpr size_t kSrcPortBitmapSize =
-      ((kSrcPortMax - kSrcPortMin + 1) + sizeof(uint64_t) - 1) /
-      sizeof(uint64_t);
+  using listener_info =
+      std::tuple<Ipv4::Address, MachnetPktHdr::Port,
+                 std::shared_ptr<shm::Channel>, std::promise<bool>>;
   // A mutex to synchronize control plane operations.
   std::mutex mtx_;
   // A shared pointer to the PmdPort instance.
@@ -1035,7 +1072,7 @@ class MachnetEngine {
   // Listeners for incoming packets.
   std::unordered_map<
       Ipv4::Address,
-      std::unordered_map<Udp::Port, std::shared_ptr<shm::Channel>>>
+      std::unordered_map<MachnetPktHdr::Port, std::shared_ptr<shm::Channel>>>
       listeners_{};
   // Unordered map of active flows.
   std::unordered_map<net::flow::Key,

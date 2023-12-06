@@ -29,7 +29,7 @@ const char *fname = file_name(__FILE__);
 TEST(BasicMachnetEngineSharedStateTest, SrcPortAlloc) {
   using EthAddr = juggler::net::Ethernet::Address;
   using Ipv4Addr = juggler::net::Ipv4::Address;
-  using UdpPort = juggler::net::Udp::Port;
+  using MachnetPort = juggler::net::MachnetPktHdr::Port;
   using MachnetEngineSharedState = juggler::MachnetEngineSharedState;
 
   EthAddr test_mac{"00:00:00:00:00:01"};
@@ -37,14 +37,14 @@ TEST(BasicMachnetEngineSharedStateTest, SrcPortAlloc) {
   test_ip.FromString("10.0.0.1");
 
   MachnetEngineSharedState state({}, {test_mac}, {test_ip});
-  std::vector<UdpPort> allocated_ports;
+  std::vector<MachnetPort> allocated_ports;
   do {
     auto port = state.SrcPortAlloc(test_ip, [](uint16_t port) { return true; });
     if (!port.has_value()) break;
     allocated_ports.emplace_back(port.value());
   } while (true);
 
-  std::vector<UdpPort> expected_ports;
+  std::vector<MachnetPort> expected_ports;
   expected_ports.resize(MachnetEngineSharedState::kSrcPortMax -
                         MachnetEngineSharedState::kSrcPortMin + 1);
   std::iota(expected_ports.begin(), expected_ports.end(),
@@ -53,7 +53,7 @@ TEST(BasicMachnetEngineSharedStateTest, SrcPortAlloc) {
   EXPECT_EQ(allocated_ports, expected_ports);
 
   auto release_allocated_ports = [&state,
-                                  &test_ip](std::vector<UdpPort> &ports) {
+                                  &test_ip](std::vector<MachnetPort> &ports) {
     while (!ports.empty()) {
       state.SrcPortRelease(test_ip, ports.back());
       ports.pop_back();
