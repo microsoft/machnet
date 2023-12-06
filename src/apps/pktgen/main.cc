@@ -43,6 +43,7 @@ DEFINE_bool(active_generator, false,
             "When 'true' this host is generating the traffic, otherwise it is "
             "bouncing.");
 DEFINE_bool(zerocopy, true, "Use memcpy to fill packet payload.");
+DEFINE_uint32(flows_nr, 1, "Number of flows to generate.");
 DEFINE_string(rtt_log, "", "Log file for RTT measurements.");
 
 // This is the source/destination UDP port used by the application.
@@ -92,6 +93,7 @@ struct task_context {
                juggler::net::Ipv4::Address local_ip,
                std::optional<juggler::net::Ethernet::Address> remote_mac,
                std::optional<juggler::net::Ipv4::Address> remote_ip,
+               std::vector<juggler::net::Udp::Port> src_ports,
                uint16_t packet_size, juggler::dpdk::RxRing *rxring,
                juggler::dpdk::TxRing *txring,
                std::vector<std::vector<uint8_t>> payloads)
@@ -99,6 +101,7 @@ struct task_context {
         local_ipv4_addr(local_ip),
         remote_mac_addr(remote_mac),
         remote_ipv4_addr(remote_ip),
+        udp_src_ports(src_ports),
         packet_size(packet_size),
         rx_ring(CHECK_NOTNULL(rxring)),
         tx_ring(CHECK_NOTNULL(txring)),
@@ -110,6 +113,7 @@ struct task_context {
   const juggler::net::Ipv4::Address local_ipv4_addr;
   const std::optional<juggler::net::Ethernet::Address> remote_mac_addr;
   const std::optional<juggler::net::Ipv4::Address> remote_ipv4_addr;
+  const std::vector<juggler::net::Udp::Port> udp_src_ports;
   const uint16_t packet_size;
 
   juggler::dpdk::PacketPool *packet_pool;
@@ -206,6 +210,8 @@ void prepare_packet(void *context, juggler::dpdk::Packet *packet,
   auto *ctx = static_cast<task_context *>(context);
 
   const auto len = ctx->packet_size;
+  const auto &src_ports = ctx->udp_src_ports;
+  static uint64_t cnt;
   CHECK_NOTNULL(packet->append(len));
 
   // Prepare the L2 header.
@@ -230,7 +236,7 @@ void prepare_packet(void *context, juggler::dpdk::Packet *packet,
 
   // Prepare the L4 header.
   auto *udph = reinterpret_cast<juggler::net::Udp *>(ipv4h + 1);
-  udph->src_port.port = juggler::be16_t(kAppUDPPort);
+  udph->src_port.port = src_ports[cnt++ % src_ports.size()].port;
   udph->dst_port.port = juggler::be16_t(kAppUDPPort);
   udph->len = juggler::be16_t(len - sizeof(*eh) - sizeof(*ipv4h));
   udph->cksum = juggler::be16_t(0);
@@ -527,6 +533,11 @@ void bounce(void *context) {
     ipv4h->dst_addr.address = ipv4h->src_addr.address;
     ipv4h->src_addr.address = juggler::be32_t(ctx->local_ipv4_addr.address);
 
+    auto *udph = reinterpret_cast<juggler::net::Udp *>(ipv4h + 1);
+    auto tmp_port = udph->dst_port.port;
+    udph->dst_port.port = udph->src_port.port;
+    udph->src_port.port = tmp_port;
+
     // Add the packet to the TX batch.
     tx_batch.Append(packet);
 
@@ -607,6 +618,17 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  std::vector<juggler::net::Udp::Port> src_ports;
+  for (uint32_t i = 0; i < FLAGS_flows_nr; i++) {
+    src_ports.emplace_back(kAppUDPPort + i);
+  }
+  std::string src_ports_str;
+  for (const auto &port : src_ports) {
+    src_ports_str += std::to_string(port.port.value()) + " ";
+  }
+  LOG(INFO) << "Distributing packets over " << FLAGS_flows_nr
+            << " flows (RR). Source ports: " << src_ports_str;
+
   const uint16_t packet_len =
       std::max(std::min(static_cast<uint16_t>(FLAGS_pkt_size),
                         juggler::dpdk::PmdRing::kDefaultFrameSize),
@@ -632,8 +654,8 @@ int main(int argc, char *argv[]) {
   // We share the packet pool attached to the RX ring. Since we plan to handle a
   // queue pair from a single core this is safe.
   task_context task_ctx(interface.l2_addr(), interface.ip_addr(),
-                        remote_l2_addr, remote_ip, packet_len, rxring, txring,
-                        packet_payloads);
+                        remote_l2_addr, remote_ip, src_ports, packet_len,
+                        rxring, txring, packet_payloads);
 
   auto packet_generator = [](uint64_t now, void *context) {
     tx(context);
