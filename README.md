@@ -99,30 +99,30 @@ cd hello_world; make
 cd machnet
 rm -rf build; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=Release ..; make -j
 
-# See available benchmark options
-./src/apps/msg_gen/msg_gen --help
-
 # On VM #1, run the msg_gen server
 ./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1> --logtostderr
 
 # On VM #2, run the msg_gen client
 ./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1> --remote_ip <eth1 IP address of VM 2> --active_generator --logtostderr
+
+# See available benchmark options for more testing
+./src/apps/msg_gen/msg_gen --help
 ```
 
 The client should print message rate and latency percentile statistics.
 `msg_gen --help` lists all the options available (e.g., message size, number of outstanding messages, etc.).
 
 
-## Application Programming Interface
-Applications use the following steps to interact with the Machnet service:
+## Machnet API
+
+See [machnet.h](src/ext/machnet.h) for the full API documentation.  Applications use the following steps to interact with the Machnet service:
 
 - Initialize the Machnet library using `machnet_init()`.
-- In every thread, create a new channel to Machnet using `machnet_attach()`.
+- In every thread, create a new shared-memory channel to Machnet using `machnet_attach()`.
 - Listen on a port using `machnet_listen()`.
 - Connect to remote processes using `machnet_connect()`.
 - Send and receive messages using `machnet_send()` and `machnet_recv()`.
 
-See [machnet.h](src/ext/machnet.h) for the full API documentation.
 
 ## Developing Machnet
 
