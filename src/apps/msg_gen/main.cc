@@ -23,6 +23,7 @@ using std::chrono::time_point;
 DEFINE_string(local_ip, "", "IP of the local Machnet interface");
 DEFINE_string(remote_ip, "", "IP of the remote server's Machnet interface");
 DEFINE_uint32(remote_port, 888, "Remote port to connect to.");
+DEFINE_uint32(local_port, 888, "Remote port to connect to.");
 DEFINE_uint32(tx_msg_size, 64,
               "Size of the message (request/response) to send.");
 DEFINE_uint32(msg_window, 8, "Maximum number of messages in flight.");
@@ -342,12 +343,12 @@ int main(int argc, char *argv[]) {
               << " <-> " << FLAGS_remote_ip << ":" << flow.dst_port << "]";
   } else {
     int ret =
-        machnet_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_remote_port);
+        machnet_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_local_port);
     CHECK(ret == 0)
         << "Failed to listen on local port. machnet_listen() error: "
         << strerror(ret);
 
-    LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_remote_port
+    LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_local_port
               << "]";
   }
 
