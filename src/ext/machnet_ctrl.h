@@ -8,7 +8,7 @@ extern "C" {
 
 #include <uuid/uuid.h>
 
-#define MACHNET_CONTROLLER_DEFAULT_PATH "/var/run/machnet/machnet_ctrl.sock"
+#define MACHNET_CONTROLLER_DEFAULT_PATH "/tmp/machnet/machnet_ctrl.sock"
 
 /**
  * @struct machnet_app_info

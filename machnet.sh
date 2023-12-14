@@ -6,6 +6,8 @@
 #  - debug: if set, run a debug build from the Machnet Docker container
 #  - bare_metal: if set, will use local binary instead of Docker image
 
+MACHNET_CTRL_DIR="/tmp/machnet"
+
 LOCAL_MAC=""
 LOCAL_IP=""
 BARE_METAL=0
@@ -40,7 +42,7 @@ done
 
 # Pre-flight checks
 if [ -z "$LOCAL_MAC" ] || [ -z "$LOCAL_IP" ]; then
-    echo "Please provide both local MAC and IP address"
+    echo "Usage: machnet.sh --mac <local MAC> --ip <local IP>"
     exit 1
 fi
 
@@ -87,14 +89,14 @@ done
 
 echo "Starting Machnet with local MAC $LOCAL_MAC and IP $LOCAL_IP"
 
-if [ ! -d "/var/run/machnet" ]; then
-    echo "Creating /var/run/machnet"
-    sudo mkdir -p /var/run/machnet
+if [ ! -d ${MACHNET_CTRL_DIR} ]; then
+    echo "Creating Machnet control directory ${MACHNET_CTRL_DIR}"
+    mkdir -p ${MACHNET_CTRL_DIR}
 fi
 
-sudo bash -c "echo '{\"machnet_config\": {\"$LOCAL_MAC\": {\"ip\": \"$LOCAL_IP\"}}}' > /var/run/machnet/local_config.json"
-echo "Created config for local Machnet, in /var/run/machnet/local_config.json. Contents:"
-sudo cat /var/run/machnet/local_config.json
+bash -c "echo '{\"machnet_config\": {\"$LOCAL_MAC\": {\"ip\": \"$LOCAL_IP\"}}}' > ${MACHNET_CTRL_DIR}/local_config.json"
+echo "Created config for local Machnet, in ${MACHNET_CTRL_DIR}/local_config.json. Contents:"
+cat ${MACHNET_CTRL_DIR}/local_config.json
 
 if [ $BARE_METAL -eq 1 ]; then
     echo "Starting Machnet in bare-metal mode"
@@ -106,7 +108,7 @@ if [ $BARE_METAL -eq 1 ]; then
         exit 1
     fi
 
-    sudo ${machnet_bin} --config_json /var/run/machnet/local_config.json --logtostderr=1
+    sudo ${machnet_bin} --config_json ${MACHNET_CTRL_DIR}/local_config.json --logtostderr=1
 else
     if ! command -v docker &> /dev/null
     then
@@ -136,9 +138,9 @@ else
 
     sudo docker run --privileged --net=host \
         -v /dev/hugepages:/dev/hugepages \
-        -v /var/run/machnet:/var/run/machnet \
+        -v ${MACHNET_CTRL_DIR}:${MACHNET_CTRL_DIR} \
         ghcr.io/microsoft/machnet/machnet:latest \
         ${machnet_bin} \
-        --config_json /var/run/machnet/local_config.json \
+        --config_json ${MACHNET_CTRL_DIR}/local_config.json \
         --logtostderr=1
 fi
