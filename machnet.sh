@@ -99,8 +99,7 @@ sudo cat /var/run/machnet/local_config.json
 if [ $BARE_METAL -eq 1 ]; then
     echo "Starting Machnet in bare-metal mode"
     THIS_SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-    BUILD_DIR="$THIS_SCRIPT_DIR/$BUILD_DIR"
-    machnet_bin="${BUILD_DIR}/src/apps/machnet/machnet"
+    machnet_bin="${THIS_SCRIPT_DIR}/build/src/apps/machnet/machnet"
 
     if [ ! -f ${machnet_bin} ]; then
         echo "Machnet binary ${machnet_bin} not found, please build Machnet first"
