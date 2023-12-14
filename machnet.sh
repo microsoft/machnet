@@ -40,7 +40,7 @@ done
 
 # Pre-flight checks
 if [ -z "$LOCAL_MAC" ] || [ -z "$LOCAL_IP" ]; then
-    echo "Please provide both local MAC and IP address"
+    echo "Usage: machnet.sh --mac <local MAC> --ip <local IP>"
     exit 1
 fi
 
@@ -90,6 +90,7 @@ echo "Starting Machnet with local MAC $LOCAL_MAC and IP $LOCAL_IP"
 if [ ! -d "/var/run/machnet" ]; then
     echo "Creating /var/run/machnet"
     sudo mkdir -p /var/run/machnet
+    sudo chmod 755 /var/run/machnet # Set permissions like Ubuntu's default, needed on (e.g.) CentOS
 fi
 
 sudo bash -c "echo '{\"machnet_config\": {\"$LOCAL_MAC\": {\"ip\": \"$LOCAL_IP\"}}}' > /var/run/machnet/local_config.json"

@@ -93,16 +93,16 @@ void MachnetConfigProcessor::AssertJsonValidMachnetConfig() {
 }
 
 void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
-  for (const auto &[key, val] : json_.at(kMachnetConfigJsonKey).items()) {
+  for (const auto &[key, json_val] : json_.at(kMachnetConfigJsonKey).items()) {
     const net::Ethernet::Address l2_addr(key);
     size_t engine_threads = 1;
     cpu_set_t cpu_mask = NetworkInterfaceConfig::kDefaultCpuMask;
 
     net::Ipv4::Address ip_addr;
-    CHECK(ip_addr.FromString(val.at("ip")));
+    CHECK(ip_addr.FromString(json_val.at("ip")));
 
-    if (val.find("engine_threads") != val.end()) {
-      engine_threads = val.at("engine_threads");
+    if (json_val.find("engine_threads") != json_val.end()) {
+      engine_threads = json_val.at("engine_threads");
       LOG(INFO) << "Using " << engine_threads << " engine threads for "
                 << l2_addr.ToString();
     } else {
@@ -110,8 +110,8 @@ void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
                 << " for " << l2_addr.ToString();
     }
 
-    if (val.find("cpu_mask") != val.end()) {
-      std::string cpu_mask_str = val.at("cpu_mask");
+    if (json_val.find("cpu_mask") != json_val.end()) {
+      std::string cpu_mask_str = json_val.at("cpu_mask");
       const size_t cpu_mask_val =
           std::stoull(cpu_mask_str.c_str(), nullptr, 16);
       cpu_mask = utils::calculate_cpu_mask(cpu_mask_val);
@@ -121,22 +121,24 @@ void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
       LOG(INFO) << "Using default CPU mask for " << l2_addr.ToString();
     }
 
-    std::optional<std::string> pci_addr;
-    if (val.find("pcie") != val.end()) {
-      pci_addr = val.at("pcie");
-      LOG(INFO) << "Using config file PCIe address " << pci_addr.value()
-                << " for " << l2_addr.ToString();
+    std::string pci_addr = "";
+    if (json_val.find("pcie") != json_val.end()) {
+      pci_addr = json_val.at("pcie");
+      LOG(INFO) << "Using config file PCIe address " << pci_addr << " for "
+                << l2_addr.ToString();
     } else {
-      pci_addr = GetPCIeAddressSysfs(l2_addr);
-      if (!pci_addr) {
-        LOG(FATAL) << "Failed to get PCIe address from sysfs for L2 address "
-                   << l2_addr.ToString()
-                   << ", and no PCIe address specified in config file.";
+      const std::optional<std::string> ret = GetPCIeAddressSysfs(l2_addr);
+      if (ret.has_value()) {
+        pci_addr = ret.value();
+      } else {
+        LOG(WARNING) << "Failed to get PCIe address from sysfs for L2 address "
+                     << l2_addr.ToString()
+                     << ", and no PCIe address specified in config file.";
       }
     }
 
-    interfaces_config_.emplace(pci_addr.value(), l2_addr, ip_addr,
-                               engine_threads, cpu_mask);
+    interfaces_config_.emplace(pci_addr, l2_addr, ip_addr, engine_threads,
+                               cpu_mask);
   }
   for (const auto &interface : interfaces_config_) {
     interface.Dump();
@@ -149,7 +151,12 @@ utils::CmdLineOpts MachnetConfigProcessor::GetEalOpts() const {
   eal_opts.Append({"-c", "0x1"});
   eal_opts.Append({"-n", "4"});
   for (const auto &interface : interfaces_config_) {
-    eal_opts.Append({"-a", interface.pcie_addr()});
+    if (interface.pcie_addr() != "") {
+      eal_opts.Append({"-a", interface.pcie_addr()});
+    } else {
+      LOG(WARNING) << "Not passing PCIe allowlist for interface "
+                   << interface.l2_addr().ToString();
+    }
   }
 
   return eal_opts;
