@@ -158,6 +158,7 @@ void ReportStats(ThreadCtx *thread_ctx) {
               << "). " << latency_stats_ss.str() << drops_stats_ss.str()
               << std::endl;
 
+    hdr_reset(thread_ctx->latency_hist);
     thread_ctx->stats.last_measure_time = now;
     thread_ctx->stats.prev = thread_ctx->stats.current;
   }
