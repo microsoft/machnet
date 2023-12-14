@@ -24,11 +24,11 @@ Run the `msg_gen` benchmark
 ./msg_gen --local_ip <client DPDK IP> --remote_ip <server DPDK IP> --active_generator --msg_window 32 --msg_size 1024
 ```
 
-| Server | NIC type | Experiment | Round-trip p50 99 99.9 | Request rate | Date |
+| Server | NIC, DPDK PMD | Experiment | Round-trip p50 99 99.9 | Request rate | Date |
 | --- | --- | --- | --- | --- | --- |
-| Azure F8s_v2, Ubuntu 22.04 |  Connect4-Lx  | Latency | 18 us, 19 us, 25 us | 54K | Dec 2023
+| Azure F8s_v2, Ubuntu 22.04 |  CX4-Lx, netvsc | Latency | 18 us, 19 us, 25 us | 54K | Dec 2023
 | |  | Message rate | 41 us, 54 us, 61 us | 753K | Dec 2023
-| EC2 XXX, XXX | ENA | Latency | XXX | XXX | Dec 2023
+| AWS EC2 XXX, XXX | ENA | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
 | GCP XXX, XXX | gVNIC | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
@@ -36,8 +36,8 @@ Run the `msg_gen` benchmark
 | |  | Message rate | XXX | XXX | Dec 2023
 | Bare metal, Mariner | E810 VF | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
-| Bare metal, Ubuntu 20.04 | ConnectX-5 | Latency | XXX | XXX | Dec 2023
+| Bare metal, Ubuntu 20.04 | CX5, mlx5 | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
-| Bare metal, Ubuntu 20.04 | ConnectX-6 DX | Latency | XXX | XXX | Dec 2023
+| Bare metal, Ubuntu 20.04 | CX6-Dx, mlx5 | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
 
