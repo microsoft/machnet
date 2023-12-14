@@ -26,8 +26,8 @@ Run the `msg_gen` benchmark
 
 | Server | NIC type | Experiment | Round-trip p50 99 99.9 | Request rate | Date |
 | --- | --- | --- | --- | --- | --- |
-| Azure F8s_v2, Ubuntu 22.04 |  Connect4-Lx  | Latency | XXX | XXX | Dec 2023
-| |  | Message rate | XXX | XXX | Dec 2023
+| Azure F8s_v2, Ubuntu 22.04 |  Connect4-Lx  | Latency | 18 us, 19 us, 25 us | 54K | Dec 2023
+| |  | Message rate | 41 us, 54 us, 61 us | 753K | Dec 2023
 | EC2 XXX, XXX | ENA | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
 | GCP XXX, XXX | gVNIC | Latency | XXX | XXX | Dec 2023
@@ -40,7 +40,4 @@ Run the `msg_gen` benchmark
 | |  | Message rate | XXX | XXX | Dec 2023
 | Bare metal, Ubuntu 20.04 | ConnectX-6 DX | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
-
-
-
 
