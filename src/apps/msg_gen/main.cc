@@ -12,6 +12,8 @@
 #include <chrono>
 #include <csignal>
 #include <cstdint>
+#include <iomanip>
+#include <iostream>
 #include <numeric>
 #include <sstream>
 #include <thread>
@@ -123,32 +125,39 @@ void ReportStats(ThreadCtx *thread_ctx) {
   auto &prev = thread_ctx->stats.prev;
 
   if (sec_elapsed >= 1) {
-    auto msg_sent = cur.tx_success - prev.tx_success;
-    auto tx_mps = msg_sent / sec_elapsed;
-    auto tx_gbps = ((cur.tx_bytes - prev.tx_bytes) * 8) / (sec_elapsed * 1E9);
+    const double msg_sent = cur.tx_success - prev.tx_success;
+    const double tx_mps = msg_sent / sec_elapsed;
+    const double tx_gbps =
+        ((cur.tx_bytes - prev.tx_bytes) * 8) / (sec_elapsed * 1E9);
 
-    auto msg_received = cur.rx_count - prev.rx_count;
-    auto rx_mps = msg_received / sec_elapsed;
-    auto rx_gbps = ((cur.rx_bytes - prev.rx_bytes) * 8) / (sec_elapsed * 1E9);
+    const double msg_received = cur.rx_count - prev.rx_count;
+    const double rx_mps = msg_received / sec_elapsed;
+    const double rx_gbps =
+        ((cur.rx_bytes - prev.rx_bytes) * 8) / (sec_elapsed * 1E9);
 
-    auto msg_dropped = cur.err_tx_drops - prev.err_tx_drops;
-    auto tx_drop_mps = msg_dropped / sec_elapsed;
+    const size_t msg_dropped = cur.err_tx_drops - prev.err_tx_drops;
 
     std::ostringstream latency_stats_ss;
-    latency_stats_ss << "Latency (us): ";
+    latency_stats_ss << "RTT (p50/99/99.9 us): ";
     if (thread_ctx->num_request_latency_samples > 0) {
       auto perc = hdr_value_at_percentile;
-      latency_stats_ss << "median " << perc(thread_ctx->latency_hist, 50.0)
-                       << ", 99th: " << perc(thread_ctx->latency_hist, 99.0)
-                       << ", 99.9th: " << perc(thread_ctx->latency_hist, 99.9);
+      latency_stats_ss << perc(thread_ctx->latency_hist, 50.0) << "/"
+                       << perc(thread_ctx->latency_hist, 99.0) << "/"
+                       << perc(thread_ctx->latency_hist, 99.9);
     } else {
       latency_stats_ss << "N/A";
     }
 
-    LOG(INFO) << "TX MPS: " << tx_mps << " (" << tx_gbps
-              << " Gbps), RX MPS: " << rx_mps << " (" << rx_gbps
-              << " Gbps), TX_DROP MPS: " << tx_drop_mps << ", "
-              << latency_stats_ss.str();
+    std::ostringstream drops_stats_ss;
+    if (msg_dropped > 0) {
+      drops_stats_ss << ", TX drops: " << msg_dropped;
+    }
+
+    std::cout << "TX/RX (msg/sec, Gbps): (" << std::fixed
+              << std::setprecision(1) << tx_mps << "/" << rx_mps << std::fixed
+              << std::setprecision(3) << ", " << tx_gbps << "/" << rx_gbps
+              << "). " << latency_stats_ss.str() << drops_stats_ss.str()
+              << std::endl;
 
     thread_ctx->stats.last_measure_time = now;
     thread_ctx->stats.prev = thread_ctx->stats.current;
