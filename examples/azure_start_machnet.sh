@@ -13,7 +13,7 @@ machnet_mac_addr=$(
     "http://169.254.169.254/metadata/instance?api-version=2021-02-01" | \
     jq '.network.interface[1].macAddress' | \
     tr -d '"' | \
-    sed 's/\(..\)/\1:/g;s/:$//')
+    sed 's/\(..\)/\1:/g;s/:$//') # Converts AABBCCDDEEFF to AA:BB:CC:DD:EE:FF
 echo "Machnet MAC address: $machnet_mac_addr"
 
 sudo modprobe uio_hv_generic
