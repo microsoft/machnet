@@ -26,8 +26,7 @@ DEFINE_string(local_ip, "", "IP of the local Machnet interface");
 DEFINE_string(remote_ip, "", "IP of the remote server's Machnet interface");
 DEFINE_uint32(remote_port, 888, "Remote port to connect to.");
 DEFINE_uint32(local_port, 888, "Remote port to connect to.");
-DEFINE_uint32(tx_msg_size, 64,
-              "Size of the message (request/response) to send.");
+DEFINE_uint32(msg_size, 64, "Size of the message (request/response) to send.");
 DEFINE_uint32(msg_window, 8, "Maximum number of messages in flight.");
 DEFINE_uint64(msg_nr, UINT64_MAX, "Number of messages to send.");
 DEFINE_bool(active_generator, false,
@@ -200,11 +199,11 @@ void ServerLoop(void *channel_ctx) {
     tx_flow.src_port = rx_flow.dst_port;
     tx_flow.dst_port = rx_flow.src_port;
 
-    const int ret = machnet_send(
-        channel_ctx, tx_flow, thread_ctx.tx_message.data(), FLAGS_tx_msg_size);
+    const int ret = machnet_send(channel_ctx, tx_flow,
+                                 thread_ctx.tx_message.data(), FLAGS_msg_size);
     if (ret == 0) {
       stats_cur.tx_success++;
-      stats_cur.tx_bytes += FLAGS_tx_msg_size;
+      stats_cur.tx_bytes += FLAGS_msg_size;
     } else {
       stats_cur.err_tx_drops++;
     }
@@ -230,12 +229,11 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
       reinterpret_cast<msg_hdr_t *>(thread_ctx->tx_message.data());
   msg_hdr->window_slot = window_slot;
 
-  const int ret =
-      machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
-                   thread_ctx->tx_message.data(), FLAGS_tx_msg_size);
+  const int ret = machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
+                               thread_ctx->tx_message.data(), FLAGS_msg_size);
   if (ret == 0) {
     stats_cur.tx_success++;
-    stats_cur.tx_bytes += FLAGS_tx_msg_size;
+    stats_cur.tx_bytes += FLAGS_msg_size;
   } else {
     LOG(WARNING) << "Client: Failed to send message for window slot "
                  << window_slot;
@@ -328,11 +326,11 @@ int main(int argc, char *argv[]) {
   gflags::SetUsageMessage("Simple Machnet-based message generator.");
   signal(SIGINT, SigIntHandler);
 
-  CHECK_GT(FLAGS_tx_msg_size, sizeof(msg_hdr_t)) << "Message size too small";
+  CHECK_GT(FLAGS_msg_size, sizeof(msg_hdr_t)) << "Message size too small";
   if (!FLAGS_active_generator) {
-    LOG(INFO) << "Starting in server mode, response size " << FLAGS_tx_msg_size;
+    LOG(INFO) << "Starting in server mode, response size " << FLAGS_msg_size;
   } else {
-    LOG(INFO) << "Starting in client mode, request size " << FLAGS_tx_msg_size;
+    LOG(INFO) << "Starting in client mode, request size " << FLAGS_msg_size;
   }
 
   CHECK_EQ(machnet_init(), 0) << "Failed to initialize Machnet library.";
