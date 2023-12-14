@@ -56,6 +56,8 @@ OS, which will cause this NIC to disappear from tools like `ifconfig`. **Before
 this step, note down the IP and MAC address of the NIC, since we will need them
 later.**
 
+The steps below can be automated using a script like [azure_start_machnet.sh](examples/azure_start_machnet.sh).
+
 ```bash
 MACHNET_IP_ADDR=`ifconfig eth1 | grep -w inet | tr -s " " | cut -d' ' -f 3`
 MACHNET_MAC_ADDR=`ifconfig eth1 | grep -w ether | tr -s " " | cut -d' ' -f 3`
