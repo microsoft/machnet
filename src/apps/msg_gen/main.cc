@@ -184,14 +184,14 @@ void ServerLoop(void *channel_ctx) {
     stats_cur.rx_count++;
     stats_cur.rx_bytes += rx_size;
 
-    const app_hdr_t *msg_hdr =
+    const app_hdr_t *req_hdr =
         reinterpret_cast<const app_hdr_t *>(thread_ctx.rx_message.data());
-    VLOG(1) << "Server: Received msg for window slot " << msg_hdr->window_slot;
+    VLOG(1) << "Server: Received msg for window slot " << req_hdr->window_slot;
 
     // Send the response
-    app_hdr_t *tx_msg_hdr =
+    app_hdr_t *resp_hdr =
         reinterpret_cast<app_hdr_t *>(thread_ctx.tx_message.data());
-    tx_msg_hdr->window_slot = msg_hdr->window_slot;
+    resp_hdr->window_slot = req_hdr->window_slot;
 
     MachnetFlow_t tx_flow;
     tx_flow.dst_ip = rx_flow.src_ip;
@@ -225,9 +225,9 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   thread_ctx->msg_latency_info_vec[window_slot].tx_ts =
       high_resolution_clock::now();
 
-  app_hdr_t *msg_hdr =
+  app_hdr_t *req_hdr =
       reinterpret_cast<app_hdr_t *>(thread_ctx->tx_message.data());
-  msg_hdr->window_slot = window_slot;
+  req_hdr->window_slot = window_slot;
 
   const int ret = machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
                                thread_ctx->tx_message.data(), FLAGS_msg_size);
@@ -260,17 +260,17 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
     thread_ctx->stats.current.rx_count++;
     thread_ctx->stats.current.rx_bytes += rx_size;
 
-    const auto *msg_hdr =
+    const auto *resp_hdr =
         reinterpret_cast<app_hdr_t *>(thread_ctx->rx_message.data());
-    if (msg_hdr->window_slot >= FLAGS_msg_window) {
-      LOG(ERROR) << "Received invalid window slot: " << msg_hdr->window_slot;
+    if (resp_hdr->window_slot >= FLAGS_msg_window) {
+      LOG(ERROR) << "Received invalid window slot: " << resp_hdr->window_slot;
       continue;
     }
 
     const size_t latency_us =
-        thread_ctx->RecordRequestEnd(msg_hdr->window_slot);
+        thread_ctx->RecordRequestEnd(resp_hdr->window_slot);
     VLOG(1) << "Client: Received message for window slot "
-            << msg_hdr->window_slot << " in " << latency_us << " us";
+            << resp_hdr->window_slot << " in " << latency_us << " us";
 
     if (FLAGS_verify) {
       for (uint32_t i = sizeof(app_hdr_t); i < rx_size; i++) {
@@ -284,7 +284,7 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
       }
     }
 
-    return msg_hdr->window_slot;
+    return resp_hdr->window_slot;
   }
 
   LOG(FATAL) << "Should not reach here";
