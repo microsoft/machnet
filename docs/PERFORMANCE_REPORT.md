@@ -1,4 +1,4 @@
-# Machnet benchmarks
+# Machnet performance report
 
 ## Single-connection request-response benchmark
 

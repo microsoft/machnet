@@ -6,7 +6,7 @@ where the application is deployed and mediates access to the DPDK NIC.
 Applications interact with Machnet over shared memory with a sockets-like API.
 Machnet processes in the cluster communicate with each other using DPDK.
 
-See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for tested cloud and bare-metal
+See [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md) for tested cloud and bare-metal
 platforms and latency numbers.
 
 Machnet provides the following benefits, in addition to the low latency:
