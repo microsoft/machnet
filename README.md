@@ -1,11 +1,13 @@
 # Machnet
 
 Machnet is an ongoing project to provide an easy way for applications to access
-low-latency userspace networking like DPDK. Machnet runs as a separate process
-on all machines where the application is deployed and manages networking.
-Applications interact with Machnet over shared memory with a familiar
-socket-like API. Machnet processes in the cluster communicate with each other
-using userspace networking.
+low-latency DPDK networking. Machnet runs as a separate process on all machines
+where the application is deployed and mediates access to the DPDK NIC.
+Applications interact with Machnet over shared memory with a sockets-like API.
+Machnet processes in the cluster communicate with each other using DPDK.
+
+See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for tested cloud and bare-metal
+platforms and latency numbers.
 
 Machnet provides the following benefits, in addition to the low latency:
 
