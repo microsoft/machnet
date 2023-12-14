@@ -125,12 +125,12 @@ void ReportStats(ThreadCtx *thread_ctx) {
 
   if (sec_elapsed >= 1) {
     const double msg_sent = cur.tx_success - prev.tx_success;
-    const double tx_mps = msg_sent / sec_elapsed;
+    const double tx_kmps = msg_sent / (1000 * sec_elapsed);
     const double tx_gbps =
         ((cur.tx_bytes - prev.tx_bytes) * 8) / (sec_elapsed * 1E9);
 
     const double msg_received = cur.rx_count - prev.rx_count;
-    const double rx_mps = msg_received / sec_elapsed;
+    const double rx_kmps = msg_received / (1000 * sec_elapsed);
     const double rx_gbps =
         ((cur.rx_bytes - prev.rx_bytes) * 8) / (sec_elapsed * 1E9);
 
@@ -153,10 +153,10 @@ void ReportStats(ThreadCtx *thread_ctx) {
     }
 
     std::cout << "TX/RX (msg/sec, Gbps): (" << std::fixed
-              << std::setprecision(1) << tx_mps << "/" << rx_mps << std::fixed
-              << std::setprecision(3) << ", " << tx_gbps << "/" << rx_gbps
-              << "). " << latency_stats_ss.str() << drops_stats_ss.str()
-              << std::endl;
+              << std::setprecision(1) << tx_kmps << "K/" << rx_kmps << "K"
+              << std::fixed << std::setprecision(3) << ", " << tx_gbps << "/"
+              << rx_gbps << "). " << latency_stats_ss.str()
+              << drops_stats_ss.str() << std::endl;
 
     hdr_reset(thread_ctx->latency_hist);
     thread_ctx->stats.last_measure_time = now;
@@ -326,6 +326,7 @@ int main(int argc, char *argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   gflags::SetUsageMessage("Simple Machnet-based message generator.");
   signal(SIGINT, SigIntHandler);
+  FLAGS_logtostderr = 1;
 
   CHECK_GT(FLAGS_msg_size, sizeof(app_hdr_t)) << "Message size too small";
   if (!FLAGS_active_generator) {

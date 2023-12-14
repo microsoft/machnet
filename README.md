@@ -102,10 +102,10 @@ cd machnet
 rm -rf build; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=Release ..; make -j
 
 # On VM #1, run the msg_gen server
-./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1> --logtostderr
+./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1>
 
 # On VM #2, run the msg_gen client
-./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1> --remote_ip <eth1 IP address of VM 2> --active_generator --logtostderr
+./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1> --remote_ip <eth1 IP address of VM 2> --active_generator
 
 # See available benchmark options for more testing
 ./src/apps/msg_gen/msg_gen --help
