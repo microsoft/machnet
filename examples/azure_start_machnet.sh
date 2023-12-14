@@ -1,5 +1,12 @@
 #!/bin/bash
 # Hacky script to start-up Machnet on an Azure VM on interface #1
+# Usage: ./azure_start_machnet.sh [--bare_metal]
+
+BARE_METAL_ARG=""
+if [ "$1" == "--bare_metal" ]; then
+    echo "Running in bare metal mode, will not use docker"
+    BARE_METAL_ARG="--bare_metal"
+fi
 
 machnet_ip_addr=$(
     curl -s -H Metadata:true --noproxy "*" \
@@ -24,4 +31,4 @@ if [ -d /sys/class/net/eth1 ]; then
     sudo driverctl -b vmbus set-override $DEV_UUID uio_hv_generic
 fi
 
-cd ..; ./machnet.sh --bare_metal --mac $machnet_mac_addr --ip $machnet_ip_addr
+cd ..; ./machnet.sh ${BARE_METAL_ARG} --mac $machnet_mac_addr --ip $machnet_ip_addr
