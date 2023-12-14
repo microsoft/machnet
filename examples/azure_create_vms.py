@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Create Azure VMs for testing Machnet
-# Usage: ./azure_vm.py --resource_group machnet_test --location westus2 --nickname tutorial --num_vms 2
+# Usage: ./create_azure_vms.py --resource_group machnet_test --location westus2 --nickname tutorial --num_vms 2
 #
 # Requirements:
 #  - pip3 install -r requirements.txt

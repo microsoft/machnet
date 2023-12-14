@@ -3,8 +3,8 @@
 # Usage: machnet.sh --mac <local MAC> --ip <local IP>
 #  - mac: MAC address of the local DPDK interface
 #  - ip: IP address of the local DPDK interface
+#  - debug: if set, run a debug build from the Machnet Docker container
 #  - bare_metal: if set, will use local binary instead of Docker image
-#  - debug: if set, will spawn a DEBUG stack instance instead of a prod one
 
 LOCAL_MAC=""
 LOCAL_IP=""
@@ -99,16 +99,11 @@ sudo cat /var/run/machnet/local_config.json
 if [ $BARE_METAL -eq 1 ]; then
     echo "Starting Machnet in bare-metal mode"
     THIS_SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-    BUILD_DIR=="$THIS_SCRIPT_DIR/"
-    if [ $DEBUG -eq 1 ]; then
-        BUILD_DIR="$THIS_SCRIPT_DIR/build/debug_build"
-    else
-        BUILD_DIR="$THIS_SCRIPT_DIR/build/release_build"
-    fi
+    BUILD_DIR="$THIS_SCRIPT_DIR/$BUILD_DIR"
     machnet_bin="${BUILD_DIR}/src/apps/machnet/machnet"
 
     if [ ! -f ${machnet_bin} ]; then
-        echo "${machnet_bin} not found, please build Machnet first"
+        echo "Machnet binary ${machnet_bin} not found, please build Machnet first"
         exit 1
     fi
 
@@ -133,22 +128,18 @@ else
     fi
 
     if [ $DEBUG -eq 1 ]; then
-        echo "Starting Machnet in DEBUG mode"
-        sudo docker run --privileged --net=host \
-            -v /dev/hugepages:/dev/hugepages \
-            -v /var/run/machnet:/var/run/machnet \
-            ghcr.io/microsoft/machnet/machnet:latest \
-            /root/machnet/debug_build/src/apps/machnet/machnet \
-            --config_json /var/run/machnet/local_config.json \
-            --logtostderr=1
+        echo "Using debug build from Docker image"
+        machnet_bin="/root/machnet/debug_build/src/apps/machnet/machnet"
     else
-        echo "Starting Machnet in RELEASE mode"
-        sudo docker run --privileged --net=host \
-            -v /dev/hugepages:/dev/hugepages \
-            -v /var/run/machnet:/var/run/machnet \
-            ghcr.io/microsoft/machnet/machnet:latest \
-            /root/machnet/release_build/src/apps/machnet/machnet \
-            --config_json /var/run/machnet/local_config.json \
-            --logtostderr=1
+        echo "Using release build from Docker image"
+        machnet_bin="/root/machnet/release_build/src/apps/machnet/machnet"
     fi
+
+    sudo docker run --privileged --net=host \
+        -v /dev/hugepages:/dev/hugepages \
+        -v /var/run/machnet:/var/run/machnet \
+        ghcr.io/microsoft/machnet/machnet:latest \
+        ${machnet_bin} \
+        --config_json /var/run/machnet/local_config.json \
+        --logtostderr=1
 fi
