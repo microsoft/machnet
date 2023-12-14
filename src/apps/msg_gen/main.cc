@@ -36,7 +36,7 @@ DEFINE_bool(verify, false, "Verify payload of received messages.");
 
 static volatile int g_keep_running = 1;
 
-struct msg_hdr_t {
+struct app_hdr_t {
   uint64_t window_slot;
 };
 
@@ -184,13 +184,13 @@ void ServerLoop(void *channel_ctx) {
     stats_cur.rx_count++;
     stats_cur.rx_bytes += rx_size;
 
-    const msg_hdr_t *msg_hdr =
-        reinterpret_cast<const msg_hdr_t *>(thread_ctx.rx_message.data());
+    const app_hdr_t *msg_hdr =
+        reinterpret_cast<const app_hdr_t *>(thread_ctx.rx_message.data());
     VLOG(1) << "Server: Received msg for window slot " << msg_hdr->window_slot;
 
     // Send the response
-    msg_hdr_t *tx_msg_hdr =
-        reinterpret_cast<msg_hdr_t *>(thread_ctx.tx_message.data());
+    app_hdr_t *tx_msg_hdr =
+        reinterpret_cast<app_hdr_t *>(thread_ctx.tx_message.data());
     tx_msg_hdr->window_slot = msg_hdr->window_slot;
 
     MachnetFlow_t tx_flow;
@@ -225,8 +225,8 @@ void ClientSendOne(ThreadCtx *thread_ctx, uint64_t window_slot) {
   thread_ctx->msg_latency_info_vec[window_slot].tx_ts =
       high_resolution_clock::now();
 
-  msg_hdr_t *msg_hdr =
-      reinterpret_cast<msg_hdr_t *>(thread_ctx->tx_message.data());
+  app_hdr_t *msg_hdr =
+      reinterpret_cast<app_hdr_t *>(thread_ctx->tx_message.data());
   msg_hdr->window_slot = window_slot;
 
   const int ret = machnet_send(thread_ctx->channel_ctx, *thread_ctx->flow,
@@ -261,7 +261,7 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
     thread_ctx->stats.current.rx_bytes += rx_size;
 
     const auto *msg_hdr =
-        reinterpret_cast<msg_hdr_t *>(thread_ctx->rx_message.data());
+        reinterpret_cast<app_hdr_t *>(thread_ctx->rx_message.data());
     if (msg_hdr->window_slot >= FLAGS_msg_window) {
       LOG(ERROR) << "Received invalid window slot: " << msg_hdr->window_slot;
       continue;
@@ -273,7 +273,7 @@ uint64_t ClientRecvOneBlocking(ThreadCtx *thread_ctx) {
             << msg_hdr->window_slot << " in " << latency_us << " us";
 
     if (FLAGS_verify) {
-      for (uint32_t i = sizeof(msg_hdr_t); i < rx_size; i++) {
+      for (uint32_t i = sizeof(app_hdr_t); i < rx_size; i++) {
         if (thread_ctx->rx_message[i] != thread_ctx->message_gold[i]) {
           LOG(ERROR) << "Message data mismatch at index " << i << std::hex
                      << " " << static_cast<uint32_t>(thread_ctx->rx_message[i])
@@ -326,7 +326,7 @@ int main(int argc, char *argv[]) {
   gflags::SetUsageMessage("Simple Machnet-based message generator.");
   signal(SIGINT, SigIntHandler);
 
-  CHECK_GT(FLAGS_msg_size, sizeof(msg_hdr_t)) << "Message size too small";
+  CHECK_GT(FLAGS_msg_size, sizeof(app_hdr_t)) << "Message size too small";
   if (!FLAGS_active_generator) {
     LOG(INFO) << "Starting in server mode, response size " << FLAGS_msg_size;
   } else {
