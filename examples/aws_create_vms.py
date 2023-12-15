@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Create AWS EC2 Instances for testing with Machnet
-# Usage: ./create_aws_ec2.py --aws_region us-east-1 --nickname tutorial --num_instances 1
+# Usage: ./create_aws_ec2.py --aws_region us-east-1 --nickname tutorial --num_instances 1 --key_name <AWS SSH key_name>
 #
 # Requirements:
 #  - pip3 install boto3 termcolor
@@ -8,7 +8,6 @@
 
 import argparse
 import boto3
-import pydantic
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
 try:
@@ -72,8 +71,9 @@ def create_key_pair(ec2_client, key_name: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--aws_region", type=str, required=True, help="AWS region to create instances in")
+    parser.add_argument("--aws_region", type=str, required=True, help="AWS region to create instances in", choices=["us-east-1", "eu-central-1"])
     parser.add_argument("--nickname", type=str, required=True, help="Nickname to use as a prefix for resources")
+    parser.add_argument("--key_name", type=str, required=True, help="Name of an existing AWS SSH key pair")
     parser.add_argument("--num_instances", type=int, default=1, help="Number of EC2 instances to provision")
     args = parser.parse_args()
 
@@ -81,36 +81,107 @@ def main():
         cprint("Error: nickname must be alphanumeric", "red")
         exit()
 
-    ec2: ServiceResource = boto3.resource('ec2', region_name=args.aws_region)
     c_vpc_name = f"{args.nickname}-{args.aws_region}-vpc"
     c_subnet_name = f"{args.nickname}-{args.aws_region}-subnet"
+    c_sg_name = f"{args.nickname}-{args.aws_region}-sg"
+    c_base_instance_name = f"{args.nickname}-{args.aws_region}-instance"
 
+    ec2: ServiceResource = boto3.resource('ec2', region_name=args.aws_region)
     vpc = create_vpc_helper(ec2, c_vpc_name)
-
     subnet = create_subnet(ec2, vpc, c_subnet_name)
 
-    exit(0)
+    print([
+        sg.group_name 
+        for sg 
+        in vpc.security_groups.filter(Filters=[{"Name": "group-name", "Values": [c_sg_name]}])
+    ])
+    exit()
 
-    # Create Key Pair
-    key_name = f"{args.nickname}_keypair"
-    create_key_pair(ec2_client, key_name)
-    cprint(f"Created and saved Key Pair: {key_name}.pem", "green")
+    # Filter by name
+    sg_filters = [
+        {'Name': 'group-name', 'Values': [c_sg_name]},
+    ]
 
-    # Create EC2 instances
-    try:
-        instances = ec2_resource.create_instances(
-            ImageId='ami-0abcdef1234567890',  # Replace with a valid AMI ID
-            MinCount=1,
-            MaxCount=args.num_instances,
-            InstanceType='t2.micro',  # Replace with desired instance type
-            KeyName=key_name,
-            SubnetId=subnet.id
-        )
+    # Describe security groups with filter
+    response = ec2.describe_security_groups(Filters=sg_filters)
+    print(response)
+    exit()
 
-        for instance in instances:
-            cprint(f"Instance {instance.id} created", "green")
-    except ClientError as e:
-        cprint(f"Error creating instances: {e}", "red")
+    security_group_exists = False
+    for sg_i in ec2.describe_security_groups()['SecurityGroups']:
+        if sg_i['GroupName'] == c_sg_name:
+            cprint(f"Security group {c_sg_name} already exists. Using existing security group.", "yellow")
+            security_group = sg_i
+            security_group_exists = True
+
+    if not security_group_exists:
+        security_group = ec2.create_security_group(GroupName=c_sg_name, Description='Machnet security group', VpcId=vpc.id)
+        cprint(f"Created security group: {security_group.id} with name {c_sg_name}", "green")
+
+    exit()
+
+    # Add more from https://cloud-images.ubuntu.com/locator/ec2/
+    if args.aws_region == 'us-east-1':
+        ami_id = 'ami-0c7217cdde317cfec'
+    elif args.aws_region == 'eu-central-1':
+        ami_id = 'ami-0fc02b454efabb390'
+
+    for i in range(args.num_instances):
+        instance_name_i = f"{c_base_instance_name}-{i}"
+
+        # Check if instance already exists
+        instance_already_exists = False
+        for instance in ec2.instances.all():
+            if instance.tags:
+                for tag in instance.tags:
+                    if tag['Key'] == 'Name' and tag['Value'] == instance_name_i:
+                        cprint(f"Instance {instance.id} with name {instance_name_i} already exists. Using existing instance.", "yellow")
+                        instance_already_exists = True
+
+        if instance_already_exists:
+            continue
+
+        print(f'No instance with name {instance_name_i} found. Creating new instance.')
+
+        try:
+            # Create with two network interfaces
+            instance = ec2.create_instances(
+                ImageId=ami_id,
+                MinCount=1,
+                MaxCount=1,
+                InstanceType='t2.micro',
+                KeyName=args.key_name,
+                SubnetId=subnet.id,
+                NetworkInterfaces=[
+                    {
+                        'DeviceIndex': 0,
+                        'AssociatePublicIpAddress': True,
+                        'SubnetId': subnet.id,
+                        'Groups': [security_group.id for security_group in ec2.security_groups.all()],
+                    },
+                    {
+                        'DeviceIndex': 1,
+                        'AssociatePublicIpAddress': False,
+                        'SubnetId': subnet.id,
+                        'Groups': [security_group.id for security_group in ec2.security_groups.all()],
+                    },
+                ],
+                TagSpecifications=[
+                    {
+                        'ResourceType': 'instance',
+                        'Tags': [
+                            {
+                                'Key': 'Name',
+                                'Value': instance_name_i
+                            },
+                        ]
+                    },
+                ]
+            )
+            cprint(f"Instance {instance[0].id} created", "green")
+        except ClientError as e:
+            cprint(f"Error creating instances: {e}", "red")
+
 
 if __name__ == "__main__":
     main()
