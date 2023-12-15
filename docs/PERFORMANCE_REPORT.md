@@ -36,8 +36,8 @@ Run the `msg_gen` benchmark
 | |  | Message rate | 30 us, 33 us, 37 us | 1043K | Dec 2023
 | Bare metal, Mariner | E810 VF, iavf | Latency | 18 us, 22 us, 22 us | 55K | Dec 2023
 | |  | Message rate | 31 us, 35 us, 41 us | 1003K | Dec 2023
-| Bare metal, Ubuntu 22.04 | NVIDIA Bluefield-2, mlx5 | Latency | 9us, 12us, 13us | 99K | Dec 2023
-| |  | Message rate | 24us , 26us, 28us | 1.32M | Dec 2023
+| Bare metal, Ubuntu 22.04 | Bluefield-2, mlx5 | Latency | 9 us, 12 us, 13 us | 99K | Dec 2023
+| |  | Message rate | 24 us, 26 us, 28 us | 1320K | Dec 2023
 | Bare metal, Ubuntu 20.04 | CX5, mlx5 | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
 | Bare metal, Ubuntu 20.04 | CX6-Dx, mlx5 | Latency | XXX | XXX | Dec 2023
