@@ -278,13 +278,17 @@ bool MachnetController::CreateChannel(
     return false;
   }
 
-  // Register channel buffer memory with NIC DPDK driver.
-  auto device = engine->GetPmdPort()->GetDevice();
-  CHECK(channel_manager_.GetChannel(channel_uuid_str.c_str())
-            ->RegisterMemForDMA(device));
-  *fd = channel_manager_.GetChannel(channel_uuid_str.c_str())->GetFd();
+  if (kShmZeroCopyEnabled) {
+    LOG(INFO) << "Registering channel buffer memory with NIC DPDK driver.";
+    // Register channel buffer memory with NIC DPDK driver.
+    auto device = engine->GetPmdPort()->GetDevice();
+    CHECK(channel_manager_.GetChannel(channel_uuid_str.c_str())
+              ->RegisterMemForDMA(device));
+  } else {
+    LOG(INFO) << "Not registering channel buffer memory with NIC DPDK driver.";
+  }
 
-  // Initialize the necessary channels.
+  *fd = channel_manager_.GetChannel(channel_uuid_str.c_str())->GetFd();
   return status;
 }
 

@@ -846,8 +846,13 @@ class Flow {
         if (!msg.has_value()) break;
         auto* msg_buf = msg.value();
         auto* packet = batch.pkts()[i];
-        PrepareDataPacket<CopyMode::kZeroCopy>(msg_buf, packet,
-                                               pcb_.get_snd_nxt());
+        if (kShmZeroCopyEnabled) {
+          PrepareDataPacket<CopyMode::kZeroCopy>(msg_buf, packet,
+                                                pcb_.get_snd_nxt());
+        } else {
+          PrepareDataPacket<CopyMode::kMemCopy>(msg_buf, packet,
+                                                pcb_.get_snd_nxt());
+        }
       }
 
       // TX.
