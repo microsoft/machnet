@@ -18,10 +18,10 @@ Run the `msg_gen` benchmark
 ./msg_gen --local_ip <server_DPDK_IP> --msg_size 1024
 
 # Client: Experiment #1: latency
-./msg_gen --local_ip <client DPDK IP> --remote_ip <server DPDK IP> --active_generator --msg_window 1 --msg_size 1024
+./msg_gen --local_ip <client DPDK IP> --remote_ip <server DPDK IP> --msg_window 1 --msg_size 1024
 
 # Client: Experiment #2: message rate
-./msg_gen --local_ip <client DPDK IP> --remote_ip <server DPDK IP> --active_generator --msg_window 32 --msg_size 1024
+./msg_gen --local_ip <client DPDK IP> --remote_ip <server DPDK IP> --msg_window 32 --msg_size 1024
 ```
 
 | Server | NIC, DPDK PMD | Experiment | Round-trip p50 99 99.9 | Request rate | Date |
@@ -34,8 +34,8 @@ Run the `msg_gen` benchmark
 | |  | Message rate | XXX | XXX | Dec 2023
 | Bare metal, Mariner | E810 PF | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
-| Bare metal, Mariner | E810 VF | Latency | XXX | XXX | Dec 2023
-| |  | Message rate | XXX | XXX | Dec 2023
+| Bare metal, Mariner | E810, iavf | Latency | 18 us, 22 us, 22 us | 55K | Dec 2023
+| |  | Message rate | 31 us, 35 us, 41 us | 1003K | Dec 2023
 | Bare metal, Ubuntu 20.04 | CX5, mlx5 | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
 | Bare metal, Ubuntu 20.04 | CX6-Dx, mlx5 | Latency | XXX | XXX | Dec 2023

@@ -29,9 +29,6 @@ DEFINE_uint32(local_port, 888, "Remote port to connect to.");
 DEFINE_uint32(msg_size, 64, "Size of the message (request/response) to send.");
 DEFINE_uint32(msg_window, 8, "Maximum number of messages in flight.");
 DEFINE_uint64(msg_nr, UINT64_MAX, "Number of messages to send.");
-DEFINE_bool(active_generator, false,
-            "When 'true' this host is generating the traffic, otherwise it is "
-            "bouncing.");
 DEFINE_bool(verify, false, "Verify payload of received messages.");
 
 static volatile int g_keep_running = 1;
@@ -329,7 +326,7 @@ int main(int argc, char *argv[]) {
   FLAGS_logtostderr = 1;
 
   CHECK_GT(FLAGS_msg_size, sizeof(app_hdr_t)) << "Message size too small";
-  if (!FLAGS_active_generator) {
+  if (FLAGS_remote_ip == "") {
     LOG(INFO) << "Starting in server mode, response size " << FLAGS_msg_size;
   } else {
     LOG(INFO) << "Starting in client mode, request size " << FLAGS_msg_size;
@@ -340,7 +337,9 @@ int main(int argc, char *argv[]) {
   CHECK_NOTNULL(channel_ctx);
 
   MachnetFlow_t flow;
-  if (FLAGS_active_generator) {
+  std::thread datapath_thread;
+  if (FLAGS_remote_ip != "") {
+    // Client-mode
     int ret =
         machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
                         FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
@@ -350,6 +349,8 @@ int main(int argc, char *argv[]) {
 
     LOG(INFO) << "[CONNECTED] [" << FLAGS_local_ip << ":" << flow.src_port
               << " <-> " << FLAGS_remote_ip << ":" << flow.dst_port << "]";
+
+    datapath_thread = std::thread(ClientLoop, channel_ctx, &flow);
   } else {
     int ret =
         machnet_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_local_port);
@@ -359,12 +360,7 @@ int main(int argc, char *argv[]) {
 
     LOG(INFO) << "[LISTENING] [" << FLAGS_local_ip << ":" << FLAGS_local_port
               << "]";
-  }
 
-  std::thread datapath_thread;
-  if (FLAGS_active_generator) {
-    datapath_thread = std::thread(ClientLoop, channel_ctx, &flow);
-  } else {
     datapath_thread = std::thread(ServerLoop, channel_ctx);
   }
 
