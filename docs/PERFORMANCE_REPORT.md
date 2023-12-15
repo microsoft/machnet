@@ -28,11 +28,11 @@ ${MSG_GEN} --local_ip <client DPDK IP> --remote_ip <server DPDK IP> --msg_window
 
 | Server | NIC, DPDK PMD | Round-trip p50 99 99.9 | RPCs/s | Notes |
 | --- | --- | --- | --- | --- |
-| Azure F8s_v2 |  CX4-Lx, netvsc | E1: 18 us, 19 us, 25 us | 54K |  Disabled proximity groups
+| Azure F8s_v2 |  CX4-Lx, netvsc | E1: 18 us, 19 us, 25 us | 54K |  No proximity groups
 | *Ubuntu 22.03* |  | E2: 41 us, 54 us, 61 us | 753K | 
 | | | | | |
-| AWS c5.xlarge | ENA, ena | E1: 42 us, 66 us, 105 us | 22K | Enabled proximity groups
-| *Amazon Linux* |  | E2: 61 us, 132 us, 209 us | 122K | `--msg_window 8` instead of 32
+| AWS c5.xlarge | ENA, ena | E1: 42 us, 66 us, 105 us | 22K | Proximity groups
+| *Amazon Linux* |  | E2: 61 us, 132 us, 209 us | 122K | `--msg_window 8`
 | | | | | |
 | GCP XXX, XXX | gVNIC | E1: XXX | XXX | | 
 | *XXX*|  | E2: XXX | XXX | | 
