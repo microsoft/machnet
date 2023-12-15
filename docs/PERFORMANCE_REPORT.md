@@ -19,29 +19,36 @@ MSG_GEN="docker run -v /var/run/machnet:/var/run/machnet ghcr.io/microsoft/machn
 # Server
 ${MSG_GEN} --local_ip <server_DPDK_IP> --msg_size 1024
 
-# Client: Experiment #1: latency
+# Client: Experiment E1: latency
 ${MSG_GEN} --local_ip <client DPDK IP> --remote_ip <server DPDK IP> --msg_window 1 --tx_msg_size 1024
 
-# Client: Experiment #2: message rate
+# Client: Experiment E2: message rate
 ${MSG_GEN} --local_ip <client DPDK IP> --remote_ip <server DPDK IP> --msg_window 32 --tx_msg_size 1024
 ```
 
-| Server | NIC, DPDK PMD | Experiment | Round-trip p50 99 99.9 | Request rate | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Azure F8s_v2, Ubuntu 22.04 |  CX4-Lx, netvsc | Latency | 18 us, 19 us, 25 us | 54K |  Disabled proximity groups
-| |  | Message rate | 41 us, 54 us, 61 us | 753K | 
-| AWS c5.xlarge, Amazon Linux | Amazon ENA, ena | Latency | 42 us, 66 us, 105 us | 22K | Enabled proximity groups
-| |  | Message rate | 61 us, 132 us, 209 us | 122K | `--msg_window 8` instead of 32
-| GCP XXX, XXX | gVNIC | Latency | XXX | XXX | 
-| |  | Message rate | XXX | XXX | 
-| Bare metal, Mariner | E810 PF, ice | Latency | 18 us, 21 us, 22 us | 55K | 
-| |  | Message rate | 30 us, 33 us, 37 us | 1043K | 
-| Bare metal, Mariner | E810 VF, iavf | Latency | 18 us, 22 us, 22 us | 55K | 
-| |  | Message rate | 31 us, 35 us, 41 us | 1003K | 
-| Bare metal, Ubuntu 22.04 | Bluefield-2, mlx5 | Latency | 9 us, 12 us, 13 us | 99K | 
-| |  | Message rate | 24 us, 26 us, 28 us | 1320K | 
-| Bare metal, Ubuntu 20.04 | CX5, mlx5 | Latency | XXX | XXX | 
-| |  | Message rate | XXX | XXX | 
-| Bare metal, Ubuntu 20.04 | CX6-Dx, mlx5 | Latency | XXX | XXX | 
-| |  | Message rate | XXX | XXX | 
+| Server | NIC, DPDK PMD | Round-trip p50 99 99.9 | RPCs/s | Notes |
+| --- | --- | --- | --- | --- |
+| Azure F8s_v2 |  CX4-Lx, netvsc | E1: 18 us, 19 us, 25 us | 54K |  Disabled proximity groups
+| *Ubuntu 22.03* |  | E2: 41 us, 54 us, 61 us | 753K | 
+| | | | | |
+| AWS c5.xlarge | ENA, ena | E1: 42 us, 66 us, 105 us | 22K | Enabled proximity groups
+| *Amazon Linux* |  | E2: 61 us, 132 us, 209 us | 122K | `--msg_window 8` instead of 32
+| | | | | |
+| GCP XXX, XXX | gVNIC | E1: XXX | XXX | | 
+| *XXX*|  | E2: XXX | XXX | | 
+| | | | | |
+| Bare metal | E810 PF, ice | E1: 18 us, 21 us, 22 us | 55K | 
+| *Mariner 2.0* |  | E2: 30 us, 33 us, 37 us | 1043K | 
+| | | | | |
+| Bare metal | E810 VF, iavf | E1: 18 us, 22 us, 22 us | 55K | 
+| *Mariner 2.0* |  | E2: 31 us, 35 us, 41 us | 1003K | 
+| | | | | |
+| Bare metal | Bluefield-2, mlx5 | E1: 9 us, 12 us, 13 us | 99K | 
+| *Ubuntu 22.04* |  | E2: 24 us, 26 us, 28 us | 1320K | 
+| | | | | |
+| Bare metal j| CX5, mlx5 | E1: XXX | XXX | 
+| *Ubuntu 20.04* |  | E2: XXX | XXX | 
+| | | | | |
+| Bare metal | CX6-Dx, mlx5 | E1: XXX | XXX | 
+| *Ubuntu 20.04* |  | E2: XXX | XXX | 
 
