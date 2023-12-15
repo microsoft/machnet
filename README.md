@@ -1,39 +1,41 @@
-# Machnet
+# Machnet: Easy kernel-bypass networking on cloud VMs
 
-Machnet is an ongoing project to provide an easy way for applications to access
-low-latency DPDK networking. Machnet runs as a separate process on all machines
-where the application is deployed and mediates access to the DPDK NIC.
-Applications interact with Machnet over shared memory with a sockets-like API.
-Machnet processes in the cluster communicate with each other using DPDK.
+Machnet provides an easy way for applications to access low-latency reliable
+messaging based on DPDK. It supports a variety of cloud and bare-metal
+platforms, evaluated in
+[docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md).
 
-See [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md) for tested cloud and bare-metal
-platforms and latency numbers.
+**Architecture**: Machnet runs as a separate process on all machines where the
+application is deployed and mediates access to the DPDK NIC.  Applications
+interact with Machnet over shared memory with a sockets-like API.  Machnet
+processes in the cluster communicate with each other using DPDK.
 
-Machnet provides the following benefits, in addition to the low latency:
+Machnet provides the following unique benefits, in addition to the low latency:
 
-- Designed specifically for cloud VM environments like Azure.
+- Designed specifically for public cloud VM environments.
 - Multiple applications can simultaneously use the same network interface.
 - No need for DPDK expertise, or compiling the application with DPDK.
 
-# Steps to use Machnet on Azure
+# Steps to use Machnet
 
-## 1. Set up two VMs, each with two accelerated NICs
+## 1. Set up two VMs with two NICs each
 
 Machnet requires a dedicated NIC on each VM that it runs on. This NIC may be
 used by multiple applications that use Machnet.
 
-We recommend the following steps:
+On Azure, we recommend the following steps:
 
-  1. Create two VMs on Azure, each with accelerated networking enabled. The VMs will start up with one NIC each, named `eth0`. This NIC is *never* used by Machnet.
+  1. Create two VMs with accelerated networking enabled. The VMs will start up with one NIC each, named `eth0`. This NIC is *never* used by Machnet.
   2. Shut-down the VMs.
-  3. Create two new accelerated NICs from the portal, with no public IPs, and add one to each VM. Then restart the VMs. Each VM should now have another NIC named `eth1`, which will be used by Machnet.
+  3. Create two new accelerated NICs from the portal, with no public IPs, and add one to each VM.
+  4. After restarting, each VM should have another NIC named `eth1`, which will be used by Machnet.
 
+The `examples` directory contains detailed scripts/instructions to launch VMs for Machnet.
 
-## 2. Get the Machnet Docker image
+## 2. Get the Docker image with a pre-built Machnet
 
-The Machnet binary is provided in the form of a Docker image on Github container
-registry. Pulling public images from Github container registry requires a few
-mandatory steps.
+Pulling public images from Github container registry requires a few mandatory
+steps.
 
  1. Generate a Github personal access token for yourself (https://github.com/settings/tokens) with the read:packages scope. and store it in the `GITHUB_PAT` environment variable.
  2. At `https://github.com/settings/tokens`, follow the steps to "Configure SSO" for this token.
@@ -41,7 +43,7 @@ mandatory steps.
 ```bash
 # Install packages required to try out Machnet
 sudo apt-get update
-sudo apt-get install -y docker.io make cmake gcc pkg-config g++ uuid-dev libgflags-dev net-tools driverctl jq
+sudo apt-get install -y docker.io net-tools driverctl
 
 # Reboot like below to allow non-root users to run Docker
 sudo usermod -aG docker $USER && sudo reboot
@@ -51,20 +53,24 @@ echo ${GITHUB_PAT} | docker login ghcr.io -u <github_username> --password-stdin
 docker pull ghcr.io/microsoft/machnet/machnet:latest
 ```
 
-## 3. Start the Machnet service on both VMs
+## 3. Start the Machnet process on both VMs
 
-Using DPDK on Azure requires unbinding the second NIC (`eth1` here ) from the
-OS, which will cause this NIC to disappear from tools like `ifconfig`. **Before
+Using DPDK often requires unbinding the dedicated NIC from the OS. This will
+cause the NIC to disappear from tools like `ifconfig`. **Before this step, note
 this step, note down the IP and MAC address of the NIC, since we will need them
 later.**
 
-The steps below can be automated using a script like [azure_start_machnet.sh](examples/azure_start_machnet.sh).
+Below, we assume that the dedicated NIC is named `eth1`.  These steps can be
+automated using a script like
+[azure_start_machnet.sh](examples/azure_start_machnet.sh) that uses the
+cloud's metadata service to get the NIC's IP and MAC address.
+
 
 ```bash
 MACHNET_IP_ADDR=`ifconfig eth1 | grep -w inet | tr -s " " | cut -d' ' -f 3`
 MACHNET_MAC_ADDR=`ifconfig eth1 | grep -w ether | tr -s " " | cut -d' ' -f 3`
 
-# Unbind eth1 from the OS
+# Azure uses driverctl to unbind the NIC instaed of dpdk-devbind.py
 sudo modprobe uio_hv_generic
 DEV_UUID=$(basename $(readlink /sys/class/net/eth1/device))
 sudo driverctl -b vmbus set-override $DEV_UUID uio_hv_generic
@@ -98,23 +104,27 @@ cd hello_world; make
 
 ## 5. Run the end-to-end benchmark
 
+The Docker image contains a pre-built benchmark called `msg_gen`.
 ```bash
-# Build the `msg_gen` app for benchmarking. This partial build does not need DPDK or rdma_core.
-cd machnet
-rm -rf build; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=Release ..; make -j
+MSG_GEN="docker run -v /var/run/machnet:/var/run/machnet ghcr.io/microsoft/machnet/machnet:latest release_build/src/apps/msg_gen/msg_gen"
 
 # On VM #1, run the msg_gen server
-./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1>
+${MSG_GEN} --local_ip <eth1 IP address of VM 1>
 
 # On VM #2, run the msg_gen client
-./src/apps/msg_gen/msg_gen --local_ip <eth1 IP address of VM 1> --remote_ip <eth1 IP address of VM 2> --active_generator
-
-# See available benchmark options for more testing
-./src/apps/msg_gen/msg_gen --help
+${MSG_GEN} --local_ip <eth1 IP address of VM 1> --remote_ip <eth1 IP address of VM 2>
 ```
 
 The client should print message rate and latency percentile statistics.
-`msg_gen --help` lists all the options available (e.g., message size, number of outstanding messages, etc.).
+`msg_gen --help` lists all the options available.
+
+We can also build `msg_gen` from source without DPDK or rdma_core:
+```bash
+cd machnet
+rm -rf build; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=Release ..; make -j
+MSG_GEN="~/machnet/build/src/apps/msg_gen/msg_gen"
+```
+
 
 
 ## Machnet API
