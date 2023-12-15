@@ -32,9 +32,9 @@ Run the `msg_gen` benchmark
 | |  | Message rate | XXX | XXX | Dec 2023
 | GCP XXX, XXX | gVNIC | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
-| Bare metal, Mariner | E810 PF | Latency | XXX | XXX | Dec 2023
-| |  | Message rate | XXX | XXX | Dec 2023
-| Bare metal, Mariner | E810, iavf | Latency | 18 us, 22 us, 22 us | 55K | Dec 2023
+| Bare metal, Mariner | E810 PF, ice | Latency | 18 us, 21 us, 22 us | 55K | Dec 2023
+| |  | Message rate | 30 us, 33 us, 37 us | 1043K | Dec 2023
+| Bare metal, Mariner | E810 VF, iavf | Latency | 18 us, 22 us, 22 us | 55K | Dec 2023
 | |  | Message rate | 31 us, 35 us, 41 us | 1003K | Dec 2023
 | Bare metal, Ubuntu 20.04 | CX5, mlx5 | Latency | XXX | XXX | Dec 2023
 | |  | Message rate | XXX | XXX | Dec 2023
