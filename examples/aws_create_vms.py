@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Create AWS EC2 Instances along with VPC, Subnet, and Key Pair
-# Usage: ./create_aws_ec2.py --aws_region us-west-2 --nickname tutorial --num_instances 2
+# Create AWS EC2 Instances for testing with Machnet
+# Usage: ./create_aws_ec2.py --aws_region us-east-1 --nickname tutorial --num_instances 1
 #
 # Requirements:
 #  - pip3 install boto3 termcolor
@@ -8,8 +8,8 @@
 
 import argparse
 import boto3
+import pydantic
 from boto3.resources.base import ServiceResource
-from boto3.ec2 import Vpc, Subnet
 from botocore.exceptions import ClientError
 try:
     from termcolor import cprint
@@ -17,26 +17,44 @@ except ImportError:
     def cprint(*args, **kwargs):
         print(*args, **kwargs)
 
-def create_vpc(ec2_resource: ServiceResource, vpc_name: str) -> Vpc:
+def create_vpc_helper(ec2_resource: ServiceResource, vpc_name: str) -> dict:
+    for vpc in ec2_resource.vpcs.all():
+        if vpc.tags:
+            for tag in vpc.tags:
+                if tag['Key'] == 'Name' and tag['Value'] == vpc_name:
+                    cprint(f"VPC {vpc.id} with name {vpc_name} already exists. Using existing VPC.", "yellow")
+                    return vpc
+
     DEFAULT_VPC_CIDR_BLOCK: str = '10.0.0.0/16'
     try:
         vpc = ec2_resource.create_vpc(CidrBlock=DEFAULT_VPC_CIDR_BLOCK)
         vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
         vpc.wait_until_available()
+        cprint(f"Created VPC: {vpc.id} with name {vpc_name}", "green")
         return vpc
     except ClientError as e:
         cprint(f"Error creating VPC: {e}", "red")
-        raise
+        exit(-1)
 
-def create_subnet(ec2_resource: ServiceResource, vpc: Vpc, subnet_name: str) -> Subnet:
+
+def create_subnet(ec2_resource: ServiceResource, vpc: dict, subnet_name: str) -> dict:
+    for subnet in vpc.subnets.all():
+        if subnet.tags:
+            for tag in subnet.tags:
+                if tag['Key'] == 'Name' and tag['Value'] == subnet_name:
+                    cprint(f"Subnet {subnet.id} with name {subnet_name} already exists. Using existing subnet.", "yellow")
+                    return subnet
+
     DEFAULT_SUBNET_CIDR_BLOCK: str = '10.0.1.0/24'
     try:
         subnet = ec2_resource.create_subnet(VpcId=vpc.id, CidrBlock=DEFAULT_SUBNET_CIDR_BLOCK)
         subnet.create_tags(Tags=[{"Key": "Name", "Value": subnet_name}])
+        cprint(f"Created subnet: {subnet.id} with name {subnet_name}", "green")
         return subnet
     except ClientError as e:
-        cprint(f"Error creating Subnet: {e}", "red")
-        raise
+        cprint(f"Error creating subnet: {e}", "red")
+        exit(-1)
+
 
 def create_key_pair(ec2_client, key_name: str) -> str:
     try:
@@ -63,17 +81,13 @@ def main():
         cprint("Error: nickname must be alphanumeric", "red")
         exit()
 
-    ec2_resource = boto3.resource('ec2', region_name=args.aws_region)
-    ec2_client = boto3.client('ec2', region_name=args.aws_region)
-
+    ec2: ServiceResource = boto3.resource('ec2', region_name=args.aws_region)
     c_vpc_name = f"{args.nickname}-{args.aws_region}-vpc"
     c_subnet_name = f"{args.nickname}-{args.aws_region}-subnet"
 
-    vpc = create_vpc(ec2_resource, c_vpc_name)
-    cprint(f"Created VPC: {vpc.id} with name tag {c_vpc_name}", "green")
+    vpc = create_vpc_helper(ec2, c_vpc_name)
 
-    subnet = create_subnet(ec2_resource, vpc, c_subnet_name)
-    cprint(f"Created subnet: {subnet.id} with name_tag", "green")
+    subnet = create_subnet(ec2, vpc, c_subnet_name)
 
     exit(0)
 
