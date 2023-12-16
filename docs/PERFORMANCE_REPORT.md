@@ -9,7 +9,11 @@ flight for pipelining.
 Start the Machnet Docker container on both client and server
 
 ```bash
-./machnet.sh --mac <server_DPDK_IP> --ip <server_DPDK_IP>
+# Server
+./machnet.sh --mac <server_DPDK_MAC> --ip <server_DPDK_IP>
+
+# Client
+./machnet.sh --mac <client_DPDK_MAC> --ip <client_DPDK_IP>
 ```
 
 Run the `msg_gen` benchmark:
