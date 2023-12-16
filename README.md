@@ -34,8 +34,8 @@ The `examples` directory contains detailed scripts/instructions to launch VMs fo
 
 ## 2. Get the Docker image with a pre-built Machnet
 
-Pulling public images from Github container registry requires a few mandatory
-steps.
+You can either build the Docker image using the Dockerfile in this repo, or pull
+it from Github container registry. Pulling from GHCR requires an auth token:
 
  1. Generate a Github personal access token for yourself (https://github.com/settings/tokens) with the read:packages scope. and store it in the `GITHUB_PAT` environment variable.
  2. At `https://github.com/settings/tokens`, follow the steps to "Configure SSO" for this token.
@@ -65,12 +65,11 @@ automated using a script like
 [azure_start_machnet.sh](examples/azure_start_machnet.sh) that uses the
 cloud's metadata service to get the NIC's IP and MAC address.
 
-
 ```bash
 MACHNET_IP_ADDR=`ifconfig eth1 | grep -w inet | tr -s " " | cut -d' ' -f 3`
 MACHNET_MAC_ADDR=`ifconfig eth1 | grep -w ether | tr -s " " | cut -d' ' -f 3`
 
-# Azure uses driverctl to unbind the NIC instaed of dpdk-devbind.py
+# Azure uses driverctl to unbind the NIC instead of dpdk-devbind.py
 sudo modprobe uio_hv_generic
 DEV_UUID=$(basename $(readlink /sys/class/net/eth1/device))
 sudo driverctl -b vmbus set-override $DEV_UUID uio_hv_generic
