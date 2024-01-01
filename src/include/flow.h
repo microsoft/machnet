@@ -156,11 +156,16 @@ class RXTracking {
  public:
   using MachnetPktHdr = net::MachnetPktHdr;
 
-  static constexpr std::size_t kReassemblyQueueDefaultSize = 64;
-  static constexpr std::size_t kReassemblyQueueDefaultSizeMask =
-      (kReassemblyQueueDefaultSize - 1);
-  static_assert(utils::is_power_of_two(kReassemblyQueueDefaultSize),
-                "ReassemblyQueue size must be a power of two.");
+  // 64-bit SACK bitmask => we can track up to 64 packets
+  static constexpr std::size_t kReassemblyMaxSeqnoDistance = 64;
+
+  struct reasm_queue_ent_t {
+    shm::MsgBuf* msgbuf;
+    uint64_t seqno;
+
+    reasm_queue_ent_t(shm::MsgBuf* m, uint64_t s) : msgbuf(m), seqno(s) {}
+  };
+
   RXTracking(const RXTracking&) = delete;
   RXTracking(uint32_t local_ip, uint16_t local_port, uint32_t remote_ip,
              uint16_t remote_port, shm::Channel* channel)
@@ -169,32 +174,10 @@ class RXTracking {
         remote_ip_(remote_ip),
         remote_port_(remote_port),
         channel_(CHECK_NOTNULL(channel)),
-        reass_q_head_(0),
-        reass_q_tail_(0),
-        reass_q_(kReassemblyQueueDefaultSize, nullptr),
-        oldest_inorder_item_(nullptr),
-        latest_inorder_item_(nullptr) {}
+        cur_msg_train_head_(nullptr),
+        cur_msg_train_tail_(nullptr) {}
 
-  /**
-   * @brief Return the size of the reassembly queue.
-   * @return The size of the reassembly queue.
-   */
-  const size_t ReassemblyQueueCapacity() const { return reass_q_.size() - 1; }
-
-  /**
-   * @brief Check if the reassembly queue is empty. If empty, it means that
-   * there are no out-of-order packets delivered and pending for reassembly.
-   * Buffering of in-order packets still happens without occupying space in the
-   * reassembly queue; we deliver the in-order packets to the application when a
-   * full message is received.
-   * @return True if the reassembly queue is empty, false otherwise.
-   */
-  bool IsReassemblyQueueEmpty() const {
-    return ((reass_q_head_ - reass_q_tail_) &
-            kReassemblyQueueDefaultSizeMask) == 0;
-  }
-
-  void Push(swift::Pcb* pcb, const dpdk::Packet* packet) {
+  void Add(swift::Pcb* pcb, const dpdk::Packet* packet) {
     const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
     const auto* machneth = packet->head_data<MachnetPktHdr*>(net_hdr_len);
     const auto* payload =
@@ -203,41 +186,33 @@ class RXTracking {
     const auto expected_seqno = pcb->rcv_nxt;
 
     if (swift::seqno_lt(seqno, expected_seqno)) [[unlikely]] {  // NOLINT
-      // Packet is a duplicate.
+      // Packet is in the past
       // LOG(INFO) << "Received old packet: " << seqno << " < " <<
       // expected_seqno;
       return;
     }  // NOLINT
 
-    auto distance = seqno - expected_seqno;
-    if (distance >= ReassemblyQueueCapacity()) [[unlikely]] {  // NOLINT
-      // Packet is too far ahead; a packet train was dropped?
-      // We cannot buffer this packet's data.
-      LOG(ERROR) << "Packet too far ahead, seqno: " << seqno
-                 << ", expected: " << expected_seqno;
+    const size_t distance = seqno - expected_seqno;
+    if (distance >= kReassemblyMaxSeqnoDistance) [[unlikely]] {  // NOLINT
+      LOG(ERROR) << "Packet too far ahead. Dropping as we can't handle SACK. "
+                 << "seqno: " << seqno << ", expected: " << expected_seqno;
       return;
     }  // NOLINT
 
-    // Check if we need to expand the reassembly queue window.
-    auto reass_q_window =
-        (reass_q_head_ - reass_q_tail_) & kReassemblyQueueDefaultSizeMask;
-    if (distance >= reass_q_window) [[unlikely]] {  // NOLINT
-      reass_q_head_ =
-          (reass_q_tail_ + distance + 1) & kReassemblyQueueDefaultSizeMask;
-    }  // NOLINT
-
-    // Packet is in-order or ahead of the next expected sequence number.
-    auto pos = (reass_q_tail_ + distance) & kReassemblyQueueDefaultSizeMask;
-    // clang-format off
-    if (reass_q_[pos] != nullptr) [[unlikely]] {  // NOLINT
+    // Only iterate through the deque if we must, i.e., for ooo packts only
+    auto it = reass_q_.begin();
+    if (seqno != expected_seqno) {
+      it = std::find_if(reass_q_.begin(), reass_q_.end(),
+                        [&seqno](const reasm_queue_ent_t& entry) {
+                          return entry.seqno >= seqno;
+                        });
+      if (it != reass_q_.end() && it->seqno == seqno) {
         // Packet is a duplicate.
         return;
+      }
     }
-    // clang-format on
 
-    // Buffer the packet.
-    // Copy the payload to a `MsgBuf` object, and set the flags
-    // appropriately.
+    // Buffer the packet in the SHM channel. It may be out-of-order.
     auto* msgbuf = channel_->MsgBufAlloc();
     CHECK_NOTNULL(msgbuf);
     const size_t payload_len =
@@ -250,55 +225,53 @@ class RXTracking {
     msgbuf->set_dst_ip(local_ip_);
     msgbuf->set_dst_port(local_port_);
     DCHECK(!(msgbuf->is_last() && msgbuf->is_sg()));
-    reass_q_[pos] = msgbuf;
+
+    if (seqno == expected_seqno) {
+      reass_q_.emplace_front(msgbuf, seqno);
+    } else {
+      reass_q_.insert(it, reasm_queue_ent_t(msgbuf, seqno));
+    }
 
     // Update the SACK bitmap for the newly received packet.
     pcb->sack_bitmap |= (1ULL << distance);
     pcb->sack_bitmap_count++;
 
-    TryDequeueMsgBufs(pcb);
+    PushInOrderMsgbufsToShmTrain(pcb);
   }
 
  private:
-  void TryDequeueMsgBufs(swift::Pcb* pcb) {
-    while (reass_q_tail_ != reass_q_head_ &&
-           reass_q_[reass_q_tail_] != nullptr) {
-      // We have a contiguous sequence of buffers, so we can return at least the
-      // first one.
-      auto* msgbuf = reass_q_[reass_q_tail_];
-      if (latest_inorder_item_ == nullptr) {
-        latest_inorder_item_ = msgbuf;
-        oldest_inorder_item_ = latest_inorder_item_;
+  void PushInOrderMsgbufsToShmTrain(swift::Pcb* pcb) {
+    while (!reass_q_.empty() && reass_q_.front().seqno == pcb->rcv_nxt) {
+      auto& front = reass_q_.front();
+      auto* msgbuf = front.msgbuf;
+      reass_q_.pop_front();
+
+      if (cur_msg_train_head_ == nullptr) {
+        DCHECK(msgbuf->is_first());
+        cur_msg_train_head_ = msgbuf;
+        cur_msg_train_tail_ = msgbuf;
       } else {
-        latest_inorder_item_->set_next(msgbuf);
-        latest_inorder_item_ = msgbuf;
+        cur_msg_train_tail_->set_next(msgbuf);
+        cur_msg_train_tail_ = msgbuf;
       }
-      TryDeliverMessage();
-      reass_q_[reass_q_tail_] = nullptr;
-      reass_q_tail_ = (reass_q_tail_ + 1) & kReassemblyQueueDefaultSizeMask;
+
+      if (cur_msg_train_tail_->is_last()) {
+        // We have a complete message. Let's deliver it to the application.
+        DCHECK(!cur_msg_train_tail_->is_sg());
+        auto* msgbuf_to_deliver = cur_msg_train_head_;
+        auto nr_delivered = channel_->EnqueueMessages(&msgbuf_to_deliver, 1);
+        if (nr_delivered != 1) {
+          LOG(FATAL) << "SHM channel full, failed to deliver message";
+        }
+
+        cur_msg_train_head_ = nullptr;
+        cur_msg_train_tail_ = nullptr;
+      }
+
       pcb->advance_rcv_nxt();
-      // Shift the SACK bitmap by 1.
       pcb->sack_bitmap >>= 1;
       pcb->sack_bitmap_count--;
     }
-  }
-
-  void TryDeliverMessage() {
-    DCHECK_NE(oldest_inorder_item_, nullptr);
-    DCHECK_NE(latest_inorder_item_, nullptr);
-    DCHECK(oldest_inorder_item_->is_first());
-    if (!latest_inorder_item_->is_last()) return;
-
-    DCHECK(!latest_inorder_item_->is_sg());
-    // We have a complete message. Let's deliver it to the application.
-    auto* msgbuf = oldest_inorder_item_;
-    auto nr_delivered = channel_->EnqueueMessages(&msgbuf, 1);
-    if (nr_delivered != 1) {
-      // The channel is full.
-      return;
-    }
-    oldest_inorder_item_ = nullptr;
-    latest_inorder_item_ = nullptr;
   }
 
   const uint32_t local_ip_;
@@ -306,17 +279,9 @@ class RXTracking {
   const uint32_t remote_ip_;
   const uint16_t remote_port_;
   shm::Channel* channel_;
-  size_t reass_q_head_;
-  size_t reass_q_tail_;
-  std::vector<shm::MsgBuf*> reass_q_;
-  // The oldest received `MsgBuf' we have received, but not yet submitted to the
-  // application. This is always the first buffer of a message (chain of
-  // buffers).
-  shm::MsgBuf* oldest_inorder_item_;
-  // This is the latest in-order `MsgBuf' we have received. There might be
-  // subsequent segments that we have already received, but they are
-  // out-of-order in the reassembly queue.
-  shm::MsgBuf* latest_inorder_item_;
+  std::deque<reasm_queue_ent_t> reass_q_;
+  shm::MsgBuf* cur_msg_train_head_;
+  shm::MsgBuf* cur_msg_train_tail_;
 };
 
 /**
@@ -572,7 +537,7 @@ class Flow {
           return;
         }
         // Data packet, process the payload.
-        rx_tracking_.Push(&pcb_, packet);
+        rx_tracking_.Add(&pcb_, packet);
         SendAck();
         break;
     }
