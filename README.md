@@ -1,5 +1,7 @@
 # Machnet: Easy kernel-bypass networking on cloud VMs
 
+[![Build](https://github.com/microsoft/machnet/actions/workflows/build.yml/badge.svg?event=push)](https://github.com/microsoft/machnet)
+
 Machnet provides an easy way for applications to access low-latency reliable
 messaging based on DPDK. It supports a variety of cloud and bare-metal
 platforms, evaluated in
