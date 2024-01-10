@@ -2,9 +2,9 @@
 
 [![Build](https://github.com/microsoft/machnet/actions/workflows/build.yml/badge.svg?event=push)](https://github.com/microsoft/machnet)
 
-Machnet provides an easy way for applications to access low-latency reliable
-messaging based on DPDK. It supports a variety of cloud and bare-metal
-platforms, evaluated in
+Machnet provides an easy way for applications to reduce their Ethernet
+networking latency via kernel-bypass (DPDK-based) reliable messaging.
+It supports a variety of cloud and bare-metal platforms, evaluated in
 [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md).
 
 **Architecture**: Machnet runs as a separate process on all machines where the
