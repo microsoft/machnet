@@ -1,11 +1,12 @@
-# Machnet: Easy kernel-bypass networking on cloud VMs
+# Machnet: Easy kernel-bypass messaging between cloud VMs
 
 [![Build](https://github.com/microsoft/machnet/actions/workflows/build.yml/badge.svg?event=push)](https://github.com/microsoft/machnet)
 
 Machnet provides an easy way for applications to reduce their Ethernet
 networking latency via kernel-bypass (DPDK-based) reliable messaging.
 It supports a variety of cloud and bare-metal platforms, evaluated in
-[docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md).
+[docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md). Machnet can help
+speed up distributed applications like databases, caches, finance, etc.
 
 **Architecture**: Machnet runs as a separate process on all machines where the
 application is deployed and mediates access to the DPDK NIC.  Applications
@@ -20,9 +21,9 @@ Machnet provides the following unique benefits, in addition to the low latency:
 
 # Steps to use Machnet
 
-## 1. Set up two VMs with two NICs each
+## 1. Set up two machines with two NICs each
 
-Machnet requires a dedicated NIC on each VM that it runs on. This NIC may be
+Machnet requires a dedicated NIC on each machine that it runs on. This NIC may be
 used by multiple applications that use Machnet.
 
 On Azure, we recommend the following steps:
@@ -71,10 +72,13 @@ cloud's metadata service to get the NIC's IP and MAC address.
 MACHNET_IP_ADDR=`ifconfig eth1 | grep -w inet | tr -s " " | cut -d' ' -f 3`
 MACHNET_MAC_ADDR=`ifconfig eth1 | grep -w ether | tr -s " " | cut -d' ' -f 3`
 
-# Azure uses driverctl to unbind the NIC instead of dpdk-devbind.py
+# If on Azure, use driverctl to unbind the NIC instead of dpdk-devbind.py:
 sudo modprobe uio_hv_generic
 DEV_UUID=$(basename $(readlink /sys/class/net/eth1/device))
 sudo driverctl -b vmbus set-override $DEV_UUID uio_hv_generic
+
+# Otherwise, use dpdk-devbind.py like so
+# sudo <dpdk_dir>/usertools/dpdk-devbind.py --bind=vfio-pci <PCIe address of dedicated NIC>
 
 # Start Machnet
 echo "Machnet IP address: $MACHNET_IP_ADDR, MAC address: $MACHNET_MAC_ADDR"
@@ -99,7 +103,7 @@ cd hello_world; make
 # On VM #1, run the hello_world server
 ./hello_world --local <eth1 IP address of VM 1>
 
-# On VM #2, run the hello_world client
+# On VM #2, run the hello_world client. This should print the reply from the server.
 ./hello_world --local <eth1 IP address of VM 1> --remote <eth1 IP address of VM 2>
 ```
 
