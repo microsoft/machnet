@@ -4,14 +4,20 @@
 #include <ether.h>
 #include <packet_pool.h>
 #include <rte_bus_pci.h>
+// #include <rte_bus_pci.h>
+// #include <rte_pci.h>
+// #include <bus_pci_driver.h>
 #include <rte_ethdev.h>
-#include <rte_ether.h>
+// #include <rte_ether.h>
+#include <rte_bus.h>
+#include <rte_version.h>
 #include <utils.h>
 #include <worker.h>
 
 #include <memory>
 #include <optional>
 #include <vector>
+#include <linux/ethtool.h>
 
 namespace juggler {
 namespace dpdk {
@@ -19,6 +25,10 @@ namespace dpdk {
 [[maybe_unused]] static void FetchDpdkPortInfo(
     uint8_t port_id, struct rte_eth_dev_info *devinfo,
     juggler::net::Ethernet::Address *lladdr, std::string *pci_string) {
+  
+  // struct ethtool_drvinfo drvinfo;
+
+
   if (!rte_eth_dev_is_valid_port(port_id)) {
     LOG(INFO) << "Port id " << static_cast<int>(port_id) << " is not valid.";
     return;
@@ -37,12 +47,23 @@ namespace dpdk {
                       reinterpret_cast<rte_ether_addr *>(lladdr->bytes));
 
   struct rte_bus *bus = rte_bus_find_by_device(devinfo->device);
-  if (bus && !strcmp(bus->name, "pci")) {
-    const struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(devinfo->device);
-    *pci_string = juggler::utils::Format(
-        "%08x:%02hhx:%02hhx.%02hhx %04hx:%04hx", pci_dev->addr.domain,
-        pci_dev->addr.bus, pci_dev->addr.devid, pci_dev->addr.function,
-        pci_dev->id.vendor_id, pci_dev->id.device_id);
+  // if (bus && !strcmp(bus->name, "pci")) {
+    // const struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(devinfo->device);
+    // *pci_string = juggler::utils::Format(
+    //     "%08x:%02hhx:%02hhx.%02hhx %04hx:%04hx", pci_dev->addr.domain,
+    //     pci_dev->addr.bus, pci_dev->addr.devid, pci_dev->addr.function,
+    //     pci_dev->id.vendor_id, pci_dev->id.device_id);
+  if (bus) {
+    // strlcpy(drvinfo.driver, devinfo->driver_name,
+    //     sizeof(drvinfo.driver));
+    // strlcpy(drvinfo.version, rte_version(), sizeof(drvinfo.version));
+    // strlcpy(drvinfo.bus_info, rte_dev_name(devinfo->device),
+    //     sizeof(drvinfo.bus_info));
+      // const struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(devinfo->device);
+      // *pci_string = juggler::utils::Format(
+      //     "%08x:%02hhx:%02hhx.%02hhx %04hx:%04hx", pci_dev->addr.domain,
+      //     pci_dev->addr.bus, pci_dev->addr.devid, pci_dev->addr.function,
+      //     pci_dev->id.vendor_id, pci_dev->id.device_id);
   }
 
   LOG(INFO) << "[PMDPORT] [port_id: " << static_cast<uint32_t>(port_id)
