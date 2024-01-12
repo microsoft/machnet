@@ -41,10 +41,10 @@ ldconfig
 
 ### Build DPDK
 
-We use DPDK v21.11 LTS, like so:
+We use DPDK v23.11 LTS, like so:
 
 ```bash
-export RTE_SDK=/path/to/dpdk-21.11/
+export RTE_SDK=/path/to/dpdk-23.11/
 cd ${RTE_SDK} && meson build && cd build && ninja && DESTDIR=${PWD}/install ninja install
 ```
 
