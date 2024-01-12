@@ -49,7 +49,6 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
 
   port_conf.rxmode.mtu = PmdRing::kDefaultFrameSize;
   port_conf.rxmode.max_lro_pkt_size = PmdRing::kDefaultFrameSize;
-  // port_conf.rxmode.split_hdr_size = 0;
   const auto rx_offload_capa = devinfo->rx_offload_capa;
   port_conf.rxmode.offloads |= ((RTE_ETH_RX_OFFLOAD_CHECKSUM)&rx_offload_capa);
 

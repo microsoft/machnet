@@ -4,20 +4,14 @@
 #include <ether.h>
 #include <packet_pool.h>
 #include <rte_bus_pci.h>
-// #include <rte_bus_pci.h>
-// #include <rte_pci.h>
-// #include <bus_pci_driver.h>
 #include <rte_ethdev.h>
-// #include <rte_ether.h>
-#include <rte_bus.h>
-#include <rte_version.h>
+
 #include <utils.h>
 #include <worker.h>
 
 #include <memory>
 #include <optional>
 #include <vector>
-#include <linux/ethtool.h>
 
 namespace juggler {
 namespace dpdk {
