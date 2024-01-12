@@ -100,7 +100,7 @@ void RxRing::Init() {
 void PmdPort::InitDriver(uint16_t mtu) {
   if (is_dpdk_primary_process_) {
     // Get DPDK port info.
-    FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_, &pci_info_);
+    FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_);
     device_ = devinfo_.device;
 
     if (std::string(devinfo_.driver_name) == "net_netvsc") {
@@ -115,9 +115,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
         // Get DPDK port info.
         struct rte_eth_dev_info vf_devinfo_;
         struct net::Ethernet::Address vf_l2_addr_;
-        std::string vf_pci_info_;
-        FetchDpdkPortInfo(vf_port_id.value(), &vf_devinfo_, &vf_l2_addr_,
-                          &vf_pci_info_);
+        FetchDpdkPortInfo(vf_port_id.value(), &vf_devinfo_, &vf_l2_addr_);
 
         // If the VF is using an 'mlx4*' driver, we need extra checks.
         if (std::string(vf_devinfo_.driver_name).find("mlx4") !=
@@ -302,7 +300,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
                 << "Link is DOWN.";
     }
   } else {
-    FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_, &pci_info_);
+    FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_);
 
     // For the rings, just set port and queue IDs here, which have been
     // pre-initialized by the DPDK primary process
