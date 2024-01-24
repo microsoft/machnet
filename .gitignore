@@ -1,3 +1,5 @@
 *.so
 *.o
 build/
+.history
+.vscode

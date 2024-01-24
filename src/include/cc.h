@@ -88,7 +88,7 @@ struct Pcb {
   uint32_t snd_una{0};
   uint32_t snd_ooo_acks{0};
   uint32_t rcv_nxt{0};
-  uint64_t sack_bitmap{0};
+  uint64_t sack_bitmap[4]{0};
   uint8_t sack_bitmap_count{0};
   uint16_t cwnd{kInitialCwnd};
   uint16_t duplicate_acks{0};
