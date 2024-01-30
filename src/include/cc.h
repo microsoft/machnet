@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <cmath>
 
 #include "utils.h"
 
@@ -36,15 +37,59 @@ constexpr bool seqno_gt(uint32_t a, uint32_t b) {
  */
 // TODO(ilias): First-cut implementation. Needs a lot of work.
 struct Pcb {
-  static constexpr std::size_t kInitialCwnd = 32;
+  static constexpr std::size_t kInitialCwnd = 1; // 32 packets
   static constexpr std::size_t kRexmitThreshold = 3;
   static constexpr int kRtoThresholdInTicks = 3;  // in slow timer ticks.
   static constexpr int kRtoDisabled = -1;
   Pcb() {}
+
+  void expand_window(uint16_t acked_packets) {
+    if (state == 2) {
+      // Congestion avoidance.
+      if (cwnd == 0){
+        LOG(ERROR) << "cwnd is zero";
+        state = 1;
+        cwnd = 1;
+      } else {
+        cwnd += 1.0*acked_packets/cwnd;
+      }
+    } else if(state == 1) {
+      // Slow start. We make sure we don't overflow the window.
+      if (cwnd + acked_packets > cwnd) {
+        cwnd += acked_packets;
+      }
+
+      if (cwnd >= ssthresh) {
+        // go to congestion avoidance
+        state = 2;
+      }
+    } else {
+      // first time we started the 
+      cwnd += acked_packets;
+    }
+
+    // congestion window more than TX len does not make sense.
+    // TX len is the number of NIC descriptors. Maybe I am wrong though.
+    // Also this should be more than what channel has for us, in terms of
+    // available descriptors.
+    if (cwnd > 256) {
+      cwnd = 256;
+      ssthresh = cwnd/2;
+    }
+
+  }
+
+  void reduce_window() {
+    ssthresh = cwnd / 2;
+    cwnd = 1; // we can also set it to initial value
+    state = 1; // slow start
+  }
+    
   // Return the sender effective window in # of packets.
   uint32_t effective_wnd() const {
-    uint32_t effective_wnd = cwnd - (snd_nxt - snd_una - snd_ooo_acks);
-    return effective_wnd > cwnd ? 0 : effective_wnd;
+    uint32_t effective_wnd = floor(cwnd) - (snd_nxt - snd_una - snd_ooo_acks);
+    return effective_wnd > floor(cwnd) ? 0 : effective_wnd;
+    // return floor(cwnd);
   }
 
   uint32_t seqno() const { return snd_nxt; }
@@ -61,7 +106,10 @@ struct Pcb {
          ", rcv_nxt: " + std::to_string(rcv_nxt) +
          ", cwnd: " + std::to_string(cwnd) +
          ", fast_rexmits: " + std::to_string(fast_rexmits) +
-         ", rto_rexmits: " + std::to_string(rto_rexmits);
+         ", rto_rexmits: " + std::to_string(rto_rexmits) +
+         ", effective_wnd: " + std::to_string(effective_wnd()) +
+         ", state: " + std::to_string(state) +
+         ", ss_thresh: " + std::to_string(ssthresh);
     return s;
   }
 
@@ -83,18 +131,49 @@ struct Pcb {
   }
   void rto_advance() { rto_timer++; }
 
+  void shift_right_sack_bitmap() {
+    // Since we have 4 elements in the SACK bitmap we start from 3
+    for (int i = 3; i > 0; --i) {
+        // Shift the current element to the right
+        sack_bitmap_test[i] = (sack_bitmap_test[i] >> 1) | (sack_bitmap_test[i - 1] << 63);
+    }
+    
+    // Special handling for the first element
+    sack_bitmap_test[0] >>= 1;
+
+    sack_bitmap_count--;
+  
+  }
+
+  void sack_bitmap_setbit(uint32_t index) {
+    if (index >= 256) {
+      LOG(ERROR) << "Index out of bounds: " << index;
+    }
+    
+    sack_bitmap_test[index/64] |= (1ULL << index % 64);
+
+    sack_bitmap_count++;
+ }
+
+
+
   uint32_t target_delay{0};
   uint32_t snd_nxt{0};
   uint32_t snd_una{0};
   uint32_t snd_ooo_acks{0};
   uint32_t rcv_nxt{0};
-  uint64_t sack_bitmap[4]{0};
+  uint64_t sack_bitmap{0};
+  uint64_t sack_bitmap_test[4]{0};
   uint8_t sack_bitmap_count{0};
-  uint16_t cwnd{kInitialCwnd};
+  // uint16_t cwnd{kInitialCwnd};
+  float cwnd{kInitialCwnd};
   uint16_t duplicate_acks{0};
   int rto_timer{kRtoDisabled};
   uint16_t fast_rexmits{0};
   uint16_t rto_rexmits{0};
+  uint16_t ssthresh{0}; // slow start threshold.
+  uint8_t state{0}; // 0: just starting for the first time 1: slow start, 2: congestion avoidance.
+  // float remaining{0.0};
 };
 
 }  // namespace swift
