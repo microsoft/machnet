@@ -18,7 +18,7 @@ __attribute__((unused)) static void ReportLinkStatus(uint8_t port_id) {
     LOG(WARNING) << "rte_eth_link_get_nowait() failed.";
   }
 
-  if (link.link_status == ETH_LINK_UP) {
+  if (link.link_status == RTE_ETH_LINK_UP) {
     LOG(INFO) << "[PMDPORT: " << static_cast<int>(port_id) << "] "
               << "Link is UP " << link.link_speed
               << (link.link_autoneg ? "(AutoNeg)" : "(Fixed)")
@@ -38,18 +38,17 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
   // offloads so return a very basic ethernet configuration.
   if (std::string(devinfo->driver_name) == "net_null") return port_conf;
 
-  port_conf.link_speeds = ETH_LINK_SPEED_AUTONEG;
-  uint64_t rss_hf = ETH_RSS_IP | ETH_RSS_UDP | ETH_RSS_TCP | ETH_RSS_SCTP;
+  port_conf.link_speeds = RTE_ETH_LINK_SPEED_AUTONEG;
+  uint64_t rss_hf = RTE_ETH_RSS_IP | RTE_ETH_RSS_UDP | RTE_ETH_RSS_TCP | RTE_ETH_RSS_SCTP;
   if (devinfo->flow_type_rss_offloads) {
     rss_hf &= devinfo->flow_type_rss_offloads;
   }
 
   port_conf.lpbk_mode = 1;
-  port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
+  port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
 
   port_conf.rxmode.mtu = PmdRing::kDefaultFrameSize;
   port_conf.rxmode.max_lro_pkt_size = PmdRing::kDefaultFrameSize;
-  port_conf.rxmode.split_hdr_size = 0;
   const auto rx_offload_capa = devinfo->rx_offload_capa;
   port_conf.rxmode.offloads |= ((RTE_ETH_RX_OFFLOAD_CHECKSUM)&rx_offload_capa);
 
@@ -60,21 +59,21 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
   };
 
   const auto tx_offload_capa = devinfo->tx_offload_capa;
-  if (!(tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM) ||
-      !(tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM)) {
+  if (!(tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM) ||
+      !(tx_offload_capa & RTE_ETH_TX_OFFLOAD_UDP_CKSUM)) {
     // Making this fatal; not sure what NIC does not support checksum offloads.
     LOG(FATAL) << "Hardware does not support checksum offloads.";
   }
 
-  port_conf.txmode.mq_mode = ETH_MQ_TX_NONE;
+  port_conf.txmode.mq_mode = RTE_ETH_MQ_TX_NONE;
   port_conf.txmode.offloads =
-      (DEV_TX_OFFLOAD_IPV4_CKSUM | DEV_TX_OFFLOAD_UDP_CKSUM);
+      (RTE_ETH_TX_OFFLOAD_IPV4_CKSUM | RTE_ETH_TX_OFFLOAD_UDP_CKSUM);
 
-  if (tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE) {
+  if (tx_offload_capa & RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE) {
     // TODO(ilias): Add option to the constructor to enable this offload.
     LOG(WARNING)
         << "Enabling FAST FREE: use always the same mempool for each queue.";
-    port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+    port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE;
   }
 
   return port_conf;
@@ -100,7 +99,7 @@ void RxRing::Init() {
 void PmdPort::InitDriver(uint16_t mtu) {
   if (is_dpdk_primary_process_) {
     // Get DPDK port info.
-    FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_, &pci_info_);
+    FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_);
     device_ = devinfo_.device;
 
     if (std::string(devinfo_.driver_name) == "net_netvsc") {
@@ -115,9 +114,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
         // Get DPDK port info.
         struct rte_eth_dev_info vf_devinfo_;
         struct net::Ethernet::Address vf_l2_addr_;
-        std::string vf_pci_info_;
-        FetchDpdkPortInfo(vf_port_id.value(), &vf_devinfo_, &vf_l2_addr_,
-                          &vf_pci_info_);
+        FetchDpdkPortInfo(vf_port_id.value(), &vf_devinfo_, &vf_l2_addr_);
 
         // If the VF is using an 'mlx4*' driver, we need extra checks.
         if (std::string(vf_devinfo_.driver_name).find("mlx4") !=
@@ -282,7 +279,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
     struct rte_eth_link link;
     memset(&link, '0', sizeof(link));
     int nsecs = 30;
-    while (nsecs-- && link.link_status == ETH_LINK_DOWN) {
+    while (nsecs-- && link.link_status == RTE_ETH_LINK_DOWN) {
       memset(&link, '0', sizeof(link));
       int ret = rte_eth_link_get_nowait(port_id_, &link);
       if (ret != 0) {
@@ -292,7 +289,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
       sleep(1);
     }
 
-    if (link.link_status == ETH_LINK_UP) {
+    if (link.link_status == RTE_ETH_LINK_UP) {
       LOG(INFO) << "[PMDPORT: " << static_cast<int>(port_id_) << "] "
                 << "Link is UP " << link.link_speed
                 << (link.link_autoneg ? " (AutoNeg)" : " (Fixed)")
@@ -302,7 +299,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
                 << "Link is DOWN.";
     }
   } else {
-    FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_, &pci_info_);
+    FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_);
 
     // For the rings, just set port and queue IDs here, which have been
     // pre-initialized by the DPDK primary process

@@ -5,7 +5,7 @@
 #include <packet_pool.h>
 #include <rte_bus_pci.h>
 #include <rte_ethdev.h>
-#include <rte_ether.h>
+
 #include <utils.h>
 #include <worker.h>
 
@@ -18,7 +18,8 @@ namespace dpdk {
 
 [[maybe_unused]] static void FetchDpdkPortInfo(
     uint8_t port_id, struct rte_eth_dev_info *devinfo,
-    juggler::net::Ethernet::Address *lladdr, std::string *pci_string) {
+    juggler::net::Ethernet::Address *lladdr) {
+
   if (!rte_eth_dev_is_valid_port(port_id)) {
     LOG(INFO) << "Port id " << static_cast<int>(port_id) << " is not valid.";
     return;
@@ -36,21 +37,11 @@ namespace dpdk {
   rte_eth_macaddr_get(port_id,
                       reinterpret_cast<rte_ether_addr *>(lladdr->bytes));
 
-  struct rte_bus *bus = rte_bus_find_by_device(devinfo->device);
-  if (bus && !strcmp(bus->name, "pci")) {
-    const struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(devinfo->device);
-    *pci_string = juggler::utils::Format(
-        "%08x:%02hhx:%02hhx.%02hhx %04hx:%04hx", pci_dev->addr.domain,
-        pci_dev->addr.bus, pci_dev->addr.devid, pci_dev->addr.function,
-        pci_dev->id.vendor_id, pci_dev->id.device_id);
-  }
-
   LOG(INFO) << "[PMDPORT] [port_id: " << static_cast<uint32_t>(port_id)
             << ", driver: " << devinfo->driver_name
             << ", RXQ: " << devinfo->max_rx_queues
             << ", TXQ: " << devinfo->max_tx_queues
-            << ", l2addr: " << lladdr->ToString()
-            << ", pci_info: " << *pci_string << "]";
+            << ", l2addr: " << lladdr->ToString() << "]";
 }
 
 [[maybe_unused]] static std::optional<uint16_t> FindSlaveVfPortId(
@@ -59,7 +50,7 @@ namespace dpdk {
   std::string pci_info;
   juggler::net::Ethernet::Address lladdr;
 
-  FetchDpdkPortInfo(port_id, &devinfo, &lladdr, &pci_info);
+  FetchDpdkPortInfo(port_id, &devinfo, &lladdr);
 
   uint16_t slave_port_id = 0;
   while (slave_port_id < RTE_MAX_ETHPORTS) {
@@ -73,10 +64,8 @@ namespace dpdk {
     }
 
     struct rte_eth_dev_info slave_devinfo;
-    std::string slave_pci_info;
     juggler::net::Ethernet::Address slave_lladdr;
-    FetchDpdkPortInfo(slave_port_id, &slave_devinfo, &slave_lladdr,
-                      &slave_pci_info);
+    FetchDpdkPortInfo(slave_port_id, &slave_devinfo, &slave_lladdr);
     if (slave_lladdr == lladdr) {
       return slave_port_id;
     }
@@ -97,7 +86,7 @@ namespace dpdk {
     std::string pci_info;
     juggler::net::Ethernet::Address lladdr;
 
-    FetchDpdkPortInfo(port_id, &devinfo, &lladdr, &pci_info);
+    FetchDpdkPortInfo(port_id, &devinfo, &lladdr);
   }
 }
 

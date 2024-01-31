@@ -42,7 +42,7 @@ RUN git clone -b 'stable-v40' --single-branch --depth 1 https://github.com/linux
 ENV RTE_SDK /root/dpdk
 
 # Build DPDK
-RUN git clone --depth 1 --branch 'v21.11' https://github.com/DPDK/dpdk.git ${RTE_SDK} && \
+RUN git clone --depth 1 --branch 'v23.11' https://github.com/DPDK/dpdk.git ${RTE_SDK} && \
     cd ${RTE_SDK} && \
     meson build -Dexamples='' -Dplatform=generic -Denable_kmods=false -Dtests=false -Ddisable_drivers='raw/*,crypto/*,baseband/*,dma/*' && \
     cd build/ && \
