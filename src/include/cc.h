@@ -37,12 +37,18 @@ constexpr bool seqno_gt(uint32_t a, uint32_t b) {
  */
 // TODO(ilias): First-cut implementation. Needs a lot of work.
 struct Pcb {
-  static constexpr std::size_t kInitialCwnd = 1; // 32 packets
+  static constexpr std::size_t kInitialCwnd = 1; // star from 1 as inital window
   static constexpr std::size_t kRexmitThreshold = 3;
   static constexpr int kRtoThresholdInTicks = 3;  // in slow timer ticks.
   static constexpr int kRtoDisabled = -1;
   Pcb() {}
 
+  /**
+   * @brief This function is called when we receive an ack from the receiver.
+   * It will update the congestion window based on acked_packets,
+   * and will also update the state of the congestion control.
+   * param acked_packets: number of packets acked by the receiver.
+   */
   void expand_window(uint16_t acked_packets) {
     if (state == 2) {
       // Congestion avoidance.
@@ -68,10 +74,10 @@ struct Pcb {
       cwnd += acked_packets;
     }
 
+
+    // TODO: This should not be more than what channel can handle, also TX len might need to be checked
+
     // congestion window more than TX len does not make sense.
-    // TX len is the number of NIC descriptors. Maybe I am wrong though.
-    // Also this should be more than what channel has for us, in terms of
-    // available descriptors.
     if (cwnd > 256) {
       cwnd = 256;
       ssthresh = cwnd/2;
@@ -89,7 +95,6 @@ struct Pcb {
   uint32_t effective_wnd() const {
     uint32_t effective_wnd = floor(cwnd) - (snd_nxt - snd_una - snd_ooo_acks);
     return effective_wnd > floor(cwnd) ? 0 : effective_wnd;
-    // return floor(cwnd);
   }
 
   uint32_t seqno() const { return snd_nxt; }
@@ -155,8 +160,6 @@ struct Pcb {
     sack_bitmap_count++;
  }
 
-
-
   uint32_t target_delay{0};
   uint32_t snd_nxt{0};
   uint32_t snd_una{0};
@@ -165,7 +168,6 @@ struct Pcb {
   uint64_t sack_bitmap{0};
   uint64_t sack_bitmap_test[4]{0};
   uint8_t sack_bitmap_count{0};
-  // uint16_t cwnd{kInitialCwnd};
   float cwnd{kInitialCwnd};
   uint16_t duplicate_acks{0};
   int rto_timer{kRtoDisabled};
@@ -173,7 +175,6 @@ struct Pcb {
   uint16_t rto_rexmits{0};
   uint16_t ssthresh{0}; // slow start threshold.
   uint8_t state{0}; // 0: just starting for the first time 1: slow start, 2: congestion avoidance.
-  // float remaining{0.0};
 };
 
 }  // namespace swift
