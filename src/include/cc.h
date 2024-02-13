@@ -37,7 +37,7 @@ constexpr bool seqno_gt(uint32_t a, uint32_t b) {
  */
 // TODO(ilias): First-cut implementation. Needs a lot of work.
 struct Pcb {
-  static constexpr std::size_t kInitialCwnd = 1; // star from 1 as inital window
+  static constexpr std::size_t kInitialCwnd = 128; // start from 128 as inital window
   static constexpr std::size_t kRexmitThreshold = 3;
   static constexpr int kRtoThresholdInTicks = 3;  // in slow timer ticks.
   static constexpr int kRtoDisabled = -1;
@@ -140,11 +140,11 @@ struct Pcb {
     // Since we have 4 elements in the SACK bitmap we start from 3
     for (int i = 3; i > 0; --i) {
         // Shift the current element to the right
-        sack_bitmap_test[i] = (sack_bitmap_test[i] >> 1) | (sack_bitmap_test[i - 1] << 63);
+        sack_bitmap[i] = (sack_bitmap[i] >> 1) | (sack_bitmap[i - 1] << 63);
     }
     
     // Special handling for the first element
-    sack_bitmap_test[0] >>= 1;
+    sack_bitmap[0] >>= 1;
 
     sack_bitmap_count--;
   
@@ -155,7 +155,7 @@ struct Pcb {
       LOG(ERROR) << "Index out of bounds: " << index;
     }
     
-    sack_bitmap_test[index/64] |= (1ULL << index % 64);
+    sack_bitmap[index/64] |= (1ULL << index % 64);
 
     sack_bitmap_count++;
  }
@@ -165,8 +165,7 @@ struct Pcb {
   uint32_t snd_una{0};
   uint32_t snd_ooo_acks{0};
   uint32_t rcv_nxt{0};
-  uint64_t sack_bitmap{0};
-  uint64_t sack_bitmap_test[4]{0};
+  uint64_t sack_bitmap[4]{0};
   uint8_t sack_bitmap_count{0};
   float cwnd{kInitialCwnd};
   uint16_t duplicate_acks{0};

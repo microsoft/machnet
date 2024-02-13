@@ -253,10 +253,7 @@ class RXTracking {
     reass_q_[pos] = msgbuf;
 
     // Update the SACK bitmap for the newly received packet.
-    // pcb->sack_bitmap[distance/64] |= (1ULL << distance % 64);
-    // pcb->sack_bitmap |= (1ULL << distance);
     pcb->sack_bitmap_setbit(distance);
-    // pcb->sack_bitmap_count++;
 
     TryDequeueMsgBufs(pcb);
   }
@@ -279,12 +276,9 @@ class RXTracking {
       reass_q_[reass_q_tail_] = nullptr;
       reass_q_tail_ = (reass_q_tail_ + 1) & kReassemblyQueueDefaultSizeMask;
       pcb->advance_rcv_nxt();
+
       // Shift the SACK bitmap by 1.
-
       pcb->shift_right_sack_bitmap(); 
-
-      // pcb->sack_bitmap >>= 1;
-      // pcb->sack_bitmap_count--;
     }
   }
 
@@ -688,7 +682,7 @@ class Flow {
     machneth->ackno = be32_t(pcb_.ackno());
 
     for (int i = 0; i < 4; ++i) {
-      machneth->sack_bitmap_test[i] = be64_t(pcb_.sack_bitmap_test[i]);
+      machneth->sack_bitmap[i] = be64_t(pcb_.sack_bitmap[i]);
     }
 
     // machneth->sack_bitmap = be64_t(pcb_.sack_bitmap);
@@ -908,7 +902,7 @@ class Flow {
             pcb_.duplicate_acks - swift::Pcb::kRexmitThreshold;
         size_t index = 0;
         while (sack_bitmap_count) {
-          auto sack_bitmap = machneth->sack_bitmap_test[3 - (index/64)].value();
+          auto sack_bitmap = machneth->sack_bitmap[3 - (index/64)].value();
             // if ((sack_bitmap & (1ULL << index)) == 0) {
             if ((sack_bitmap & (1ULL << index % 64)) == 0) {
             // We found a missing packet.
@@ -921,7 +915,8 @@ class Flow {
               PrepareDataPacket<CopyMode::kMemCopy>(msgbuf, packet, seqno);
               txring_->SendPackets(&packet, 1);
               pcb_.rto_reset();
-              pcb_.reduce_window();
+              // TODO: Reduce the congestion window, currently window is constant
+              // pcb_.reduce_window();
               return;
             }
           } else {
@@ -949,8 +944,9 @@ class Flow {
 
       tx_tracking_.ReceiveAcks(num_acked_packets);
             
-      // update the congestion window based on the acked packets.
-      pcb_.expand_window(num_acked_packets);
+      // TODO: update the congestion window based on the acked packets.
+      // currently window is constant.
+      // pcb_.expand_window(num_acked_packets);
       pcb_.snd_una = ackno;
       pcb_.duplicate_acks = 0;
       pcb_.snd_ooo_acks = 0;
