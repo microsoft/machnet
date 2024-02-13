@@ -156,8 +156,8 @@ class RXTracking {
  public:
   using MachnetPktHdr = net::MachnetPktHdr;
 
-  // 64-bit SACK bitmask => we can track up to 64 packets
-  static constexpr std::size_t kReassemblyMaxSeqnoDistance = 64;
+  // 256-bit SACK bitmask => we can track up to 256 packets
+  static constexpr std::size_t kReassemblyMaxSeqnoDistance = 256;
 
   struct reasm_queue_ent_t {
     shm::MsgBuf* msgbuf;
