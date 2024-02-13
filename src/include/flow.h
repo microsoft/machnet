@@ -156,13 +156,6 @@ class RXTracking {
  public:
   using MachnetPktHdr = net::MachnetPktHdr;
 
-<<<<<<< HEAD
-  static constexpr std::size_t kReassemblyQueueDefaultSize = 256;
-  static constexpr std::size_t kReassemblyQueueDefaultSizeMask =
-      (kReassemblyQueueDefaultSize - 1);
-  static_assert(utils::is_power_of_two(kReassemblyQueueDefaultSize),
-                "ReassemblyQueue size must be a power of two.");
-=======
   // 64-bit SACK bitmask => we can track up to 64 packets
   static constexpr std::size_t kReassemblyMaxSeqnoDistance = 64;
 
@@ -173,7 +166,6 @@ class RXTracking {
     reasm_queue_ent_t(shm::MsgBuf* m, uint64_t s) : msgbuf(m), seqno(s) {}
   };
 
->>>>>>> main
   RXTracking(const RXTracking&) = delete;
   RXTracking(uint32_t local_ip, uint16_t local_port, uint32_t remote_ip,
              uint16_t remote_port, shm::Channel* channel)
@@ -276,14 +268,9 @@ class RXTracking {
       }
 
       pcb->advance_rcv_nxt();
-<<<<<<< HEAD
 
       // Shift the SACK bitmap by 1.
       pcb->shift_right_sack_bitmap(); 
-=======
-      pcb->sack_bitmap >>= 1;
-      pcb->sack_bitmap_count--;
->>>>>>> main
     }
   }
 
