@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <cmath>
 
 #include "utils.h"
 
@@ -45,8 +44,8 @@ struct Pcb {
 
   // Return the sender effective window in # of packets.
   uint32_t effective_wnd() const {
-    uint32_t effective_wnd = floor(cwnd) - (snd_nxt - snd_una - snd_ooo_acks);
-    return effective_wnd > floor(cwnd) ? 0 : effective_wnd;
+    uint32_t effective_wnd = cwnd - (snd_nxt - snd_una - snd_ooo_acks);
+    return effective_wnd > cwnd ? 0 : effective_wnd;
   }
 
   uint32_t seqno() const { return snd_nxt; }
@@ -64,9 +63,7 @@ struct Pcb {
          ", cwnd: " + std::to_string(cwnd) +
          ", fast_rexmits: " + std::to_string(fast_rexmits) +
          ", rto_rexmits: " + std::to_string(rto_rexmits) +
-         ", effective_wnd: " + std::to_string(effective_wnd()) +
-         ", state: " + std::to_string(state) +
-         ", ss_thresh: " + std::to_string(ssthresh);
+         ", effective_wnd: " + std::to_string(effective_wnd());    
     return s;
   }
 
@@ -121,13 +118,11 @@ struct Pcb {
   uint32_t rcv_nxt{0};
   uint64_t sack_bitmap[4]{0};
   uint8_t sack_bitmap_count{0};
-  float cwnd{kInitialCwnd};
+  uint16_t cwnd{kInitialCwnd};
   uint16_t duplicate_acks{0};
   int rto_timer{kRtoDisabled};
   uint16_t fast_rexmits{0};
   uint16_t rto_rexmits{0};
-  uint16_t ssthresh{0}; // TODO(alireza): Needed for CC, slow start threshold.
-  uint8_t state{0}; // TODO(alireza): Needed for CC, 0: just starting for the first time 1: slow start, 2: congestion avoidance.
 };
 
 }  // namespace swift
