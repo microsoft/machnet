@@ -89,7 +89,10 @@ struct Pcb {
   void rto_advance() { rto_timer++; }
 
   void shift_right_sack_bitmap() {
-    // Since we have 4 elements in the SACK bitmap we start from 3
+    // Since we have 4 elements of 64 bits in the SACK bitmap we start from 3
+    // The value 3 will have to change if we go beyond 256 bits.
+    // For instance if we have 512 bits we will have 8 elements of 64 bits,
+    // In that case we will have to start from 7.
     for (int i = 3; i > 0; --i) {
         // Shift the current element to the right
         sack_bitmap[i] = (sack_bitmap[i] >> 1) | (sack_bitmap[i - 1] << 63);
@@ -97,7 +100,6 @@ struct Pcb {
     
     // Special handling for the first element
     sack_bitmap[0] >>= 1;
-
     sack_bitmap_count--;
   
   }
@@ -124,8 +126,8 @@ struct Pcb {
   int rto_timer{kRtoDisabled};
   uint16_t fast_rexmits{0};
   uint16_t rto_rexmits{0};
-  uint16_t ssthresh{0}; // TODO: Needed for CC, slow start threshold.
-  uint8_t state{0}; // TODO: Needed for CC, 0: just starting for the first time 1: slow start, 2: congestion avoidance.
+  uint16_t ssthresh{0}; // TODO(alireza): Needed for CC, slow start threshold.
+  uint8_t state{0}; // TODO(alireza): Needed for CC, 0: just starting for the first time 1: slow start, 2: congestion avoidance.
 };
 
 }  // namespace swift

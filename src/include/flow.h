@@ -651,8 +651,6 @@ class Flow {
       machneth->sack_bitmap[i] = be64_t(pcb_.sack_bitmap[i]);
     }
 
-    // machneth->sack_bitmap = be64_t(pcb_.sack_bitmap);
-
     machneth->sack_bitmap_count = be16_t(pcb_.sack_bitmap_count);
     machneth->timestamp1 = be64_t(0);
   }
@@ -854,7 +852,6 @@ class Flow {
         // fast recovery phase. We need to send a new packet for every ACK we
         // get.
         auto sack_bitmap_count = machneth->sack_bitmap_count.value();
-        // auto sack_bitmap = machneth->sack_bitmap.value();
         // First we check the SACK bitmap to see if there are more undelivered
         // packets. In fast recovery mode we get after a fast retransmit, and
         // for every new ACKnowledgement we get, we send a new packet.
@@ -869,7 +866,6 @@ class Flow {
         size_t index = 0;
         while (sack_bitmap_count) {
           auto sack_bitmap = machneth->sack_bitmap[3 - (index/64)].value();
-            // if ((sack_bitmap & (1ULL << index)) == 0) {
             if ((sack_bitmap & (1ULL << index % 64)) == 0) {
             // We found a missing packet.
             // We skip holes in the SACK bitmap that have already been
@@ -881,7 +877,7 @@ class Flow {
               PrepareDataPacket<CopyMode::kMemCopy>(msgbuf, packet, seqno);
               txring_->SendPackets(&packet, 1);
               pcb_.rto_reset();
-              // TODO: Reduce the congestion window, currently window is constant
+              // TODO(alireza): Reduce the congestion window, currently window is constant
               // pcb_.reduce_window();
               return;
             }
@@ -910,7 +906,7 @@ class Flow {
 
       tx_tracking_.ReceiveAcks(num_acked_packets);
             
-      // TODO: update the congestion window based on the acked packets.
+      // TODO(alireza): update the congestion window based on the acked packets.
       // currently window is constant.
       // pcb_.expand_window(num_acked_packets);
       pcb_.snd_una = ackno;
