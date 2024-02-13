@@ -270,11 +270,6 @@ TEST_F(FlowTest, TXQueue_PushPop) {
   EXPECT_EQ(channel_->GetFreeBufCount(), channel_->GetTotalBufCount());
 }
 
-TEST_F(FlowTest, RXQueue_init) {
-  EXPECT_EQ(rx_tracking_->ReassemblyQueueCapacity(),
-            RXTracking::kReassemblyQueueDefaultSize - 1);
-}
-
 TEST_F(FlowTest, RXQueue_Push) {
   std::mt19937 engine(rng_);
   std::uniform_int_distribution<std::mt19937::result_type> dist(
@@ -297,13 +292,13 @@ TEST_F(FlowTest, RXQueue_Push) {
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
       auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
-      rx_tracking_->Push(&rx_pcb, pkt);
+      rx_tracking_->Add(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
                 channel_->GetTotalBufCount() - buffers_used);
       // All packets are in order so the reassembly queue should be empty.
-      EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
+      EXPECT_TRUE(rx_tracking_->reass_q_.empty());
       EXPECT_EQ(rx_pcb.get_rcv_nxt(), prev_rcv_nxt + 1);
     }
 
@@ -340,7 +335,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
   // can test for out-of-order.
   std::uniform_int_distribution<> dist(
       2 * packet_payload_size,
-      rx_tracking_->ReassemblyQueueCapacity() * packet_payload_size);
+      RXTracking::kReassemblyMaxSeqnoDistance * packet_payload_size);
 
   const size_t kNumTries = 1000;
   for (size_t i = 0; i < kNumTries; i++) {
@@ -363,23 +358,23 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
       auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
-      rx_tracking_->Push(&rx_pcb, pkt);
+      rx_tracking_->Add(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
                 channel_->GetTotalBufCount() - buffers_used);
       // All packets are in order so the reassembly queue should be empty.
       if (pkt == packets.back()) {
-        EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
+        EXPECT_TRUE(rx_tracking_->reass_q_.empty());
         // `rcv_nxt` should now be updated; the last packet fills the final gap.
         EXPECT_EQ(prev_rcv_nxt + buffers_used, rx_pcb.get_rcv_nxt());
         // The message should have now been delivered to the application, and
         // the reassembly queue should be empty.
-        EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
+        EXPECT_TRUE(rx_tracking_->reass_q_.empty());
         EXPECT_EQ(rx_pcb.sack_bitmap_count, 0);
       } else {
         // All packets are pushed to the rassembly queue out-of-order.
-        EXPECT_FALSE(rx_tracking_->IsReassemblyQueueEmpty());
+        EXPECT_FALSE(rx_tracking_->reass_q_.empty());
         // rcv_nxt should not be updated.
         EXPECT_EQ(prev_rcv_nxt, rx_pcb.get_rcv_nxt());
         // The reassembly queue size should increase with each packet pushed.
@@ -439,7 +434,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
     std::unordered_set<size_t> indices;
     while (index < packets.size()) {
       std::uniform_int_distribution<size_t> dist(
-          2, rx_tracking_->ReassemblyQueueCapacity());
+          2, juggler::net::flow::RXTracking::kReassemblyMaxSeqnoDistance);
 
       auto ooo_batch_size = std::min(dist(rng_), packets.size() - index);
       std::shuffle(packets.begin() + index,
@@ -454,25 +449,25 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
     auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
-      rx_tracking_->Push(&rx_pcb, pkt);
+      rx_tracking_->Add(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
                 channel_->GetTotalBufCount() - buffers_used);
       if (pkt == packets.back()) {
         // For the last packet, the reassembly queue should be empty.
-        EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
+        EXPECT_TRUE(rx_tracking_->reass_q_.empty());
         // rcv_nxt should now be updated; the last packet fills the final gap.
         EXPECT_EQ(prev_rcv_nxt + buffers_used, rx_pcb.get_rcv_nxt());
         // The message should have now been delivered to the application, and
         // the reassembly queue should be empty.
-        EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
+        EXPECT_TRUE(rx_tracking_->reass_q_.empty());
         EXPECT_EQ(rx_pcb.sack_bitmap_count, 0);
       } else {
         if (indices.find(buffers_used) != indices.end()) {
           // For the last packet in an out-of-order batch, the reassembly queue
           // should be flushed, and `rcv_nxt` should be updated.
-          EXPECT_TRUE(rx_tracking_->IsReassemblyQueueEmpty());
+          EXPECT_TRUE(rx_tracking_->reass_q_.empty());
           // `rcv_nxt` should be updated here.
           EXPECT_EQ(prev_rcv_nxt + buffers_used, rx_pcb.get_rcv_nxt());
           EXPECT_EQ(rx_pcb.sack_bitmap_count, 0);
