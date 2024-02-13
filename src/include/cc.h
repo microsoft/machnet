@@ -43,54 +43,6 @@ struct Pcb {
   static constexpr int kRtoDisabled = -1;
   Pcb() {}
 
-  /**
-   * @brief This function is called when we receive an ack from the receiver.
-   * It will update the congestion window based on acked_packets,
-   * and will also update the state of the congestion control.
-   * param acked_packets: number of packets acked by the receiver.
-   */
-  void expand_window(uint16_t acked_packets) {
-    if (state == 2) {
-      // Congestion avoidance.
-      if (cwnd == 0){
-        LOG(ERROR) << "cwnd is zero";
-        state = 1;
-        cwnd = 1;
-      } else {
-        cwnd += 1.0*acked_packets/cwnd;
-      }
-    } else if(state == 1) {
-      // Slow start. We make sure we don't overflow the window.
-      if (cwnd + acked_packets > cwnd) {
-        cwnd += acked_packets;
-      }
-
-      if (cwnd >= ssthresh) {
-        // go to congestion avoidance
-        state = 2;
-      }
-    } else {
-      // first time we started the 
-      cwnd += acked_packets;
-    }
-
-
-    // TODO: This should not be more than what channel can handle, also TX len might need to be checked
-
-    // congestion window more than TX len does not make sense.
-    if (cwnd > 256) {
-      cwnd = 256;
-      ssthresh = cwnd/2;
-    }
-
-  }
-
-  void reduce_window() {
-    ssthresh = cwnd / 2;
-    cwnd = 1; // we can also set it to initial value
-    state = 1; // slow start
-  }
-    
   // Return the sender effective window in # of packets.
   uint32_t effective_wnd() const {
     uint32_t effective_wnd = floor(cwnd) - (snd_nxt - snd_una - snd_ooo_acks);
@@ -172,8 +124,8 @@ struct Pcb {
   int rto_timer{kRtoDisabled};
   uint16_t fast_rexmits{0};
   uint16_t rto_rexmits{0};
-  uint16_t ssthresh{0}; // slow start threshold.
-  uint8_t state{0}; // 0: just starting for the first time 1: slow start, 2: congestion avoidance.
+  uint16_t ssthresh{0}; // TODO: Needed for CC, slow start threshold.
+  uint8_t state{0}; // TODO: Needed for CC, 0: just starting for the first time 1: slow start, 2: congestion avoidance.
 };
 
 }  // namespace swift
