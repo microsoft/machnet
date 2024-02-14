@@ -36,7 +36,7 @@ constexpr bool seqno_gt(uint32_t a, uint32_t b) {
  */
 // TODO(ilias): First-cut implementation. Needs a lot of work.
 struct Pcb {
-  static constexpr std::size_t kInitialCwnd = 128; // start from 128 as inital window
+  static constexpr std::size_t kInitialCwnd = 128;
   static constexpr std::size_t kRexmitThreshold = 3;
   static constexpr int kRtoThresholdInTicks = 3;  // in slow timer ticks.
   static constexpr int kRtoDisabled = -1;
@@ -86,11 +86,7 @@ struct Pcb {
   void rto_advance() { rto_timer++; }
 
   void shift_right_sack_bitmap() {
-    // Since we have 4 elements of 64 bits in the SACK bitmap we start from 3
-    // The value 3 will have to change if we go beyond 256 bits.
-    // For instance if we have 512 bits we will have 8 elements of 64 bits,
-    // In that case we will have to start from 7.
-    for (int i = 3; i > 0; --i) {
+    for (size_t i = sizeof(sack_bitmap)/64 - 1; i > 0; --i) {
         // Shift the current element to the right
         sack_bitmap[i] = (sack_bitmap[i] >> 1) | (sack_bitmap[i - 1] << 63);
     }
