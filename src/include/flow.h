@@ -157,7 +157,11 @@ class RXTracking {
   using MachnetPktHdr = net::MachnetPktHdr;
 
   // 256-bit SACK bitmask => we can track up to 256 packets
-  static constexpr std::size_t kReassemblyMaxSeqnoDistance = 256;
+  static constexpr std::size_t kReassemblyMaxSeqnoDistance =
+    sizeof(sizeof(MachnetPktHdr::sack_bitmap)) * 8;
+
+  static_assert((kReassemblyMaxSeqnoDistance & (kReassemblyMaxSeqnoDistance -
+    1)) == 0, "kReassemblyMaxSeqnoDistance must be a power of two");
 
   struct reasm_queue_ent_t {
     shm::MsgBuf* msgbuf;
@@ -233,7 +237,7 @@ class RXTracking {
     }
 
     // Update the SACK bitmap for the newly received packet.
-    pcb->sack_bitmap_setbit(distance);
+    pcb->sack_bitmap_bit_set(distance);
 
     PushInOrderMsgbufsToShmTrain(pcb);
   }
@@ -269,8 +273,7 @@ class RXTracking {
 
       pcb->advance_rcv_nxt();
 
-      // Shift the SACK bitmap by 1.
-      pcb->shift_right_sack_bitmap(); 
+      pcb->sack_bitmap_shift_right_one(); 
     }
   }
 
@@ -640,15 +643,16 @@ class Flow {
                          const MachnetPktHdr::MachnetFlags& net_flags,
                          uint8_t msg_flags = 0) {
     auto* machneth = packet->head_data<MachnetPktHdr*>(
-        sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
+      sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
     machneth->magic = be16_t(MachnetPktHdr::kMagic);
     machneth->net_flags = net_flags;
     machneth->msg_flags = msg_flags;
     machneth->seqno = be32_t(seqno);
     machneth->ackno = be32_t(pcb_.ackno());
 
-    for (uint8_t i = 0; i < pcb_.kSackBitmapSize / 64; ++i) {
-      machneth->sack_bitmap[i] = be64_t(pcb_.sack_bitmap[i]);
+    int i = 0;
+    for (auto& bitmap : machneth->sack_bitmap) {
+      bitmap = be64_t(pcb_.sack_bitmap[i++]);
     }
     machneth->sack_bitmap_count = be16_t(pcb_.sack_bitmap_count);
 
@@ -877,8 +881,6 @@ class Flow {
               PrepareDataPacket<CopyMode::kMemCopy>(msgbuf, packet, seqno);
               txring_->SendPackets(&packet, 1);
               pcb_.rto_reset();
-              // TODO(alireza): Reduce the congestion window, currently window is constant
-              // pcb_.reduce_window();
               return;
             }
           } else {
@@ -906,9 +908,6 @@ class Flow {
 
       tx_tracking_.ReceiveAcks(num_acked_packets);
             
-      // TODO(alireza): update the congestion window based on the acked packets.
-      // currently window is constant.
-      // pcb_.expand_window(num_acked_packets);
       pcb_.snd_una = ackno;
       pcb_.duplicate_acks = 0;
       pcb_.snd_ooo_acks = 0;

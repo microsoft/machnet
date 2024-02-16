@@ -36,8 +36,8 @@ constexpr bool seqno_gt(uint32_t a, uint32_t b) {
  */
 // TODO(ilias): First-cut implementation. Needs a lot of work.
 struct Pcb {
-  static constexpr std::size_t kInitialCwnd = 128;
-  static constexpr std::size_t kSackBitmapSize = 265;
+  static constexpr std::size_t kInitialCwnd = 32;
+  static constexpr std::size_t kSackBitmapSize = 256;
   static constexpr std::size_t kRexmitThreshold = 3;
   static constexpr int kRtoThresholdInTicks = 3;  // in slow timer ticks.
   static constexpr int kRtoDisabled = -1;
@@ -86,24 +86,35 @@ struct Pcb {
   }
   void rto_advance() { rto_timer++; }
 
-  void shift_right_sack_bitmap() {
-    for (uint8_t i = kSackBitmapSize/64 - 1; i > 0; --i) {
-        // Shift the current element to the right
-        sack_bitmap[i] = (sack_bitmap[i] >> 1) | (sack_bitmap[i - 1] << 63);
+  void sack_bitmap_shift_right_one() {
+    auto sack_bitmap_bucket_max_idx = kSackBitmapSize/sizeof(sack_bitmap[0]) - 1;
+
+    for (uint8_t i = sack_bitmap_bucket_max_idx; i > 0; --i) {
+      // Shift the current each bucket to the right by 1 and take the most
+      // significant bit from the previous bucket 
+      auto sack_bitmap_right_bucket = sack_bitmap[i];
+      auto sack_bitmap_left_bucket = sack_bitmap[i - 1];
+      sack_bitmap_right_bucket = (sack_bitmap_right_bucket >> 1) |
+        (sack_bitmap_left_bucket << 63); 
     }
     
-    // Special handling for the first element
-    sack_bitmap[0] >>= 1;
+    // Special handling for the left most bucket
+    auto sack_bitmap_left_most_bucket = sack_bitmap[0];
+    sack_bitmap_left_most_bucket >>= 1;
+
     sack_bitmap_count--;
   
   }
 
-  void sack_bitmap_setbit(uint32_t index) {
-    if (index >= 256) {
-      LOG(ERROR) << "Index out of bounds: " << index;
-    }
+  void sack_bitmap_bit_set(size_t index) {
+    auto sack_bitmap_bucket_size = sizeof(sack_bitmap[0]);
+    auto sack_bitmap_bucket_idx = index / sack_bitmap_bucket_size;
+    auto sack_bitmap_idx_in_bucket = index % sack_bitmap_bucket_size;
+
+    LOG_IF(FATAL,  index >= kSackBitmapSize) << "Index out of bounds: " <<
+      index;
     
-    sack_bitmap[index/64] |= (1ULL << index % 64);
+    sack_bitmap[sack_bitmap_bucket_idx] |= (1ULL << sack_bitmap_idx_in_bucket);
 
     sack_bitmap_count++;
  }
