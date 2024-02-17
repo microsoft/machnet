@@ -870,11 +870,17 @@ class Flow {
             pcb_.duplicate_acks - swift::Pcb::kRexmitThreshold;
         size_t index = 0;
         while (sack_bitmap_count) {
-          constexpr size_t sack_bitmap_bucket_size = sizeof(machneth->sack_bitmap[0]);
-          constexpr size_t sack_bitmap_max_bucket_idx = sizeof(machneth->sack_bitmap) / sizeof(machneth->sack_bitmap[0]) - 1;
-          const size_t sack_bitmap_bucket_idx = sack_bitmap_max_bucket_idx - index / sack_bitmap_bucket_size;
-          const size_t sack_bitmap_idx_in_bucket = index % sack_bitmap_bucket_size;
-          auto sack_bitmap = machneth->sack_bitmap[sack_bitmap_bucket_idx].value();
+          constexpr size_t sack_bitmap_bucket_size =
+              sizeof(machneth->sack_bitmap[0]);
+          constexpr size_t sack_bitmap_max_bucket_idx =
+              sizeof(machneth->sack_bitmap) / sizeof(machneth->sack_bitmap[0]) -
+              1;
+          const size_t sack_bitmap_bucket_idx =
+              sack_bitmap_max_bucket_idx - index / sack_bitmap_bucket_size;
+          const size_t sack_bitmap_idx_in_bucket =
+              index % sack_bitmap_bucket_size;
+          auto sack_bitmap =
+              machneth->sack_bitmap[sack_bitmap_bucket_idx].value();
           if ((sack_bitmap & (1ULL << sack_bitmap_idx_in_bucket)) == 0) {
             // We found a missing packet.
             // We skip holes in the SACK bitmap that have already been
