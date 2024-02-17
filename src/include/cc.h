@@ -93,7 +93,7 @@ struct Pcb {
     for (size_t i = sack_bitmap_bucket_max_idx; i > 0; --i) {
       // Shift the current each bucket to the right by 1 and take the most
       // significant bit from the previous bucket
-      uint64_t sack_bitmap_left_bucket = sack_bitmap[i - 1];
+      const uint64_t sack_bitmap_left_bucket = sack_bitmap[i - 1];
       uint64_t &sack_bitmap_right_bucket = sack_bitmap[i];
 
       sack_bitmap_right_bucket =

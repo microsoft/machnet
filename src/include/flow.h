@@ -652,7 +652,7 @@ class Flow {
     machneth->ackno = be32_t(pcb_.ackno());
 
     size_t i = 0;
-    for (auto& bitmap : machneth->sack_bitmap) {
+    for (be64_t& bitmap : machneth->sack_bitmap) {
       bitmap = be64_t(pcb_.sack_bitmap[i++]);
     }
     machneth->sack_bitmap_count = be16_t(pcb_.sack_bitmap_count);
