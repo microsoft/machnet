@@ -158,10 +158,11 @@ class RXTracking {
 
   // 256-bit SACK bitmask => we can track up to 256 packets
   static constexpr std::size_t kReassemblyMaxSeqnoDistance =
-    sizeof(sizeof(MachnetPktHdr::sack_bitmap)) * 8;
+      sizeof(sizeof(MachnetPktHdr::sack_bitmap)) * 8;
 
-  static_assert((kReassemblyMaxSeqnoDistance & (kReassemblyMaxSeqnoDistance -
-    1)) == 0, "kReassemblyMaxSeqnoDistance must be a power of two");
+  static_assert((kReassemblyMaxSeqnoDistance &
+                 (kReassemblyMaxSeqnoDistance - 1)) == 0,
+                "kReassemblyMaxSeqnoDistance must be a power of two");
 
   struct reasm_queue_ent_t {
     shm::MsgBuf* msgbuf;
@@ -273,7 +274,7 @@ class RXTracking {
 
       pcb->advance_rcv_nxt();
 
-      pcb->sack_bitmap_shift_right_one(); 
+      pcb->sack_bitmap_shift_right_one();
     }
   }
 
@@ -643,14 +644,14 @@ class Flow {
                          const MachnetPktHdr::MachnetFlags& net_flags,
                          uint8_t msg_flags = 0) {
     auto* machneth = packet->head_data<MachnetPktHdr*>(
-      sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
+        sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
     machneth->magic = be16_t(MachnetPktHdr::kMagic);
     machneth->net_flags = net_flags;
     machneth->msg_flags = msg_flags;
     machneth->seqno = be32_t(seqno);
     machneth->ackno = be32_t(pcb_.ackno());
 
-    int i = 0;
+    size_t i = 0;
     for (auto& bitmap : machneth->sack_bitmap) {
       bitmap = be64_t(pcb_.sack_bitmap[i++]);
     }
@@ -821,7 +822,7 @@ class Flow {
         auto* packet = batch.pkts()[i];
         if (kShmZeroCopyEnabled) {
           PrepareDataPacket<CopyMode::kZeroCopy>(msg_buf, packet,
-                                                pcb_.get_snd_nxt());
+                                                 pcb_.get_snd_nxt());
         } else {
           PrepareDataPacket<CopyMode::kMemCopy>(msg_buf, packet,
                                                 pcb_.get_snd_nxt());
@@ -869,8 +870,8 @@ class Flow {
             pcb_.duplicate_acks - swift::Pcb::kRexmitThreshold;
         size_t index = 0;
         while (sack_bitmap_count) {
-          auto sack_bitmap = machneth->sack_bitmap[3 - (index/64)].value();
-            if ((sack_bitmap & (1ULL << index % 64)) == 0) {
+          auto sack_bitmap = machneth->sack_bitmap[3 - (index / 64)].value();
+          if ((sack_bitmap & (1ULL << index % 64)) == 0) {
             // We found a missing packet.
             // We skip holes in the SACK bitmap that have already been
             // retransmitted.
@@ -907,7 +908,7 @@ class Flow {
       }
 
       tx_tracking_.ReceiveAcks(num_acked_packets);
-            
+
       pcb_.snd_una = ackno;
       pcb_.duplicate_acks = 0;
       pcb_.snd_ooo_acks = 0;

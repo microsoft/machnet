@@ -64,7 +64,7 @@ struct Pcb {
          ", cwnd: " + std::to_string(cwnd) +
          ", fast_rexmits: " + std::to_string(fast_rexmits) +
          ", rto_rexmits: " + std::to_string(rto_rexmits) +
-         ", effective_wnd: " + std::to_string(effective_wnd());    
+         ", effective_wnd: " + std::to_string(effective_wnd());
     return s;
   }
 
@@ -87,44 +87,44 @@ struct Pcb {
   void rto_advance() { rto_timer++; }
 
   void sack_bitmap_shift_right_one() {
-    auto sack_bitmap_bucket_max_idx = kSackBitmapSize/sizeof(sack_bitmap[0]) - 1;
+    constexpr size_t sack_bitmap_bucket_max_idx =
+        kSackBitmapSize / sizeof(sack_bitmap[0]) - 1;
 
-    for (uint8_t i = sack_bitmap_bucket_max_idx; i > 0; --i) {
+    for (size_t i = sack_bitmap_bucket_max_idx; i > 0; --i) {
       // Shift the current each bucket to the right by 1 and take the most
-      // significant bit from the previous bucket 
-      auto sack_bitmap_right_bucket = sack_bitmap[i];
-      auto sack_bitmap_left_bucket = sack_bitmap[i - 1];
-      sack_bitmap_right_bucket = (sack_bitmap_right_bucket >> 1) |
-        (sack_bitmap_left_bucket << 63); 
+      // significant bit from the previous bucket
+      uint64_t sack_bitmap_left_bucket = sack_bitmap[i - 1];
+      uint64_t &sack_bitmap_right_bucket = sack_bitmap[i];
+
+      sack_bitmap_right_bucket =
+          (sack_bitmap_right_bucket >> 1) | (sack_bitmap_left_bucket << 63);
     }
-    
+
     // Special handling for the left most bucket
-    auto sack_bitmap_left_most_bucket = sack_bitmap[0];
+    uint64_t &sack_bitmap_left_most_bucket = sack_bitmap[0];
     sack_bitmap_left_most_bucket >>= 1;
 
     sack_bitmap_count--;
-  
   }
 
-  void sack_bitmap_bit_set(size_t index) {
-    auto sack_bitmap_bucket_size = sizeof(sack_bitmap[0]);
-    auto sack_bitmap_bucket_idx = index / sack_bitmap_bucket_size;
-    auto sack_bitmap_idx_in_bucket = index % sack_bitmap_bucket_size;
+  void sack_bitmap_bit_set(const size_t index) {
+    constexpr size_t sack_bitmap_bucket_size = sizeof(sack_bitmap[0]);
+    const size_t sack_bitmap_bucket_idx = index / sack_bitmap_bucket_size;
+    const size_t sack_bitmap_idx_in_bucket = index % sack_bitmap_bucket_size;
 
-    LOG_IF(FATAL,  index >= kSackBitmapSize) << "Index out of bounds: " <<
-      index;
-    
+    LOG_IF(FATAL, index >= kSackBitmapSize) << "Index out of bounds: " << index;
+
     sack_bitmap[sack_bitmap_bucket_idx] |= (1ULL << sack_bitmap_idx_in_bucket);
 
     sack_bitmap_count++;
- }
+  }
 
   uint32_t target_delay{0};
   uint32_t snd_nxt{0};
   uint32_t snd_una{0};
   uint32_t snd_ooo_acks{0};
   uint32_t rcv_nxt{0};
-  uint64_t sack_bitmap[kSackBitmapSize/sizeof(uint64_t)]{0};
+  uint64_t sack_bitmap[kSackBitmapSize / sizeof(uint64_t)]{0};
   uint8_t sack_bitmap_count{0};
   uint16_t cwnd{kInitialCwnd};
   uint16_t duplicate_acks{0};
