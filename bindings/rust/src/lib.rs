@@ -168,3 +168,49 @@ pub fn machnet_connect(
         }
     }
 }
+
+/// Listens for incoming messages on a specified local IP address and port.
+///
+/// This function establishes a listener on the given `local_ip` and `local_port`
+/// using the provided `MachnetChannelCtrlCtx`.
+///
+/// # Arguments
+///
+/// * `ctx` - A reference to the `MachnetChannelCtrlCtx` associated with the channel
+///   that will be used for listening.
+/// * `local_ip` - A string slice representing the local IP address to listen on.
+///   This should be a valid IPv4 or IPv6 address.
+/// * `local_port` - The local port number to listen on.
+///  This should be a valid port   that is not already in use.
+///
+/// # Returns
+///
+/// Returns `0` on successful setup, `-1` on failure.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use machnet::{MachnetChannelCtrlCtx, machnet_listen};
+///
+/// // Following is only example, normally you do machnet_attach() to get the context
+/// let ctx = MachnetChannelCtrlCtx::default();
+/// let local_ip = "127.0.0.1";
+/// let local_port = 8080;
+///
+/// let result = machnet_listen(&ctx, local_ip, local_port);
+/// if result == 0 {
+///     println!("Listening on {}:{}", local_ip, local_port);
+/// } else {
+///     println!("Failed to set up listener on {}:{}", local_ip, local_port);
+/// }
+/// ```
+///
+pub fn machnet_listen(ctx: &MachnetChannelCtrlCtx, local_ip: &str, local_port: u16) -> i32 {
+    unsafe {
+        let ctx_ptr = ctx as *const _ as *mut c_void;
+        let local_ip_cstr = CString::new(local_ip).unwrap();
+        bindings::machnet_listen(ctx_ptr, local_ip_cstr.as_ptr(), local_port)
+    }
+}
