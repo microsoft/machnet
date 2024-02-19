@@ -7,22 +7,21 @@
 
 use std::{env, path::PathBuf};
 fn main() {
-    // MACHNET environment variable should be set to the root of the machnet project
-    let lib_path = PathBuf::from(env::var("MACHNET").unwrap());
+    let lib_path = "resources";
     println!(
         "cargo:rustc-link-search=native={}",
-        lib_path.to_str().unwrap()
+        lib_path
     );
     println!("cargo:rustc-link-lib=machnet_shim");
 
     let bindings = bindgen::Builder::default()
-        .header(format!("{}/src/ext/machnet.h", lib_path.to_str().unwrap()))
+        .header(format!("{}/machnet.h", lib_path))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .allowlist_function(".*machnet.*")
         .generate()
         .expect("Unable to generate bindings");
 
     bindings
-        .write_to_file(lib_path.join("bindings/rust/src/bindings.rs"))
+        .write_to_file("src/bindings.rs")
         .expect("Couldn't write bindings!");
 }
