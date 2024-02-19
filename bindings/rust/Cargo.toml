@@ -3,8 +3,12 @@ name = "machnet"
 version = "0.1.0"
 edition = "2021"
 
+authors = ["Vahab Jabrayilov <vjabrayilov@cs.columbia.edu>"]
+description = "A Rust FFI bindings for [Machnet](https://github.com/microsoft/machnet)"
+repository = "https://github.com/microsoft/machnet/tree/rust/bindings/rust"
+license = "MIT"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
 bindgen = "0.69.4"
-
