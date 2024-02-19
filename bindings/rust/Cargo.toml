@@ -1,6 +1,6 @@
 [package]
 name = "machnet"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 authors = ["Vahab Jabrayilov <vjabrayilov@cs.columbia.edu>"]
@@ -9,6 +9,7 @@ repository = "https://github.com/microsoft/machnet/tree/rust"
 # repository = "https://github.com/microsoft/machnet/tree/rust/bindings/rust"
 license = "MIT"
 
+publish = ["docs"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
