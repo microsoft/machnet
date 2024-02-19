@@ -1,9 +1,6 @@
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 fn main() {
-    // Assumes MACHNET env variable set to the path of Machnet root directory
-    // in this case $HOME/machnet
-    let lib_path = PathBuf::from(env::var("MACHNET").unwrap());
-
+    let lib_path = PathBuf::from("../..");
     println!(
         "cargo:rustc-link-search=native={}",
         lib_path.to_str().unwrap()
