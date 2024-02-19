@@ -8,10 +8,8 @@
 use std::{env, path::PathBuf};
 fn main() {
     let lib_path = "resources";
-    println!(
-        "cargo:rustc-link-search=native={}",
-        lib_path
-    );
+
+    println!("cargo:rustc-link-search=native={}", lib_path);
     println!("cargo:rustc-link-lib=machnet_shim");
 
     let bindings = bindgen::Builder::default()
@@ -21,7 +19,8 @@ fn main() {
         .generate()
         .expect("Unable to generate bindings");
 
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
-        .write_to_file("src/bindings.rs")
+        .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 }
