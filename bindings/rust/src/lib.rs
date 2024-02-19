@@ -36,7 +36,7 @@ impl MachnetChannelCtrlCtx {
 }
 
 impl MachnetFlow {
-    fn default() -> Self {
+   pub fn default() -> Self {
         MachnetFlow {
             src_ip: 0,
             dst_ip: 0,
