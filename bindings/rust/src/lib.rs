@@ -256,3 +256,57 @@ pub fn machnet_send(ctx: &MachnetChannelCtrlCtx, flow: MachnetFlow, buf: &[u8], 
         bindings::machnet_send(ctx_ptr, flow, buf_ptr, len as usize)
     }
 }
+
+/// Receives a pending message from a remote peer over the network.
+/// This function attempts to receive data from a specified Machnet channel. It uses the provided
+/// Machnet channel context (`ctx`) and fills the given buffer (`buf`) with the received data.
+/// The `flow` parameter will be populated with the flow information of the sender.
+///
+/// # Arguments
+///
+/// * `ctx` - A reference to the `MachnetChannelCtrlCtx` representing the Machnet channel context.
+/// * `buf` - A mutable byte slice (`&mut [u8]`) that will be filled with the received message.
+///   The length of `buf` should be at least as large as the `len` parameter.
+/// * `len` - The length of `buf` in bytes. This indicates the maximum amount of data
+///   that can be written into `buf`.
+/// * `flow` - A reference to `MachnetFlow` where the flow information of the sender will be stored.
+///
+/// # Returns
+///
+/// Returns a `i64` indicating the result of the receive operation:
+/// * `0` if no message is currently available.
+/// * `-1` on failure, such as if an error occurs during the receive operation.
+/// * Otherwise, returns the number of bytes received and written into `buf`.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use machnet::{MachnetChannelCtrlCtx, MachnetFlow, machnet_recv};
+/// // Following is just for demonstration purposes, normally you do machnet_attach() to get the context and flow is obtained from machnet_listen().
+/// let ctx = MachnetChannelCtrlCtx::default();
+/// let mut flow = MachnetFlow::default();
+/// let mut buffer = [0; 1024]; // Example buffer
+/// let len = buffer.len() as u64;
+///
+/// match machnet_recv(&ctx, &mut buffer, len, &mut flow) {
+///     0 => println!("No message available"),
+///     -1 => println!("Failed to receive message"),
+///     bytes_received => println!("Received {} bytes", bytes_received),
+/// }
+/// ```
+///
+pub fn machnet_recv(
+    ctx: &MachnetChannelCtrlCtx,
+    buf: &mut [u8],
+    len: u64,
+    flow: &mut MachnetFlow,
+) -> i64 {
+    unsafe {
+        let ctx_ptr = ctx as *const _ as *mut c_void;
+        let buf_ptr = buf.as_ptr() as *mut c_void;
+        let flow_ptr = flow as *mut MachnetFlow;
+        bindings::machnet_recv(ctx_ptr, buf_ptr, len as usize, flow_ptr) as i64
+    }
+}
