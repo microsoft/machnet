@@ -1,3 +1,10 @@
+// Copyright (C) 2023 Vahab Jabrayilov
+// Email: vjabrayilov@cs.columbia.edu
+//
+// This file is part of the Machnet project.
+//
+// This project is licensed under the MIT License - see the LICENSE file for details
+
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]

@@ -1,3 +1,10 @@
+// Copyright (C) 2023 Vahab Jabrayilov
+// Email: vjabrayilov@cs.columbia.edu
+//
+// This file is part of the Machnet project.
+//
+// This project is licensed under the MIT License - see the LICENSE file for details
+
 use std::path::PathBuf;
 fn main() {
     let lib_path = PathBuf::from("../..");
