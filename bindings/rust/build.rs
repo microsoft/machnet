@@ -5,9 +5,10 @@
 //
 // This project is licensed under the MIT License - see the LICENSE file for details
 
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 fn main() {
-    let lib_path = PathBuf::from("../..");
+    // MACHNET environment variable should be set to the root of the machnet project
+    let lib_path = PathBuf::from(env::var("MACHNET").unwrap());
     println!(
         "cargo:rustc-link-search=native={}",
         lib_path.to_str().unwrap()
