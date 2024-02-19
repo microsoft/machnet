@@ -21,7 +21,16 @@ impl MachnetChannelCtrlCtx {
         }
     }
 
-    pub fn new() -> Self {
+    // only for demonstration purposes
+    // channel context should be initialized using machnet_attach()
+    pub fn default() -> Self {
+        MachnetChannelCtrlCtx {
+            // default values
+            req_id: 0,
+        }
+    }
+
+    fn new() -> Self {
         todo!()
     }
 }
@@ -117,7 +126,7 @@ pub fn machnet_attach() -> Option<MachnetChannelCtrlCtx> {
 /// use machnet::{MachnetChannelCtrlCtx, machnet_connect,machnet_attach};
 ///
 /// // Example context initialization, normally you do machnet_attach() to get the context
-/// let mut ctx = MachnetChannelCtrlCtx::new();
+/// let mut ctx = MachnetChannelCtrlCtx::default();
 /// let local_ip = "192.168.1.2";
 /// let remote_ip = "192.168.1.3";
 /// let remote_port = 8080;
@@ -133,13 +142,13 @@ pub fn machnet_attach() -> Option<MachnetChannelCtrlCtx> {
 /// ```
 ///
 pub fn machnet_connect(
-    ctx: &mut MachnetChannelCtrlCtx,
+    ctx: &MachnetChannelCtrlCtx,
     local_ip: &str,
     remote_ip: &str,
     remote_port: u16,
 ) -> Option<MachnetFlow> {
     unsafe {
-        let ctx_ptr = ctx as *mut _ as *mut c_void;
+        let ctx_ptr = ctx as *const _ as *mut c_void;
         let mut flow = MachnetFlow::default();
         // needed as local variables due to lifetime reasons
         let local_ip_cstr = CString::new(local_ip).unwrap();
@@ -159,9 +168,3 @@ pub fn machnet_connect(
         }
     }
 }
-
-
-
-
-
-
