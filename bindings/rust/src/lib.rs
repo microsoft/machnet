@@ -29,14 +29,10 @@ impl MachnetChannelCtrlCtx {
             req_id: 0,
         }
     }
-
-    fn new() -> Self {
-        todo!()
-    }
 }
 
 impl MachnetFlow {
-   pub fn default() -> Self {
+    pub fn default() -> Self {
         MachnetFlow {
             src_ip: 0,
             dst_ip: 0,
@@ -217,30 +213,30 @@ pub fn machnet_listen(ctx: &MachnetChannelCtrlCtx, local_ip: &str, local_port: u
 
 /// Enqueues a message for transmission to a remote peer over the network.
 ///
-/// This function sends data over a specified Machnet channel. 
+/// This function sends data over a specified Machnet channel.
 /// It uses the provided
-/// Machnet channel context and a pre-created flow to the remote peer. 
+/// Machnet channel context and a pre-created flow to the remote peer.
 /// The data to be sent is specified by a buffer and its length in bytes.
-/// 
+///
 /// # Arguments
 ///
 /// * `ctx` - A reference to the `MachnetChannelCtrlCtx` representing the Machnet channel context.
 /// * `flow` - The `MachnetFlow` instance representing a pre-created flow to the remote peer.
 /// * `buf` - A byte slice (`&[u8]`) reference representing the data buffer to be sent to the remote peer.
 /// * `len` - The length of the data buffer in bytes (type `u64`).
-/// 
+///
 /// # Returns
-/// 
+///
 /// Returns `0` on successful transmission, `-1` on failure.
-/// 
+///
 /// # Examples
-/// 
+///
 /// Basic usage:
 ///
 /// ```
 /// # use machnet::{MachnetChannelCtrlCtx, MachnetFlow, machnet_send};
 /// // Following is just for demonstration purposes, normally you do machnet_attach() to get the context and machnet_connect() to get the flow
-/// let ctx = MachnetChannelCtrlCtx::default(); 
+/// let ctx = MachnetChannelCtrlCtx::default();
 /// let flow = MachnetFlow::default();
 /// let data = [1, 2, 3, 4]; // Example data to send
 /// let len = data.len() as u64;
