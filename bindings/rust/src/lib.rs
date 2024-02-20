@@ -46,6 +46,15 @@ impl MachnetFlow {
             dst_port: 0,
         }
     }
+
+    pub fn new(src_ip: u32, src_port: u16, dst_ip: u32, dst_port: u16) -> Self {
+        MachnetFlow {
+            src_ip,
+            dst_ip,
+            src_port,
+            dst_port,
+        }
+    }
 }
 
 /// Initializes the Machnet library for interacting with the Machnet sidecar.
@@ -309,6 +318,7 @@ pub fn machnet_recv(
     len: u64,
     flow: &mut MachnetFlow,
 ) -> i64 {
+    // TODO(vjabrayilov): Refactor so that flow is also returned value.
     unsafe {
         let ctx_ptr = ctx as *const _ as *mut c_void;
         let buf_ptr = buf.as_ptr() as *mut c_void;
