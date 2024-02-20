@@ -18,7 +18,7 @@ To use the Machnet Rust bindings, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-machnet = "0.1.2"
+machnet = "0.1.4"
 ```
 
 ## Open Source Project
