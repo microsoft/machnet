@@ -156,8 +156,13 @@ class RXTracking {
  public:
   using MachnetPktHdr = net::MachnetPktHdr;
 
-  // 64-bit SACK bitmask => we can track up to 64 packets
-  static constexpr std::size_t kReassemblyMaxSeqnoDistance = 64;
+  // 256-bit SACK bitmask => we can track up to 256 packets
+  static constexpr std::size_t kReassemblyMaxSeqnoDistance =
+      sizeof(sizeof(MachnetPktHdr::sack_bitmap)) * 8;
+
+  static_assert((kReassemblyMaxSeqnoDistance &
+                 (kReassemblyMaxSeqnoDistance - 1)) == 0,
+                "kReassemblyMaxSeqnoDistance must be a power of two");
 
   struct reasm_queue_ent_t {
     shm::MsgBuf* msgbuf;
@@ -233,8 +238,7 @@ class RXTracking {
     }
 
     // Update the SACK bitmap for the newly received packet.
-    pcb->sack_bitmap |= (1ULL << distance);
-    pcb->sack_bitmap_count++;
+    pcb->sack_bitmap_bit_set(distance);
 
     PushInOrderMsgbufsToShmTrain(pcb);
   }
@@ -269,8 +273,8 @@ class RXTracking {
       }
 
       pcb->advance_rcv_nxt();
-      pcb->sack_bitmap >>= 1;
-      pcb->sack_bitmap_count--;
+
+      pcb->sack_bitmap_shift_right_one();
     }
   }
 
@@ -646,8 +650,14 @@ class Flow {
     machneth->msg_flags = msg_flags;
     machneth->seqno = be32_t(seqno);
     machneth->ackno = be32_t(pcb_.ackno());
-    machneth->sack_bitmap = be64_t(pcb_.sack_bitmap);
+
+    for (size_t i = 0; i < sizeof(MachnetPktHdr::sack_bitmap) /
+                               sizeof(MachnetPktHdr::sack_bitmap[0]);
+         ++i) {
+      machneth->sack_bitmap[i] = be64_t(pcb_.sack_bitmap[i]);
+    }
     machneth->sack_bitmap_count = be16_t(pcb_.sack_bitmap_count);
+
     machneth->timestamp1 = be64_t(0);
   }
 
@@ -813,7 +823,7 @@ class Flow {
         auto* packet = batch.pkts()[i];
         if (kShmZeroCopyEnabled) {
           PrepareDataPacket<CopyMode::kZeroCopy>(msg_buf, packet,
-                                                pcb_.get_snd_nxt());
+                                                 pcb_.get_snd_nxt());
         } else {
           PrepareDataPacket<CopyMode::kMemCopy>(msg_buf, packet,
                                                 pcb_.get_snd_nxt());
@@ -847,9 +857,7 @@ class Flow {
         // We have already done the fast retransmit, so we are now in the
         // fast recovery phase. We need to send a new packet for every ACK we
         // get.
-        auto sack_bitmap = machneth->sack_bitmap.value();
         auto sack_bitmap_count = machneth->sack_bitmap_count.value();
-
         // First we check the SACK bitmap to see if there are more undelivered
         // packets. In fast recovery mode we get after a fast retransmit, and
         // for every new ACKnowledgement we get, we send a new packet.
@@ -863,7 +871,18 @@ class Flow {
             pcb_.duplicate_acks - swift::Pcb::kRexmitThreshold;
         size_t index = 0;
         while (sack_bitmap_count) {
-          if ((sack_bitmap & (1ULL << index)) == 0) {
+          constexpr size_t sack_bitmap_bucket_size =
+              sizeof(machneth->sack_bitmap[0]);
+          constexpr size_t sack_bitmap_max_bucket_idx =
+              sizeof(machneth->sack_bitmap) / sizeof(machneth->sack_bitmap[0]) -
+              1;
+          const size_t sack_bitmap_bucket_idx =
+              sack_bitmap_max_bucket_idx - index / sack_bitmap_bucket_size;
+          const size_t sack_bitmap_idx_in_bucket =
+              index % sack_bitmap_bucket_size;
+          auto sack_bitmap =
+              machneth->sack_bitmap[sack_bitmap_bucket_idx].value();
+          if ((sack_bitmap & (1ULL << sack_bitmap_idx_in_bucket)) == 0) {
             // We found a missing packet.
             // We skip holes in the SACK bitmap that have already been
             // retransmitted.
@@ -898,7 +917,9 @@ class Flow {
         state_ = State::kEstablished;
         num_acked_packets--;
       }
+
       tx_tracking_.ReceiveAcks(num_acked_packets);
+
       pcb_.snd_una = ackno;
       pcb_.duplicate_acks = 0;
       pcb_.snd_ooo_acks = 0;
