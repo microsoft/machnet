@@ -2,10 +2,11 @@ use clap::Parser;
 use hdrhistogram::Histogram;
 use log::{debug, error, info, warn};
 use machnet::{
-    machnet_attach, machnet_connect, machnet_listen, machnet_recv, machnet_send,
-    MachnetChannel, MachnetFlow,
+    machnet_attach, machnet_connect, machnet_listen, machnet_recv, machnet_send, MachnetChannel,
+    MachnetFlow,
 };
 use signal_hook::{consts::SIGINT, iterator::Signals};
+use std::env;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, sleep};
@@ -118,11 +119,7 @@ impl<'a> ThreadCtx<'a> {
     const LATENCY_PRECISION: u8 = 2; // two significant digits
     const MACHNET_MSG_MAX_LEN: usize = (8 * 1 << 20); // 8MB
 
-    fn new(
-        channel_ctx: MachnetChannel<'a>,
-        flow: Option<MachnetFlow>,
-        msg_window: u64,
-    ) -> Self {
+    fn new(channel_ctx: MachnetChannel<'a>, flow: Option<MachnetFlow>, msg_window: u64) -> Self {
         let histogram = Histogram::<u64>::new_with_bounds(
             Self::MIN_LATENCY_MICROS,
             Self::MAX_LATENCY_MICROS,
@@ -327,7 +324,6 @@ fn client_send_one(thread_ctx: &mut ThreadCtx, msg_size: u64, window_slot: u64) 
 }
 
 fn client_recv_one_blocking(thread_ctx: &mut ThreadCtx, msg_window: u64) -> u64 {
-
     loop {
         if !G_KEEP_RUNNING.load(Ordering::SeqCst) {
             info!("client_recv_one_blocking: Exiting.");
@@ -402,6 +398,7 @@ fn client(channel_ctx: MachnetChannel, flow: MachnetFlow, msg_size: u64, msg_win
 }
 
 fn main() {
+    env::set_var("RUST_LOG", "info");
     env_logger::init();
     let msg_gen = MsgGen::parse();
     setup_signal_handler();
