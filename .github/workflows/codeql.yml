@@ -12,6 +12,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      deployments: read
+      packages: read
+      pull-requests: write
+      security-events: write
+
     container:
       image: ghcr.io/${{ github.repository }}/machnet_build_base:latest
       credentials:
