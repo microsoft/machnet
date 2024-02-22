@@ -9,6 +9,13 @@ on:
 jobs:
   build_and_push_machnet:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      deployments: read
+      packages: write
+      pull-requests: write
+      security-events: write
 
     steps:
       - name: Checkout code
