@@ -1,6 +1,6 @@
 [package]
 name = "machnet"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 
 authors = ["Vahab Jabrayilov <vjabrayilov@cs.columbia.edu>"]

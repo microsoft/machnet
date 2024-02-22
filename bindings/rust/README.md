@@ -30,8 +30,15 @@ To use the Machnet Rust bindings, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-machnet = "0.1.8"
+machnet = "0.1.9"
 ```
+
+## Demo
+
+We have a simple [msg_gen](https://github.com/microsoft/machnet/tree/rust/examples/rust) application that uses the Machnet stack. 
+It is a message generator application that sends variable size messages to a server and receives them back.
+
+For 1 kilobyte message sizes, Rust and C++ show almost identical latencies of 53 and 52 microseconds respectively, indicating their comparable and fast performance.
 
 ## Open Source Project
 
