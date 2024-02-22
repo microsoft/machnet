@@ -12,14 +12,33 @@ Distributed applications like databases and finance can use Machnet as the netwo
 
 We support a variety of cloud (Azure, AWS, GCP) and bare-metal platforms, OSs, and NICs, evaluated in [PERFORMANCE_REPORT.md](../../docs/PERFORMANCE_REPORT.md).
 
+## Prerequisites
+
+`clang` is required to build the Rust bindings. You can install it using the following command:
+
+```bash
+sudo apt-get update && sudo apt-get install -y clang
+```
+
+It also requires that `libmachnet_shim.so` is built and installed on the system.
+You can check out the [Machnet](https://github.com/microsoft/machnet/) repo for the details.
+Use the [`build_shim.sh`](https://github.com/microsoft/machnet/blob/main/build_shim.sh) to automatically build and install the `libmachnet_shim.so` library.
+
 ## Getting Started
 
 To use the Machnet Rust bindings, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-machnet = "0.1.7"
+machnet = "0.1.9"
 ```
+
+## Demo
+
+We have a simple [msg_gen](https://github.com/microsoft/machnet/tree/rust/examples/rust) application that uses the Machnet stack. 
+It is a message generator application that sends variable size messages to a server and receives them back.
+
+For 1 kilobyte message sizes, Rust and C++ show almost identical latencies of 53 and 52 microseconds respectively, indicating their comparable and fast performance.
 
 ## Open Source Project
 

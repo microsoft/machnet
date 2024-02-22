@@ -2,10 +2,11 @@ use clap::Parser;
 use hdrhistogram::Histogram;
 use log::{debug, error, info, warn};
 use machnet::{
-    self, machnet_attach, machnet_connect, machnet_listen, machnet_recv, machnet_send,
-    MachnetChannelCtrlCtx, MachnetFlow,
+    machnet_attach, machnet_connect, machnet_listen, machnet_recv, machnet_send, MachnetChannel,
+    MachnetFlow,
 };
 use signal_hook::{consts::SIGINT, iterator::Signals};
+use std::env;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, sleep};
@@ -16,9 +17,8 @@ const ABOUT: &str = "This application is a simple message generator that support
 #[derive(Parser, Debug)]
 #[command(name="msg_gen", version = "1.0", about =ABOUT, long_about = None)]
 struct MsgGen {
-    #[arg(short, long, action = clap::ArgAction::Count)]
-    debug: u8,
-
+    // #[arg(short, long, action = clap::ArgAction::Count)]
+    // debug: u8,
     #[arg(long, help = "IP of the local Machnet interface")]
     local_ip: String,
 
@@ -97,12 +97,12 @@ impl Stats {
         }
     }
 }
-
+#[derive(Debug, Clone)]
 struct MsgLatencyInfo {
     tx_ts: Instant,
 }
-struct ThreadCtx {
-    channel_ctx: MachnetChannelCtrlCtx,
+struct ThreadCtx<'a> {
+    channel_ctx: MachnetChannel<'a>,
     flow: Option<MachnetFlow>,
     rx_message: Vec<u8>,
     tx_message: Vec<u8>,
@@ -113,13 +113,13 @@ struct ThreadCtx {
     stats: Stats,
 }
 
-impl ThreadCtx {
+impl<'a> ThreadCtx<'a> {
     const MIN_LATENCY_MICROS: u64 = 1;
     const MAX_LATENCY_MICROS: u64 = 100 * 100 * 100; //100 sec
     const LATENCY_PRECISION: u8 = 2; // two significant digits
     const MACHNET_MSG_MAX_LEN: usize = (8 * 1 << 20); // 8MB
 
-    fn new(channel_ctx: MachnetChannelCtrlCtx, flow: Option<MachnetFlow>, msg_window: u64) -> Self {
+    fn new(channel_ctx: MachnetChannel<'a>, flow: Option<MachnetFlow>, msg_window: u64) -> Self {
         let histogram = Histogram::<u64>::new_with_bounds(
             Self::MIN_LATENCY_MICROS,
             Self::MAX_LATENCY_MICROS,
@@ -129,12 +129,17 @@ impl ThreadCtx {
         Self {
             channel_ctx,
             flow,
-            rx_message: Vec::with_capacity(Self::MACHNET_MSG_MAX_LEN),
+            rx_message: vec![0; Self::MACHNET_MSG_MAX_LEN],
             tx_message: vec![0; Self::MACHNET_MSG_MAX_LEN],
             message_gold: vec![0; Self::MACHNET_MSG_MAX_LEN],
             latency_hist: histogram,
             num_request_latency_samples: 0,
-            msg_latency_info_vec: Vec::with_capacity(msg_window.try_into().unwrap()),
+            msg_latency_info_vec: vec![
+                MsgLatencyInfo {
+                    tx_ts: Instant::now()
+                };
+                msg_window.try_into().unwrap()
+            ],
             stats: Stats::new(),
         }
     }
@@ -218,7 +223,7 @@ fn report_stats(thread_ctx: &mut ThreadCtx) {
     }
 }
 
-fn server(channel_ctx: MachnetChannelCtrlCtx, msg_size: u64, msg_window: u64) {
+fn server(channel_ctx: MachnetChannel, msg_size: u64, msg_window: u64) {
     let mut thread_ctx = ThreadCtx::new(channel_ctx, None, msg_window);
     info!("Server: Starting.");
 
@@ -229,7 +234,7 @@ fn server(channel_ctx: MachnetChannelCtrlCtx, msg_size: u64, msg_window: u64) {
         }
 
         let stats_cur = &mut thread_ctx.stats.current;
-        let channel_ctx = &thread_ctx.channel_ctx;
+        let channel_ctx = &mut thread_ctx.channel_ctx;
 
         let mut rx_flow = MachnetFlow::default();
         let rx_message_size = thread_ctx.rx_message.len() as u64;
@@ -287,7 +292,7 @@ fn server(channel_ctx: MachnetChannelCtrlCtx, msg_size: u64, msg_window: u64) {
 }
 
 fn client_send_one(thread_ctx: &mut ThreadCtx, msg_size: u64, window_slot: u64) {
-    debug!("Client: Sending message with window slot {}", window_slot);
+    // debug!("Client: Sending message with window slot {}", window_slot);
     thread_ctx.record_request_start(window_slot as usize);
     let stats_cur = &mut thread_ctx.stats.current;
     // thread_ctx.msg_latency_info_vec[window_slot as usize].tx_ts = Instant::now();
@@ -297,10 +302,10 @@ fn client_send_one(thread_ctx: &mut ThreadCtx, msg_size: u64, window_slot: u64) 
     req_hdr.window_slot = window_slot;
 
     let ret = machnet_send(
-        &thread_ctx.channel_ctx,
+        &mut thread_ctx.channel_ctx,
         thread_ctx.flow.unwrap(),
         &thread_ctx.tx_message,
-        thread_ctx.tx_message.len() as u64,
+        msg_size,
     );
 
     match ret {
@@ -319,8 +324,6 @@ fn client_send_one(thread_ctx: &mut ThreadCtx, msg_size: u64, window_slot: u64) 
 }
 
 fn client_recv_one_blocking(thread_ctx: &mut ThreadCtx, msg_window: u64) -> u64 {
-    // let channel_ctx = &mut thread_ctx.channel_ctx;
-
     loop {
         if !G_KEEP_RUNNING.load(Ordering::SeqCst) {
             info!("client_recv_one_blocking: Exiting.");
@@ -370,7 +373,7 @@ fn client_recv_one_blocking(thread_ctx: &mut ThreadCtx, msg_window: u64) -> u64 
     }
 }
 
-fn client(channel_ctx: MachnetChannelCtrlCtx, flow: MachnetFlow, msg_size: u64, msg_window: u64) {
+fn client(channel_ctx: MachnetChannel, flow: MachnetFlow, msg_size: u64, msg_window: u64) {
     let mut thread_ctx = ThreadCtx::new(channel_ctx, Some(flow), msg_window);
     info!("Client: Starting.");
 
@@ -395,6 +398,7 @@ fn client(channel_ctx: MachnetChannelCtrlCtx, flow: MachnetFlow, msg_size: u64, 
 }
 
 fn main() {
+    env::set_var("RUST_LOG", "info");
     env_logger::init();
     let msg_gen = MsgGen::parse();
     setup_signal_handler();
@@ -419,12 +423,12 @@ fn main() {
         "Failed to initialize Machnet library."
     );
 
-    let channel_ctx = machnet_attach().unwrap();
+    let mut channel_ctx = machnet_attach().unwrap();
 
     let datapath_thread = match msg_gen.remote_ip.is_empty() {
         true => {
             // Server-mode
-            let ret = machnet_listen(&channel_ctx, &msg_gen.local_ip, msg_gen.local_port);
+            let ret = machnet_listen(&mut channel_ctx, &msg_gen.local_ip, msg_gen.local_port);
             assert_eq!(ret, 0, "Failed to listen on local port.");
 
             info!("[LISTENING] [{}:{}]", msg_gen.local_ip, msg_gen.local_port);
