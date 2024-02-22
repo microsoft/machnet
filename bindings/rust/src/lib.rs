@@ -12,30 +12,41 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-pub use bindings::{MachnetChannelCtrlCtx, MachnetFlow};
+pub use bindings::MachnetFlow;
 
-use std::ffi::{c_void, CString};
+use std::{
+    ffi::{c_void, CString},
+    marker::PhantomData,
+};
 
-impl MachnetChannelCtrlCtx {
-    unsafe fn from_raw(ptr: *mut c_void) -> Option<Self> {
-        let typed_ptr = ptr as *mut MachnetChannelCtrlCtx;
-        if typed_ptr.is_null() {
+#[derive(Debug)]
+pub struct MachnetChannel<'a> {
+    ptr: *mut c_void,
+    _marker: PhantomData<&'a mut c_void>,
+}
+
+impl<'a> MachnetChannel<'a> {
+    pub fn new(ptr: *mut c_void) -> Self {
+        MachnetChannel {
+            ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn from_raw(ptr: *mut c_void) -> Option<Self> {
+        if ptr.is_null() {
             None
         } else {
-            Some(*typed_ptr)
-            // typed_ptr.as_ref();
+            Some(MachnetChannel::new(ptr))
         }
     }
 
-    // only for demonstration purposes
-    // channel context should be initialized using machnet_attach()
-    pub fn default() -> Self {
-        MachnetChannelCtrlCtx {
-            // default values
-            req_id: 0,
-        }
+    pub fn get_ptr(&self) -> *mut c_void {
+        self.ptr
     }
 }
+
+unsafe impl<'a> Send for MachnetChannel<'a> {}
 
 impl MachnetFlow {
     pub fn default() -> Self {
@@ -95,10 +106,10 @@ pub fn machnet_init() -> i32 {
 /// ```
 /// use machnet::machnet_attach;
 ///     
-/// let control_ctx = machnet_attach();
-/// match control_ctx {
-///     Some(ctx) => {
-///         // Successfully attached to Machnet channel, use `ctx` here
+/// let channel= machnet_attach();
+/// match channel{
+///     Some(ch) => {
+///         // Successfully attached to Machnet channel, use `ch` here
 ///     }
 ///     None => {
 ///         // Handle the case where attachment to Machnet channel fails
@@ -106,23 +117,22 @@ pub fn machnet_init() -> i32 {
 /// }
 /// ```
 /// # Returns
-/// Returns an ```Option<MachnetChannelCtrlCtx>```.
+/// Returns an ```Option<MachnetChannel>```.
 ///
-pub fn machnet_attach() -> Option<MachnetChannelCtrlCtx> {
+pub fn machnet_attach<'a>() -> Option<MachnetChannel<'a>> {
     unsafe {
         let ptr = bindings::machnet_attach();
-        MachnetChannelCtrlCtx::from_raw(ptr)
+        MachnetChannel::from_raw(ptr)
     }
 }
 
-/// Establishes a Machnet connection using the provided control context.
+/// Establishes a Machnet connection using the provided chanenel.
 ///
 /// This function attempts to create a connection between a local IP address and a remote IP address on a specified port.
 ///
 /// # Arguments
 ///
-/// * `ctx` - A mutable reference to the `MachnetChannelCtrlCtx` which holds
-///   the control context for the Machnet connection.
+/// * `channel` - A mutable reference to the `MachnetChannel`.
 /// * `local_ip` - A string slice representing the local IP address to bind to.
 /// * `remote_ip` - A string slice representing the remote IP address to connect to.
 /// * `remote_port` - The remote port number to connect to.
@@ -134,15 +144,14 @@ pub fn machnet_attach() -> Option<MachnetChannelCtrlCtx> {
 /// # Examples
 ///
 /// ```
-/// use machnet::{MachnetChannelCtrlCtx, machnet_connect,machnet_attach};
+/// use machnet::{machnet_connect,machnet_attach};
 ///
-/// // Example context initialization, normally you do machnet_attach() to get the context
-/// let mut ctx = MachnetChannelCtrlCtx::default();
+/// let mut channel = machnet_attach().unwrap();
 /// let local_ip = "192.168.1.2";
 /// let remote_ip = "192.168.1.3";
 /// let remote_port = 8080;
 ///
-/// match machnet_connect(&mut ctx, local_ip, remote_ip, remote_port) {
+/// match machnet_connect(&mut channel, local_ip, remote_ip, remote_port) {
 ///     Some(flow) => {
 ///         // Connection was successful, use `flow` here
 ///     }
@@ -153,24 +162,24 @@ pub fn machnet_attach() -> Option<MachnetChannelCtrlCtx> {
 /// ```
 ///
 pub fn machnet_connect(
-    ctx: &MachnetChannelCtrlCtx,
+    channel: &MachnetChannel,
     local_ip: &str,
     remote_ip: &str,
     remote_port: u16,
 ) -> Option<MachnetFlow> {
     unsafe {
-        let ctx_ptr = ctx as *const _ as *mut c_void;
+        let channel_ptr = channel.get_ptr();
         let mut flow = MachnetFlow::default();
+        let flow_ptr = &mut flow as *mut MachnetFlow;
         // needed as local variables due to lifetime reasons
         let local_ip_cstr = CString::new(local_ip).unwrap();
         let remote_ip_cstr = CString::new(remote_ip).unwrap();
-
         let res = bindings::machnet_connect(
-            ctx_ptr,
+            channel_ptr,
             local_ip_cstr.as_ptr(),
             remote_ip_cstr.as_ptr(),
             remote_port,
-            &mut flow,
+            flow_ptr, // &mut flow,
         );
 
         match res {
@@ -183,11 +192,11 @@ pub fn machnet_connect(
 /// Listens for incoming messages on a specified local IP address and port.
 ///
 /// This function establishes a listener on the given `local_ip` and `local_port`
-/// using the provided `MachnetChannelCtrlCtx`.
+/// using the provided `MachnetChannel`.
 ///
 /// # Arguments
 ///
-/// * `ctx` - A reference to the `MachnetChannelCtrlCtx` associated with the channel
+/// * `channel` - A reference to the `MachnetChannel` associated with the channel
 ///   that will be used for listening.
 /// * `local_ip` - A string slice representing the local IP address to listen on.
 ///   This should be a valid IPv4 or IPv6 address.
@@ -203,14 +212,13 @@ pub fn machnet_connect(
 /// Basic usage:
 ///
 /// ```
-/// use machnet::{MachnetChannelCtrlCtx, machnet_listen};
+/// use machnet::{machnet_attach, machnet_listen};
 ///
-/// // Following is only example, normally you do machnet_attach() to get the context
-/// let ctx = MachnetChannelCtrlCtx::default();
+/// let mut channel = machnet_attach().unwrap();
 /// let local_ip = "127.0.0.1";
 /// let local_port = 8080;
 ///
-/// let result = machnet_listen(&ctx, local_ip, local_port);
+/// let result = machnet_listen(&mut channel, local_ip, local_port);
 /// if result == 0 {
 ///     println!("Listening on {}:{}", local_ip, local_port);
 /// } else {
@@ -218,11 +226,11 @@ pub fn machnet_connect(
 /// }
 /// ```
 ///
-pub fn machnet_listen(ctx: &MachnetChannelCtrlCtx, local_ip: &str, local_port: u16) -> i32 {
+pub fn machnet_listen(channel: &mut MachnetChannel, local_ip: &str, local_port: u16) -> i32 {
     unsafe {
-        let ctx_ptr = ctx as *const _ as *mut c_void;
+        let channel_ptr = channel.get_ptr();
         let local_ip_cstr = CString::new(local_ip).unwrap();
-        bindings::machnet_listen(ctx_ptr, local_ip_cstr.as_ptr(), local_port)
+        bindings::machnet_listen(channel_ptr, local_ip_cstr.as_ptr(), local_port)
     }
 }
 
@@ -235,7 +243,7 @@ pub fn machnet_listen(ctx: &MachnetChannelCtrlCtx, local_ip: &str, local_port: u
 ///
 /// # Arguments
 ///
-/// * `ctx` - A reference to the `MachnetChannelCtrlCtx` representing the Machnet channel context.
+/// * `channel` - A reference to the `MachnetChannel` representing the Machnet channel.
 /// * `flow` - The `MachnetFlow` instance representing a pre-created flow to the remote peer.
 /// * `buf` - A byte slice (`&[u8]`) reference representing the data buffer to be sent to the remote peer.
 /// * `len` - The length of the data buffer in bytes (type `u64`).
@@ -249,14 +257,14 @@ pub fn machnet_listen(ctx: &MachnetChannelCtrlCtx, local_ip: &str, local_port: u
 /// Basic usage:
 ///
 /// ```
-/// # use machnet::{MachnetChannelCtrlCtx, MachnetFlow, machnet_send};
+/// # use machnet::{MachnetChannel, MachnetFlow, machnet_send, machnet_attach};
 /// // Following is just for demonstration purposes, normally you do machnet_attach() to get the context and machnet_connect() to get the flow
-/// let ctx = MachnetChannelCtrlCtx::default();
+/// let mut channel = machnet_attach().unwrap();
 /// let flow = MachnetFlow::default();
 /// let data = [1, 2, 3, 4]; // Example data to send
 /// let len = data.len() as u64;
 ///
-/// let result = machnet_send(&ctx, flow, &data, len);
+/// let result = machnet_send(&mut channel, flow, &data, len);
 /// if result == 0 {
 ///     println!("Message enqueued for transmission");
 /// } else {
@@ -264,22 +272,22 @@ pub fn machnet_listen(ctx: &MachnetChannelCtrlCtx, local_ip: &str, local_port: u
 /// }
 /// ```
 ///
-pub fn machnet_send(ctx: &MachnetChannelCtrlCtx, flow: MachnetFlow, buf: &[u8], len: u64) -> i32 {
+pub fn machnet_send(channel: &mut MachnetChannel, flow: MachnetFlow, buf: &[u8], len: u64) -> i32 {
     unsafe {
-        let ctx_ptr = ctx as *const _ as *mut c_void;
+        let channel_ptr = channel.get_ptr();
         let buf_ptr = buf.as_ptr() as *const c_void;
-        bindings::machnet_send(ctx_ptr, flow, buf_ptr, len as usize)
+        bindings::machnet_send(channel_ptr, flow, buf_ptr, len as usize)
     }
 }
 
 /// Receives a pending message from a remote peer over the network.
 /// This function attempts to receive data from a specified Machnet channel. It uses the provided
-/// Machnet channel context (`ctx`) and fills the given buffer (`buf`) with the received data.
+/// Machnet channel (`channel`) and fills the given buffer (`buf`) with the received data.
 /// The `flow` parameter will be populated with the flow information of the sender.
 ///
 /// # Arguments
 ///
-/// * `ctx` - A reference to the `MachnetChannelCtrlCtx` representing the Machnet channel context.
+/// * `channel` - A reference to the `MachnetChannel` representing the Machnet channel.
 /// * `buf` - A mutable byte slice (`&mut [u8]`) that will be filled with the received message.
 ///   The length of `buf` should be at least as large as the `len` parameter.
 /// * `len` - The length of `buf` in bytes. This indicates the maximum amount of data
@@ -298,14 +306,14 @@ pub fn machnet_send(ctx: &MachnetChannelCtrlCtx, flow: MachnetFlow, buf: &[u8], 
 /// Basic usage:
 ///
 /// ```
-/// use machnet::{MachnetChannelCtrlCtx, MachnetFlow, machnet_recv};
+/// use machnet::{ MachnetFlow, machnet_attach, machnet_recv};
 /// // Following is just for demonstration purposes, normally you do machnet_attach() to get the context and flow is obtained from machnet_listen().
-/// let ctx = MachnetChannelCtrlCtx::default();
+/// let mut channel = machnet_attach().unwrap();
 /// let mut flow = MachnetFlow::default();
 /// let mut buffer = [0; 1024]; // Example buffer
 /// let len = buffer.len() as u64;
 ///
-/// match machnet_recv(&ctx, &mut buffer, len, &mut flow) {
+/// match machnet_recv(&channel, &mut buffer, len, &mut flow) {
 ///     0 => println!("No message available"),
 ///     -1 => println!("Failed to receive message"),
 ///     bytes_received => println!("Received {} bytes", bytes_received),
@@ -313,16 +321,16 @@ pub fn machnet_send(ctx: &MachnetChannelCtrlCtx, flow: MachnetFlow, buf: &[u8], 
 /// ```
 ///
 pub fn machnet_recv(
-    ctx: &MachnetChannelCtrlCtx,
+    channel: &MachnetChannel,
     buf: &mut [u8],
     len: u64,
     flow: &mut MachnetFlow,
 ) -> i64 {
     // TODO(vjabrayilov): Refactor so that flow is also returned value.
     unsafe {
-        let ctx_ptr = ctx as *const _ as *mut c_void;
+        let channel_ptr = channel.get_ptr();
         let buf_ptr = buf.as_ptr() as *mut c_void;
         let flow_ptr = flow as *mut MachnetFlow;
-        bindings::machnet_recv(ctx_ptr, buf_ptr, len as usize, flow_ptr) as i64
+        bindings::machnet_recv(channel_ptr, buf_ptr, len as usize, flow_ptr) as i64
     }
 }
