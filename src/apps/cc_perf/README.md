@@ -1,6 +1,6 @@
 # Packet Drop or Reorder application (cc_perf)
 
-This is a simple packet drop or reorder application. It is mainly designed for debugging and developing of congestion control solutions in Machnet.
+This is a simple packet drop or delay app. It is mainly designed for debugging and developing of congestion control solutions in Machnet.
 
 ## Prerequisites
 
@@ -24,9 +24,22 @@ When running in this mode the application is dropping packets. It also receives 
 ```bash
 # Drop packets with 10% drop rate between two machnines with .
 cd ${REPOROOT}/build/
-sudo GLOG_logtostderr=1 ./src/apps/cc_perf/cc_perf -remote_ip $REMOTE_IP -sremote_ip $SECOND_REMOTE_IP -forward_drop -drop_rate 10
+sudo GLOG_logtostderr=1 ./src/apps/cc_perf/cc_perf -remote_ip $REMOTE_IP -sremote_ip $SECOND_REMOTE_IP -drop_mode -drop_rate 10
 
 # If ran from a different directory, you may need to specify the path to the config file:
 sudo GLOG_logtostderr=1 ./cc_perf --config_file ${REPOROOT}/src/apps/machnet/config.json -remote_ip $REMOTE_IP -sremote_ip $SECOND_REMOTE_IP -forward_drop -drop_rate 0.1 
 
 ```
+
+### Running in delay mode
+
+When running in this mode the application is delaying packets. It also receives packets and prints the achieved PPS rate.
+
+
+```bash
+# Drop packets with 10% drop rate between two machnines with .
+cd ${REPOROOT}/build/
+sudo GLOG_logtostderr=1 ./src/apps/cc_perf/cc_perf -remote_ip $REMOTE_IP -sremote_ip $SECOND_REMOTE_IP -delay 10 # in microseconds
+
+# If ran from a different directory, you may need to specify the path to the config file:
+sudo GLOG_logtostderr=1 ./cc_perf --config_file ${REPOROOT}/src/apps/machnet/config.json -remote_ip $REMOTE_IP -sremote_ip $SECOND_REMOTE_IP -delay 1
