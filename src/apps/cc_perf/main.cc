@@ -39,11 +39,12 @@ DEFINE_string(
     "Machnet JSON configuration file (shared with the pktgen application).");
 DEFINE_string(remote_ip, "", "IPv4 address of the sender server.");
 DEFINE_string(sremote_ip, "", "Second IPv4 address of the receiver server.");
-DEFINE_bool(drop_mode, false, "forward packets with drop, default drop rate is 0%. Otherwise it will delay packets."); 
+DEFINE_bool(drop_mode, false,
+            "forward packets with drop, default drop rate is 0%. Otherwise it "
+            "will delay packets.");
 DEFINE_double(drop_rate, 0, "Drop rate in forward drop mode in percent.");
 DEFINE_uint64(delay, 0, "Packet delay in delay mode in microseconds.");
-DEFINE_bool(zerocopy, true,
-"Use memcpy to fill packet payload.");
+DEFINE_bool(zerocopy, true, "Use memcpy to fill packet payload.");
 DEFINE_string(rtt_log, "", "Log file for RTT measurements.");
 
 static volatile int g_keep_running = 1;
@@ -84,10 +85,11 @@ struct task_context {
    * @param remote_ip (std::optional) Remote host's IP address to be used by the
    * applicaton in `juggler::net::Ipv4::Address` format. `std::nullopt` in
    * passive mode.
-   * @param sremote_ip (std::optional) Second remote host's IP address to be used by the
-   * applicaton in `juggler::net::Ipv4::Address` format. `std::nullopt` in
-   * passive mode.
-   * @param drop_rate The rate at which packets are dropped in forward drop mode.
+   * @param sremote_ip (std::optional) Second remote host's IP address to be
+   * used by the applicaton in `juggler::net::Ipv4::Address` format.
+   * `std::nullopt` in passive mode.
+   * @param drop_rate The rate at which packets are dropped in forward drop
+   * mode.
    * @param packet_size Size of the packets to be generated.
    * @param rxring Pointer to the RX ring previously initialized.
    * @param txring Pointer to the TX ring previously initialized.
@@ -98,10 +100,9 @@ struct task_context {
                std::optional<juggler::net::Ethernet::Address> sremote_mac,
                std::optional<juggler::net::Ipv4::Address> remote_ip,
                std::optional<juggler::net::Ipv4::Address> sremote_ip,
-               uint16_t packet_size, 
-               std::optional<double> drop_rate,
-               std::optional<uint64_t> delay, 
-               juggler::dpdk::RxRing *rxring, juggler::dpdk::TxRing *txring,
+               uint16_t packet_size, std::optional<double> drop_rate,
+               std::optional<uint64_t> delay, juggler::dpdk::RxRing *rxring,
+               juggler::dpdk::TxRing *txring,
                std::vector<std::vector<uint8_t>> payloads)
       : local_mac_addr(local_mac),
         local_ipv4_addr(local_ip),
@@ -337,7 +338,8 @@ void forward_drop(void *context) {
 
     ctx->packet_counter++;
 
-    if (ctx->drop_rate.value() && ctx->packet_counter > 1 / (ctx->drop_rate.value() / 100)) {
+    if (ctx->drop_rate.value() &&
+        ctx->packet_counter > 1 / (ctx->drop_rate.value() / 100)) {
       ctx->packet_counter = 0;
       juggler::dpdk::Packet::Free(packet);
       continue;
@@ -437,10 +439,9 @@ void packet_delay(void *context) {
     juggler::utils::Copy(&eh->src_addr, &ctx->local_mac_addr,
                          sizeof(eh->src_addr));
 
-
     // busy spin for a certain amount of time in microseconds
     rte_delay_us(ctx->delay.value());
-    
+
     // Add the packet to the TX batch.
     tx_batch.Append(packet);
 
@@ -535,12 +536,14 @@ int main(int argc, char *argv[]) {
   }
 
   if (!FLAGS_drop_mode && !FLAGS_delay) {
-    LOG(ERROR) << "Failed to retrieve packet delay, please provide packet delay in this mode";
+    LOG(ERROR) << "Failed to retrieve packet delay, please provide packet "
+                  "delay in this mode";
     exit(1);
   }
 
   if (FLAGS_drop_mode && !FLAGS_drop_rate) {
-    LOG(ERROR) << "Failed to retrieve drop rate, please provide drop rate in this mode";
+    LOG(ERROR) << "Failed to retrieve drop rate, please provide drop rate in "
+                  "this mode";
     exit(1);
   }
 
@@ -575,8 +578,8 @@ int main(int argc, char *argv[]) {
   // queue pair from a single core this is safe.
   task_context task_ctx(interface.l2_addr(), interface.ip_addr(),
                         remote_l2_addr, sremote_l2_addr, remote_ip, sremote_ip,
-                        packet_len, drop_rate, packet_delay_period, rxring, txring,
-                        packet_payloads);
+                        packet_len, drop_rate, packet_delay_period, rxring,
+                        txring, packet_payloads);
 
   auto packet_forward_drop_routine = [](uint64_t now, void *context) {
     forward_drop(context);
@@ -596,8 +599,7 @@ int main(int argc, char *argv[]) {
       std::make_shared<juggler::Task>(routine, static_cast<void *>(&task_ctx));
 
   if (FLAGS_drop_mode)
-    std::cout << "Starting in passive forwarding mode with drop."
-              << std::endl;
+    std::cout << "Starting in passive forwarding mode with drop." << std::endl;
   else
     std::cout << "Starting in packet delay mode." << std::endl;
 
