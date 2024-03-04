@@ -34,19 +34,17 @@ constexpr uint16_t kMinPacketLength =
 
 DEFINE_uint32(pkt_size, kMinPacketLength, "Packet size.");
 DEFINE_uint64(tx_batch_size, 32, "DPDK TX packet batch size.");
-DEFINE_double(drop_rate, 0, "Drop rate in forward drop mode in percent.");
 DEFINE_string(
     config_json, "../src/apps/machnet/config.json",
     "Machnet JSON configuration file (shared with the pktgen application).");
-DEFINE_string(remote_ip, "", "IPv4 address of the remote server.");
-DEFINE_string(sremote_ip, "", "Second IPv4 address of the remote server.");
-DEFINE_bool(forward_drop, true, "forward packets with a drop rate, default drop
-rate is 0%. Otherwise it will reorder packets."); DEFINE_bool(zerocopy, true,
+DEFINE_string(remote_ip, "", "IPv4 address of the sender server.");
+DEFINE_string(sremote_ip, "", "Second IPv4 address of the receiver server.");
+DEFINE_bool(drop_mode, false, "forward packets with drop, default drop rate is 0%. Otherwise it will delay packets."); 
+DEFINE_double(drop_rate, 0, "Drop rate in forward drop mode in percent.");
+DEFINE_uint64(delay, 0, "Packet delay in delay mode in microseconds.");
+DEFINE_bool(zerocopy, true,
 "Use memcpy to fill packet payload.");
 DEFINE_string(rtt_log, "", "Log file for RTT measurements.");
-
-// This is the source/destination UDP port used by the application.
-const uint16_t kAppUDPPort = 6666;
 
 static volatile int g_keep_running = 1;
 
@@ -100,7 +98,9 @@ struct task_context {
                std::optional<juggler::net::Ethernet::Address> sremote_mac,
                std::optional<juggler::net::Ipv4::Address> remote_ip,
                std::optional<juggler::net::Ipv4::Address> sremote_ip,
-               uint16_t packet_size, double drop_rate,
+               uint16_t packet_size, 
+               std::optional<double> drop_rate,
+               std::optional<uint64_t> delay, 
                juggler::dpdk::RxRing *rxring, juggler::dpdk::TxRing *txring,
                std::vector<std::vector<uint8_t>> payloads)
       : local_mac_addr(local_mac),
@@ -124,7 +124,8 @@ struct task_context {
   const std::optional<juggler::net::Ipv4::Address> remote_ipv4_addr;
   const std::optional<juggler::net::Ipv4::Address> sremote_ipv4_addr;
   const uint16_t packet_size;
-  const double drop_rate;
+  const std::optional<double> drop_rate;
+  const std::optional<uint64_t> delay;
 
   juggler::dpdk::PacketPool *packet_pool;
   juggler::dpdk::RxRing *rx_ring;
@@ -336,7 +337,7 @@ void forward_drop(void *context) {
 
     ctx->packet_counter++;
 
-    if (ctx->drop_rate && ctx->packet_counter > 1 / (ctx->drop_rate / 100)) {
+    if (ctx->drop_rate.value() && ctx->packet_counter > 1 / (ctx->drop_rate.value() / 100)) {
       ctx->packet_counter = 0;
       juggler::dpdk::Packet::Free(packet);
       continue;
@@ -380,10 +381,10 @@ void forward_drop(void *context) {
   st->rx_count += packets_received;
 }
 
-// TODO: Alireza: Main network packet reorder routine.
-// This routine acts as a middle box and can reorder some potential packets
-// between two machines receives packets. It is currently just forwards packets
-void packet_reorder(void *context) {
+// TODO: Alireza: Main network delay routine.
+// This routine acts as a middle box and can delay packets
+// between two machines receives packets.
+void packet_delay(void *context) {
   auto ctx = static_cast<task_context *>(context);
   auto rx = ctx->rx_ring;
   auto tx = ctx->tx_ring;
@@ -436,6 +437,10 @@ void packet_reorder(void *context) {
     juggler::utils::Copy(&eh->src_addr, &ctx->local_mac_addr,
                          sizeof(eh->src_addr));
 
+
+    // busy spin for a certain amount of time in microseconds
+    rte_delay_us(ctx->delay.value());
+    
     // Add the packet to the TX batch.
     tx_batch.Append(packet);
 
@@ -529,6 +534,21 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  if (!FLAGS_drop_mode && !FLAGS_delay) {
+    LOG(ERROR) << "Failed to retrieve packet delay, please provide packet delay in this mode";
+    exit(1);
+  }
+
+  if (FLAGS_drop_mode && !FLAGS_drop_rate) {
+    LOG(ERROR) << "Failed to retrieve drop rate, please provide drop rate in this mode";
+    exit(1);
+  }
+
+  // drop rate
+  std::optional<double> drop_rate = FLAGS_drop_rate;
+  // packet delay
+  std::optional<uint64_t> packet_delay_period = FLAGS_delay;
+
   const uint16_t packet_len =
       std::max(std::min(static_cast<uint16_t>(FLAGS_pkt_size),
                         juggler::dpdk::PmdRing::kDefaultFrameSize),
@@ -555,7 +575,7 @@ int main(int argc, char *argv[]) {
   // queue pair from a single core this is safe.
   task_context task_ctx(interface.l2_addr(), interface.ip_addr(),
                         remote_l2_addr, sremote_l2_addr, remote_ip, sremote_ip,
-                        packet_len, FLAGS_drop_rate, rxring, txring,
+                        packet_len, drop_rate, packet_delay_period, rxring, txring,
                         packet_payloads);
 
   auto packet_forward_drop_routine = [](uint64_t now, void *context) {
@@ -563,23 +583,23 @@ int main(int argc, char *argv[]) {
     report_stats(now, context);
   };
 
-  auto packet_reorder_routine = [](uint64_t now, void *context) {
-    packet_reorder(context);
+  auto packet_delay_routine = [](uint64_t now, void *context) {
+    packet_delay(context);
     report_stats(now, context);
   };
 
   auto routine =
-      FLAGS_forward_drop ? packet_forward_drop_routine : packet_reorder_routine;
+      FLAGS_drop_mode ? packet_forward_drop_routine : packet_delay_routine;
 
   // Create a task object to pass to worker thread.
   auto task =
       std::make_shared<juggler::Task>(routine, static_cast<void *>(&task_ctx));
 
-  if (FLAGS_forward_drop)
-    std::cout << "Starting in passive message bouncing mode with drop."
+  if (FLAGS_drop_mode)
+    std::cout << "Starting in passive forwarding mode with drop."
               << std::endl;
   else
-    std::cout << "Starting in passive message bouncing mode." << std::endl;
+    std::cout << "Starting in packet delay mode." << std::endl;
 
   juggler::WorkerPool<juggler::Task> WPool({task}, {interface.cpu_mask()});
   WPool.Init();
