@@ -1,4 +1,4 @@
-# Packet Drop or Reorder application (cc_perf)
+# Packet Drop or Delay application (cc_perf)
 
 This is a simple packet drop or delay app. It is mainly designed for debugging and developing of congestion control solutions in Machnet.
 
