@@ -330,14 +330,34 @@ int main(int argc, char *argv[]) {
   void *channel_ctx = machnet_attach();
   CHECK_NOTNULL(channel_ctx);
 
+  MachnetFlow_t flows[50];
   MachnetFlow_t flow;
   if (FLAGS_active_generator) {
-    int ret =
-        machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
-                        FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
-    CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
+
+
+    // Client-mode
+
+      for(int i = 0; i < 50; i++) {
+      auto start_time = std::chrono::high_resolution_clock::now();
+      int ret = machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
+        FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flows[i]);
+      auto end_time = std::chrono::high_resolution_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+      LOG(INFO) << "Connection time: " << duration.count() << " microseconds";
+      CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
                        "error: "
                     << strerror(ret);
+
+    LOG(ERROR) << "just stop here";
+      }
+
+    return 0;
+    
+
+    int ret = machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
+        FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
+
+
 
     LOG(INFO) << "[CONNECTED] [" << FLAGS_local_ip << ":" << flow.src_port
               << " <-> " << FLAGS_remote_ip << ":" << flow.dst_port << "]";

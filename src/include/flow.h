@@ -368,6 +368,8 @@ class Flow {
     }
   }
 
+  std::chrono::time_point<std::chrono::steady_clock> handshake_initiation_time_;
+
   /**
    * @brief Construct a new flow.
    *
@@ -605,6 +607,12 @@ class Flow {
           // Mark the flow as established.
           state_ = State::kEstablished;
           // Notify the application that the flow is established.
+          // measure the latency for connection estabishment
+          auto now = std::chrono::steady_clock::now();
+          auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+              now - handshake_initiation_time_);
+          LOG(INFO) << "Flow " << this << " established in " << duration.count()
+                   << " us";
           callback_(channel(), true, key());
         }
 

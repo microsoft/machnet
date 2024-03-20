@@ -577,7 +577,7 @@ class MachnetEngine {
       s += "\n";
     }
     s += "\n";
-    LOG(INFO) << s;
+    // LOG(INFO) << s;
   }
 
   /**
@@ -800,6 +800,7 @@ class MachnetEngine {
           channel->CreateFlow(src_addr, src_port.value(), dst_addr, dst_port,
                               pmd_port_->GetL2Addr(), remote_l2_addr.value(),
                               udp_port_pair_v, txring_, application_callback);
+      (*flow_it)->handshake_initiation_time_ = std::chrono::steady_clock::now();
       (*flow_it)->InitiateHandshake();
       active_flows_map_.emplace((*flow_it)->key(), flow_it);
       it = pending_requests_.erase(it);
@@ -814,8 +815,8 @@ class MachnetEngine {
       const auto &flow_it = it->second;
       auto is_active_flow = (*flow_it)->PeriodicCheck();
       if (!is_active_flow) {
-        LOG(INFO) << "Flow " << (*flow_it)->key().ToString()
-                  << " is no longer active. Removing.";
+        // LOG(INFO) << "Flow " << (*flow_it)->key().ToString()
+        //         << " is no longer active. Removing.";
         auto channel = (*flow_it)->channel();
         shared_state_->SrcPortRelease((*flow_it)->key().local_addr,
                                       (*flow_it)->key().local_port);
