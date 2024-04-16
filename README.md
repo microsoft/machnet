@@ -63,8 +63,8 @@ docker pull ghcr.io/microsoft/machnet/machnet:latest
 ## 3. Start the Machnet process on both VMs
 
 Using DPDK often requires unbinding the dedicated NIC from the OS. This will
-cause the NIC to disappear from tools like `ifconfig`. **Before this step, note
-this step, note down the IP and MAC address of the NIC, since we will need them
+cause the NIC to disappear from tools like `ifconfig`. **Before this step,
+note down the IP and MAC address of the NIC, since we will need them
 later.**
 
 Below, we assume that the dedicated NIC is named `eth1`.  These steps can be
