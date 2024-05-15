@@ -182,7 +182,8 @@ class RXTracking {
         cur_msg_train_head_(nullptr),
         cur_msg_train_tail_(nullptr) {}
 
-  void Add(swift::Pcb* pcb, const dpdk::Packet* packet) {
+  // If we fail to allocate in the SHM channel, return -1.
+  int Consume(swift::Pcb* pcb, const dpdk::Packet* packet) {
     const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
     const auto* machneth = packet->head_data<MachnetPktHdr*>(net_hdr_len);
     const auto* payload =
@@ -191,17 +192,15 @@ class RXTracking {
     const auto expected_seqno = pcb->rcv_nxt;
 
     if (swift::seqno_lt(seqno, expected_seqno)) {
-      // Packet is in the past
-      // LOG(INFO) << "Received old packet: " << seqno << " < " <<
-      // expected_seqno;
-      return;
+      VLOG(2) << "Received old packet: " << seqno << " < " << expected_seqno;
+      return 0;
     }
 
     const size_t distance = seqno - expected_seqno;
     if (distance >= kReassemblyMaxSeqnoDistance) {
       LOG(ERROR) << "Packet too far ahead. Dropping as we can't handle SACK. "
                  << "seqno: " << seqno << ", expected: " << expected_seqno;
-      return;
+      return 0;
     }
 
     // Only iterate through the deque if we must, i.e., for ooo packts only
@@ -212,14 +211,17 @@ class RXTracking {
                           return entry.seqno >= seqno;
                         });
       if (it != reass_q_.end() && it->seqno == seqno) {
-        // Packet is a duplicate.
-        return;
+        return 0; // Duplicate packet
       }
     }
 
     // Buffer the packet in the SHM channel. It may be out-of-order.
     auto* msgbuf = channel_->MsgBufAlloc();
-    CHECK_NOTNULL(msgbuf);
+    if (msgbuf == nullptr) {
+      VLOG(1) << "Failed to allocate a message buffer. Dropping packet.";
+      return -1;
+    }
+    
     const size_t payload_len =
         packet->length() - net_hdr_len - sizeof(MachnetPktHdr);
     auto* msg_data = msgbuf->append<uint8_t*>(payload_len);
@@ -241,6 +243,7 @@ class RXTracking {
     pcb->sack_bitmap_bit_set(distance);
 
     PushInOrderMsgbufsToShmTrain(pcb);
+    return 0;
   }
 
  private:
@@ -536,8 +539,8 @@ class Flow {
           return;
         }
         // Data packet, process the payload.
-        rx_tracking_.Add(&pcb_, packet);
-        SendAck();
+        const int consume_returncode = rx_tracking_.Consume(&pcb_, packet);
+        if (consume_returncode == 0) SendAck();
         break;
     }
   }
