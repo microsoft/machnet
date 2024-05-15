@@ -190,19 +190,19 @@ class RXTracking {
     const auto seqno = machneth->seqno.value();
     const auto expected_seqno = pcb->rcv_nxt;
 
-    if (swift::seqno_lt(seqno, expected_seqno)) [[unlikely]] {  // NOLINT
+    if (swift::seqno_lt(seqno, expected_seqno)) {
       // Packet is in the past
       // LOG(INFO) << "Received old packet: " << seqno << " < " <<
       // expected_seqno;
       return;
-    }  // NOLINT
+    }
 
     const size_t distance = seqno - expected_seqno;
-    if (distance >= kReassemblyMaxSeqnoDistance) [[unlikely]] {  // NOLINT
+    if (distance >= kReassemblyMaxSeqnoDistance) {
       LOG(ERROR) << "Packet too far ahead. Dropping as we can't handle SACK. "
                  << "seqno: " << seqno << ", expected: " << expected_seqno;
       return;
-    }  // NOLINT
+    }
 
     // Only iterate through the deque if we must, i.e., for ooo packts only
     auto it = reass_q_.begin();
@@ -459,13 +459,10 @@ class Flow {
     const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp);
     auto* machneth = packet->head_data<MachnetPktHdr*>(net_hdr_len);
 
-    // Sanity check on the Machnet header.
-    // clang-format off
-    if (machneth->magic.value() != MachnetPktHdr::kMagic) [[unlikely]] { // NOLINT
-        LOG(ERROR) << "Invalid Machnet header magic: " << machneth->magic;
-        return;
-    } // NOLINT
-    // clang-format on
+    if (machneth->magic.value() != MachnetPktHdr::kMagic) {
+      LOG(ERROR) << "Invalid Machnet header magic: " << machneth->magic;
+      return;
+    }
 
     switch (machneth->net_flags) {
       case MachnetPktHdr::MachnetFlags::kSyn:
@@ -499,7 +496,7 @@ class Flow {
           return;
         }
 
-        if (machneth->ackno.value() != pcb_.snd_nxt) [[unlikely]] {  // NOLINT
+        if (machneth->ackno.value() != pcb_.snd_nxt) {
           LOG(ERROR) << "SYN-ACK packet received with invalid ackno: "
                      << machneth->ackno << " snd_una: " << pcb_.snd_una
                      << " snd_nxt: " << pcb_.snd_nxt;
@@ -533,9 +530,7 @@ class Flow {
         process_ack(machneth);
         break;
       case MachnetPktHdr::MachnetFlags::kData:
-        // clang-format off
-        if (state_ != State::kEstablished) [[unlikely]] { // NOLINT
-          // clang-format on
+        if (state_ != State::kEstablished) {
           LOG(ERROR) << "Data packet received for flow in state: "
                      << static_cast<int>(state_);
           return;
@@ -606,7 +601,7 @@ class Flow {
   }
 
  private:
-  void PrepareL2Header(dpdk::Packet* packet) {
+  void PrepareL2Header(dpdk::Packet* packet) const {
     auto* eh = packet->head_data<Ethernet*>();
     eh->src_addr = local_l2_addr_;
     eh->dst_addr = remote_l2_addr_;
@@ -614,8 +609,7 @@ class Flow {
     packet->set_l2_len(sizeof(*eh));
   }
 
-  void PrepareL3Header(dpdk::Packet* packet) {
-    // Prepare the L3 header.
+  void PrepareL3Header(dpdk::Packet* packet) const {
     auto* ipv4h = packet->head_data<Ipv4*>(sizeof(Ethernet));
     ipv4h->version_ihl = 0x45;
     ipv4h->type_of_service = 0;
@@ -630,8 +624,7 @@ class Flow {
     packet->set_l3_len(sizeof(*ipv4h));
   }
 
-  void PrepareL4Header(dpdk::Packet* packet) {
-    // Prepare the L4 header.
+  void PrepareL4Header(dpdk::Packet* packet) const {
     auto* udph = packet->head_data<Udp*>(sizeof(Ethernet) + sizeof(Ipv4));
     udph->src_port = key_.local_port;
     udph->dst_port = key_.remote_port;
@@ -642,7 +635,7 @@ class Flow {
 
   void PrepareMachnetHdr(dpdk::Packet* packet, uint32_t seqno,
                          const MachnetPktHdr::MachnetFlags& net_flags,
-                         uint8_t msg_flags = 0) {
+                         uint8_t msg_flags = 0) const {
     auto* machneth = packet->head_data<MachnetPktHdr*>(
         sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Udp));
     machneth->magic = be16_t(MachnetPktHdr::kMagic);
@@ -662,7 +655,7 @@ class Flow {
   }
 
   void SendControlPacket(uint32_t seqno,
-                         const MachnetPktHdr::MachnetFlags& flags) {
+                         const MachnetPktHdr::MachnetFlags& flags) const {
     auto* packet = CHECK_NOTNULL(txring_->GetPacketPool()->PacketAlloc());
     dpdk::Packet::Reset(packet);
 
@@ -678,20 +671,20 @@ class Flow {
     txring_->SendPackets(&packet, 1);
   }
 
-  void SendSyn(uint32_t seqno) {
+  void SendSyn(uint32_t seqno) const {
     SendControlPacket(seqno, MachnetPktHdr::MachnetFlags::kSyn);
   }
 
-  void SendSynAck(uint32_t seqno) {
+  void SendSynAck(uint32_t seqno) const {
     SendControlPacket(seqno, MachnetPktHdr::MachnetFlags::kSyn |
                                  MachnetPktHdr::MachnetFlags::kAck);
   }
 
-  void SendAck() {
+  void SendAck() const {
     SendControlPacket(pcb_.seqno(), MachnetPktHdr::MachnetFlags::kAck);
   }
 
-  void SendRst() {
+  void SendRst() const {
     SendControlPacket(pcb_.seqno(), MachnetPktHdr::MachnetFlags::kRst);
   }
 
@@ -706,7 +699,7 @@ class Flow {
    */
   template <CopyMode copy_mode>
   void PrepareDataPacket(shm::MsgBuf* msg_buf, dpdk::Packet* packet,
-                         uint32_t seqno) {
+                         uint32_t seqno) const {
     DCHECK(!(msg_buf->is_last() && msg_buf->is_sg()));
     // Header length after before the payload.
     const size_t hdr_length =
@@ -904,13 +897,9 @@ class Flow {
         // There is no other missing segment to retransmit, so we could send new
         // packets.
       }
-      // clang-format off
-    } else if (swift::seqno_gt(ackno, pcb_.snd_nxt)) [[unlikely]] { // NOLINT
-      // clang-format on
+    } else if (swift::seqno_gt(ackno, pcb_.snd_nxt)) {
       LOG(ERROR) << "ACK received for untransmitted data.";
-      // clang-format off
-    } else [[likely]] { // NOLINT
-      // clang-format on
+    } else {
       // This is a valid ACK, acknowledging new data.
       size_t num_acked_packets = ackno - pcb_.snd_una;
       if (state_ == State::kSynReceived) {
