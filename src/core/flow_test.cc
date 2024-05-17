@@ -292,7 +292,7 @@ TEST_F(FlowTest, RXQueue_Push) {
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
       auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
-      rx_tracking_->Add(&rx_pcb, pkt);
+      rx_tracking_->Consume(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
@@ -358,7 +358,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder1) {
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
       auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
-      rx_tracking_->Add(&rx_pcb, pkt);
+      rx_tracking_->Consume(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
@@ -449,7 +449,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
     auto prev_rcv_nxt = rx_pcb.get_rcv_nxt();
     // Push the packets into the RX queue.
     for (auto &pkt : packets) {
-      rx_tracking_->Add(&rx_pcb, pkt);
+      rx_tracking_->Consume(&rx_pcb, pkt);
       // Each packet corresponds to a single channel buffer.
       buffers_used++;
       EXPECT_EQ(channel_->GetFreeBufCount(),
