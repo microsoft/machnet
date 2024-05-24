@@ -112,7 +112,7 @@ class TxRing : public PmdRing {
     unsigned int seed = 123;
     static int counter = 0;
     counter++;
-    if (counter == 10000000) {
+    if (counter == 1000000) {
       int random_packet = rand_r(&seed) % nb_pkts;
       LOG(INFO) << "Dropping random packet: " << random_packet << " from "
                 << nb_pkts << " packets.";
