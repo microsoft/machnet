@@ -5,6 +5,7 @@
 #include <rte_bus_pci.h>
 #include <rte_ethdev.h>
 
+#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <string>
@@ -103,6 +104,27 @@ class TxRing : public PmdRing {
 
   void Init();
 
+#ifdef kTESTING
+  /// @brief Drops a random packet from the given array of packets.
+  /// @param pkts Array of packet pointers.
+  /// @param nb_pkts Number of packets in the array.
+  void DropRandomPacket(Packet **pkts, uint16_t nb_pkts) const {
+    unsigned int seed = 123;
+    static int counter = 0;
+    counter++;
+    if (counter == 10000000) {
+      int random_packet = rand_r(&seed) % nb_pkts;
+      LOG(INFO) << "Dropping random packet: " << random_packet << " from "
+                << nb_pkts << " packets.";
+      Packet::Free(pkts[random_packet]);
+      for (int i = random_packet; i < nb_pkts - 1; i++) {
+        pkts[i] = pkts[i + 1];
+      }
+      counter = 0;
+    }
+  }
+#endif
+
   /**
    * @brief Tries to send a burst of packets through this TX ring.
    *
@@ -139,6 +161,10 @@ class TxRing : public PmdRing {
    * @param nb_pkts Number of packets to send.
    */
   void SendPackets(Packet **pkts, uint16_t nb_pkts) const {
+#ifdef kTESTING
+    DropRandomPacket(pkts, nb_pkts);
+#endif
+
     uint16_t nb_remaining = nb_pkts;
 
     do {
