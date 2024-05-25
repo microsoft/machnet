@@ -59,16 +59,20 @@ class PmdRing {
         port_id_(port_id),
         ring_id_(ring_id),
         ndesc_(ndesc),
-        ppool_(nullptr) {}
+        ppool_(nullptr),
+        machnet_testing(std::getenv("MACHNET_TESTING_ENABLED") != nullptr) {}
   PmdRing(const PmdPort *port, uint8_t port_id, uint16_t ring_id,
           uint16_t ndesc, uint32_t nmbufs, uint32_t mbuf_sz)
       : pmd_port_(port),
         port_id_(port_id),
         ring_id_(ring_id),
         ndesc_(ndesc),
-        ppool_(std::unique_ptr<PacketPool>(new PacketPool(nmbufs, mbuf_sz))) {}
+        ppool_(std::unique_ptr<PacketPool>(new PacketPool(nmbufs, mbuf_sz))),
+        machnet_testing(std::getenv("MACHNET_TESTING_ENABLED") != nullptr) {}
 
   rte_mempool *GetPacketMemPool() const { return ppool_.get()->GetMemPool(); }
+
+  bool IsMachnetTestingEnabled() const { return machnet_testing; }
 
  private:
   const PmdPort *pmd_port_;
@@ -76,6 +80,7 @@ class PmdRing {
   const uint16_t ring_id_;
   const uint16_t ndesc_;
   const std::unique_ptr<PacketPool> ppool_;
+  const bool machnet_testing;
 };
 
 /*
@@ -104,11 +109,10 @@ class TxRing : public PmdRing {
 
   void Init();
 
-#if kTESTING
   /// @brief Drops a random packet from the given array of packets.
   /// @param pkts Array of packet pointers.
   /// @param nb_pkts Number of packets in the array.
-  inline void DropRandomPacket(Packet **pkts, uint16_t *nb_pkts) const {
+  inline void pkt_idx_to_drop(Packet **pkts, uint16_t *nb_pkts) const {
     unsigned int seed = 123;
     static int counter = 0;
     counter++;
@@ -124,7 +128,6 @@ class TxRing : public PmdRing {
       *nb_pkts = *nb_pkts - 1;
     }
   }
-#endif
 
   /**
    * @brief Tries to send a burst of packets through this TX ring.
@@ -162,9 +165,9 @@ class TxRing : public PmdRing {
    * @param nb_pkts Number of packets to send.
    */
   void SendPackets(Packet **pkts, uint16_t nb_pkts) const {
-#if kTESTING
-    DropRandomPacket(pkts, &nb_pkts);
-#endif
+    if (IsMachnetTestingEnabled()) {
+      pkt_idx_to_drop(pkts, &nb_pkts);
+    }
 
     uint16_t nb_remaining = nb_pkts;
 
