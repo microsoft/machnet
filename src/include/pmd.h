@@ -104,11 +104,11 @@ class TxRing : public PmdRing {
 
   void Init();
 
-#ifdef kTESTING
+#if kTESTING
   /// @brief Drops a random packet from the given array of packets.
   /// @param pkts Array of packet pointers.
   /// @param nb_pkts Number of packets in the array.
-  void DropRandomPacket(Packet **pkts, uint16_t *nb_pkts) const {
+  inline void DropRandomPacket(Packet **pkts, uint16_t *nb_pkts) const {
     unsigned int seed = 123;
     static int counter = 0;
     counter++;
@@ -162,7 +162,7 @@ class TxRing : public PmdRing {
    * @param nb_pkts Number of packets to send.
    */
   void SendPackets(Packet **pkts, uint16_t nb_pkts) const {
-#ifdef kTESTING
+#if kTESTING
     DropRandomPacket(pkts, &nb_pkts);
 #endif
 
