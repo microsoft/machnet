@@ -5,7 +5,6 @@
 #include <rte_bus_pci.h>
 #include <rte_ethdev.h>
 
-#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <string>
