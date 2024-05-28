@@ -61,7 +61,9 @@ class PmdRing {
         ring_id_(ring_id),
         ndesc_(ndesc),
         ppool_(nullptr),
-        machnet_testing_(std::getenv("MACHNET_TESTING_ENABLED") != nullptr) {}
+        machnet_testing_(std::getenv("MACHNET_TESTING_ENABLED") != nullptr &&
+                         std::string(std::getenv("MACHNET_TESTING_ENABLED")) ==
+                             "1") {}
   PmdRing(const PmdPort *port, uint8_t port_id, uint16_t ring_id,
           uint16_t ndesc, uint32_t nmbufs, uint32_t mbuf_sz)
       : pmd_port_(port),
@@ -69,7 +71,9 @@ class PmdRing {
         ring_id_(ring_id),
         ndesc_(ndesc),
         ppool_(std::unique_ptr<PacketPool>(new PacketPool(nmbufs, mbuf_sz))),
-        machnet_testing_(std::getenv("MACHNET_TESTING_ENABLED") != nullptr) {}
+        machnet_testing_(std::getenv("MACHNET_TESTING_ENABLED") != nullptr &&
+                         std::string(std::getenv("MACHNET_TESTING_ENABLED")) ==
+                             "1") {}
 
   rte_mempool *GetPacketMemPool() const { return ppool_.get()->GetMemPool(); }
 
