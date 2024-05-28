@@ -60,7 +60,7 @@ class PmdRing {
         ring_id_(ring_id),
         ndesc_(ndesc),
         ppool_(nullptr),
-        machnet_testing(std::getenv("MACHNET_TESTING_ENABLED") != nullptr) {}
+        machnet_testing_(std::getenv("MACHNET_TESTING_ENABLED") != nullptr) {}
   PmdRing(const PmdPort *port, uint8_t port_id, uint16_t ring_id,
           uint16_t ndesc, uint32_t nmbufs, uint32_t mbuf_sz)
       : pmd_port_(port),
@@ -68,11 +68,9 @@ class PmdRing {
         ring_id_(ring_id),
         ndesc_(ndesc),
         ppool_(std::unique_ptr<PacketPool>(new PacketPool(nmbufs, mbuf_sz))),
-        machnet_testing(std::getenv("MACHNET_TESTING_ENABLED") != nullptr) {}
+        machnet_testing_(std::getenv("MACHNET_TESTING_ENABLED") != nullptr) {}
 
   rte_mempool *GetPacketMemPool() const { return ppool_.get()->GetMemPool(); }
-
-  bool IsMachnetTestingEnabled() const { return machnet_testing; }
 
  private:
   const PmdPort *pmd_port_;
@@ -80,7 +78,9 @@ class PmdRing {
   const uint16_t ring_id_;
   const uint16_t ndesc_;
   const std::unique_ptr<PacketPool> ppool_;
-  const bool machnet_testing;
+
+ public:
+  const bool machnet_testing_;
 };
 
 /*
@@ -165,7 +165,7 @@ class TxRing : public PmdRing {
    * @param nb_pkts Number of packets to send.
    */
   void SendPackets(Packet **pkts, uint16_t nb_pkts) const {
-    if (IsMachnetTestingEnabled()) {
+    if (machnet_testing_) {
       pkt_idx_to_drop(pkts, &nb_pkts);
     }
 
