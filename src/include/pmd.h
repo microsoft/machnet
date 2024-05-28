@@ -86,6 +86,7 @@ class PmdRing {
 
  public:
   const bool machnet_testing_;
+  juggler::utils::FastRand fast_rand_;
 };
 
 /*
@@ -117,13 +118,12 @@ class TxRing : public PmdRing {
   /// @brief Drops a random packet from the given array of packets.
   /// @param pkts Array of packet pointers.
   /// @param nb_pkts Number of packets in the array.
-  inline void pkt_idx_to_drop(Packet **pkts, uint16_t *nb_pkts) const {
-    static juggler::utils::FastRand fast_rand;
+  inline void pkt_idx_to_drop(Packet **pkts, uint16_t *nb_pkts) {
     static constexpr uint32_t kBillion = 1000000000;
     // the value below is picked randomly as probability.
     static constexpr float kDropProb = 0.000001;
-    if (fast_rand.next_u32() % kBillion < kDropProb * kBillion) {
-      int random_packet = fast_rand.next_u32() % *nb_pkts;
+    if (fast_rand_.next_u32() % kBillion < kDropProb * kBillion) {
+      int random_packet = fast_rand_.next_u32() % *nb_pkts;
       LOG(INFO) << "Dropping random packet: " << random_packet << " from "
                 << *nb_pkts << " packets.";
       Packet::Free(pkts[random_packet]);
@@ -169,7 +169,7 @@ class TxRing : public PmdRing {
    * @param pkts Array of packet pointers to send.
    * @param nb_pkts Number of packets to send.
    */
-  void SendPackets(Packet **pkts, uint16_t nb_pkts) const {
+  void SendPackets(Packet **pkts, uint16_t nb_pkts) {
     if (machnet_testing_) {
       pkt_idx_to_drop(pkts, &nb_pkts);
     }
@@ -191,7 +191,7 @@ class TxRing : public PmdRing {
    *
    * @param batch Pointer to the PacketBatch.
    */
-  void SendPackets(PacketBatch *batch) const {
+  void SendPackets(PacketBatch *batch) {
     SendPackets(batch->pkts(), batch->GetSize());
     batch->Clear();
   }
