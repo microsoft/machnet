@@ -16,6 +16,7 @@
 #include "ether.h"
 #include "packet.h"
 #include "packet_pool.h"
+#include "utils.h"
 
 namespace juggler {
 namespace dpdk {
@@ -113,18 +114,18 @@ class TxRing : public PmdRing {
   /// @param pkts Array of packet pointers.
   /// @param nb_pkts Number of packets in the array.
   inline void pkt_idx_to_drop(Packet **pkts, uint16_t *nb_pkts) const {
-    unsigned int seed = 123;
-    static int counter = 0;
-    counter++;
-    if (counter == 1000000) {
-      int random_packet = rand_r(&seed) % *nb_pkts;
+    static juggler::utils::FastRand fast_rand;
+    static constexpr uint32_t kBillion = 1000000000;
+    // the value below is picked randomly as probability.
+    static constexpr float kDropProb = 0.000001;
+    if (fast_rand.next_u32() % kBillion < kDropProb * kBillion) {
+      int random_packet = fast_rand.next_u32() % *nb_pkts;
       LOG(INFO) << "Dropping random packet: " << random_packet << " from "
                 << *nb_pkts << " packets.";
       Packet::Free(pkts[random_packet]);
       for (int i = random_packet; i < *nb_pkts - 1; i++) {
         pkts[i] = pkts[i + 1];
       }
-      counter = 0;
       *nb_pkts = *nb_pkts - 1;
     }
   }
