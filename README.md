@@ -108,7 +108,7 @@ cd hello_world; make
 ./hello_world --local <eth1 IP address of VM 1>
 
 # On VM #2, run the hello_world client. This should print the reply from the server.
-./hello_world --local <eth1 IP address of VM 1> --remote <eth1 IP address of VM 2>
+./hello_world --local <eth1 IP address of VM 2> --remote <eth1 IP address of VM 1>
 ```
 
 ## 5. Run the end-to-end benchmark
