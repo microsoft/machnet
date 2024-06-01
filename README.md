@@ -102,7 +102,7 @@ test things end-to-end with a client-server application.
 ```bash
 # Build the Machnet helper library and hello_world example, on both VMs
 ./build_shim.sh
-cd hello_world; make
+cd examples
 
 # On VM #1, run the hello_world server
 ./hello_world --local <eth1 IP address of VM 1>
