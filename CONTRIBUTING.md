@@ -13,4 +13,4 @@ cd ${REPOROOT}
 pre-commit install
 ```
 
-For instructions on how to build and test Machnet, see [INTERNAL.md](INTERNAL.md).
+For instructions on how to build and test Machnet, see [README.md](README.md).
