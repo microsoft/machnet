@@ -121,7 +121,7 @@ MSG_GEN="docker run -v /var/run/machnet:/var/run/machnet ghcr.io/microsoft/machn
 ${MSG_GEN} --local_ip <eth1 IP address of VM 1>
 
 # On VM #2, run the msg_gen client
-${MSG_GEN} --local_ip <eth1 IP address of VM 1> --remote_ip <eth1 IP address of VM 2>
+${MSG_GEN} --local_ip <eth1 IP address of VM 2> --remote_ip <eth1 IP address of VM 1>
 ```
 
 The client should print message rate and latency percentile statistics.
