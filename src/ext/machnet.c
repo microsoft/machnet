@@ -423,88 +423,90 @@ int machnet_init() {
 
 MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size) {
   MachnetChannelCtx_t *channel;
-  int shm_flags;
-  if (channel_size != NULL) *channel_size = 0;
+//   int shm_flags;
+//   if (channel_size != NULL) *channel_size = 0;
 
-  // Check whether the shmem fd is open.
-  if (fcntl(shm_fd, F_GETFD) == -1) {
-    fprintf(stderr, "Invalid shared memory file descriptor: %d", shm_fd);
-    goto fail;
-  }
+//   // Check whether the shmem fd is open.
+//   if (fcntl(shm_fd, F_GETFD) == -1) {
+//     fprintf(stderr, "Invalid shared memory file descriptor: %d", shm_fd);
+//     goto fail;
+//   }
 
-  // Get the size of the shared memory segment.
-  struct stat stat_buf;
-  if (fstat(shm_fd, &stat_buf) == -1) {
-    perror("fstat()");
-    goto fail;
-  }
+//   // Get the size of the shared memory segment.
+//   struct stat stat_buf;
+//   if (fstat(shm_fd, &stat_buf) == -1) {
+//     perror("fstat()");
+//     goto fail;
+//   }
 
-  // Map the shared memory segment into the address space of the process.
-  shm_flags = MAP_SHARED | MAP_POPULATE;
-  if (stat_buf.st_blksize > getpagesize()) {
-    /* TODO(ilias): Hack to detect if mapping is huge page backed. */
-    shm_flags |= MAP_HUGETLB;
-  }
-  channel = (MachnetChannelCtx_t *)mmap(
-      NULL, stat_buf.st_size, PROT_READ | PROT_WRITE, shm_flags, shm_fd, 0);
-  if (channel == MAP_FAILED) {
-    perror("mmap()");
-    goto fail;
-  }
+//   // Map the shared memory segment into the address space of the process.
+//   shm_flags = MAP_SHARED | MAP_POPULATE;
+//   if (stat_buf.st_blksize > getpagesize()) {
+//     /* TODO(ilias): Hack to detect if mapping is huge page backed. */
+//     shm_flags |= MAP_HUGETLB;
+//   }
+//   channel = (MachnetChannelCtx_t *)mmap(
+//       NULL, stat_buf.st_size, PROT_READ | PROT_WRITE, shm_flags, shm_fd, 0);
+//   if (channel == MAP_FAILED) {
+//     perror("mmap()");
+//     goto fail;
+//   }
 
-  if (channel->magic != MACHNET_CHANNEL_CTX_MAGIC) {
-    fprintf(stderr, "Invalid magic number: %u\n", channel->magic);
-    goto fail;
-  }
+//   if (channel->magic != MACHNET_CHANNEL_CTX_MAGIC) {
+//     fprintf(stderr, "Invalid magic number: %u\n", channel->magic);
+//     goto fail;
+//   }
 
-  // Success.
-  if (channel_size != NULL) *channel_size = stat_buf.st_size;
+//   // Success.
+//   if (channel_size != NULL) *channel_size = stat_buf.st_size;
 
-  return channel;
+//   return channel;
 
-fail:
-  if (shm_fd > 0) close(shm_fd);
+// fail:
+//   if (shm_fd > 0) close(shm_fd);
+//   return NULL;
   return NULL;
 }
 
 void *machnet_attach() {
-  uuid_t uuid;        // UUID for the shared memory channel.
-  char uuid_str[37];  // 36 chars + null terminator for UUID string.
+  // uuid_t uuid;        // UUID for the shared memory channel.
+  // char uuid_str[37];  // 36 chars + null terminator for UUID string.
 
-  uuid_generate(uuid);
-  uuid_unparse(uuid, uuid_str);
+  // uuid_generate(uuid);
+  // uuid_unparse(uuid, uuid_str);
 
-  // Generate a request to attach to the Machnet control plane.
-  machnet_ctrl_msg_t req = {};
-  req.type = MACHNET_CTRL_MSG_TYPE_REQ_CHANNEL;
-  req.msg_id = msg_id_counter++;
-  uuid_copy(req.app_uuid, g_app_uuid);
-  uuid_copy(req.channel_info.channel_uuid, uuid);
-  /* Request the default. */
-  req.channel_info.desc_ring_size = MACHNET_CHANNEL_INFO_DESC_RING_SIZE_DEFAULT;
-  req.channel_info.buffer_count = MACHNET_CHANNEL_INFO_BUFFER_COUNT_DEFAULT;
+  // // Generate a request to attach to the Machnet control plane.
+  // machnet_ctrl_msg_t req = {};
+  // req.type = MACHNET_CTRL_MSG_TYPE_REQ_CHANNEL;
+  // req.msg_id = msg_id_counter++;
+  // uuid_copy(req.app_uuid, g_app_uuid);
+  // uuid_copy(req.channel_info.channel_uuid, uuid);
+  // /* Request the default. */
+  // req.channel_info.desc_ring_size = MACHNET_CHANNEL_INFO_DESC_RING_SIZE_DEFAULT;
+  // req.channel_info.buffer_count = MACHNET_CHANNEL_INFO_BUFFER_COUNT_DEFAULT;
 
-  // Send the request to the Machnet control plane.
-  int channel_fd;
-  machnet_ctrl_msg_t resp;
-  if (_machnet_ctrl_request(&req, &resp, &channel_fd) != 0) {
-    fprintf(stderr, "ERROR: Failed to send request to controller.");
-    return NULL;
-  }
+  // // Send the request to the Machnet control plane.
+  // int channel_fd;
+  // machnet_ctrl_msg_t resp;
+  // if (_machnet_ctrl_request(&req, &resp, &channel_fd) != 0) {
+  //   fprintf(stderr, "ERROR: Failed to send request to controller.");
+  //   return NULL;
+  // }
 
-  // Check the response from the Machnet control plane.
-  if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
-      resp.msg_id != req.msg_id) {
-    fprintf(stderr, "Got invalid response from controller.\n");
-    return NULL;
-  }
+  // // Check the response from the Machnet control plane.
+  // if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
+  //     resp.msg_id != req.msg_id) {
+  //   fprintf(stderr, "Got invalid response from controller.\n");
+  //   return NULL;
+  // }
 
-  if (resp.status != MACHNET_CTRL_STATUS_SUCCESS || channel_fd < 0) {
-    fprintf(stderr, "Failure %d.\n", channel_fd);
-    return NULL;
-  }
+  // if (resp.status != MACHNET_CTRL_STATUS_SUCCESS || channel_fd < 0) {
+  //   fprintf(stderr, "Failure %d.\n", channel_fd);
+  //   return NULL;
+  // }
 
-  return machnet_bind(channel_fd, NULL);
+  // return machnet_bind(channel_fd, NULL);
+  return NULL;
 }
 
 int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
