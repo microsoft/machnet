@@ -6,7 +6,11 @@
 extern "C" {
 #endif
 
+#ifdef _WIN32
+#include "windows_uuid.h"
+#else
 #include <uuid/uuid.h>
+#endif
 
 #define MACHNET_CONTROLLER_DEFAULT_PATH "/var/run/machnet/machnet_ctrl.sock"
 
