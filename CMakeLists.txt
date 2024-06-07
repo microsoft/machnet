@@ -64,9 +64,9 @@ add_subdirectory(third_party/benchmark)
 include_directories(SYSTEM third_party/benchmark/include)
 
 
-# include_directories(SYSTEM third_party/xxHash)
-find_package(xxHash CONFIG REQUIRED)
-include_directories(SYSTEM C:/cygwin64/home/rr-windows-vm/vcpkg/packages/xxhash_x64-windows/include)
+include_directories(SYSTEM third_party/xxHash)
+# find_package(xxHash CONFIG REQUIRED)
+# include_directories(SYSTEM C:/cygwin64/home/rr-windows-vm/vcpkg/packages/xxhash_x64-windows/include)
 
 
 # Add additional compilation flags only after adding subprojects
