@@ -17,6 +17,7 @@ extern "C" {
 #include <unistd.h>
 
 #include "machnet_common.h"
+#include "cross_platform.h"
 
 /**
  * @brief Descriptor for SG data that constitute a message.

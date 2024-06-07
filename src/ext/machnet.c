@@ -8,15 +8,23 @@
 
 #include "machnet.h"
 
+#ifdef __linux__
 #include <arpa/inet.h>
-#include <errno.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+#else // #ifdef __linux__
+#include <winsock2.h>
+#include <afunix.h>
+#include <ws2tcpip.h>
+#include "windows_uio.h"
+#endif
 
+#include <errno.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include "machnet_ctrl.h"
 
 #define MIN(a, b)           \
@@ -55,74 +63,162 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
   // safety (multiple application threads issuing concurrent requests to the
   // controller).
 
-  // Connect to the local AF_UNIX domain socket.
-  int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (sock < 0) {
-    return -1;
-  }
-
-  struct sockaddr_un server_addr;
-  memset(&server_addr, 0, sizeof(server_addr));
-  server_addr.sun_family = AF_UNIX;
-  strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
-          sizeof(server_addr.sun_path) - 1);
-
-  if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-    perror("connect");
-    return -1;
-  }
-
-  // Send the request to the controller.
-  struct iovec iov[1];
-  iov[0].iov_base = req;
-  iov[0].iov_len = sizeof(*req);
-  struct msghdr msg;
-  memset(&msg, 0, sizeof(msg));
-  msg.msg_iov = iov;
-  msg.msg_iovlen = 1;
-
-  int nbytes = sendmsg(sock, &msg, 0);
-  if (nbytes != sizeof(*req)) {
-    // We got an error or a partial transmission.
-    if (nbytes < 0) {
-      perror("sendmsg");
+  #ifdef __linux__
+    // Linux
+    // Connect to the local AF_UNIX domain socket.
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) {
+      return -1;
     }
-    return -1;
-  }
 
-  // Block waiting for the response using recvmsg.
-  iov[0].iov_base = resp;
-  iov[0].iov_len = sizeof(*resp);
-  memset(&msg, 0, sizeof(msg));
-  msg.msg_iov = iov;
-  msg.msg_iovlen = 1;
-  // We need to allocate a buffer for the ancillary data.
-  char buf[CMSG_SPACE(sizeof(int))];
-  memset(buf, 0, sizeof(buf));
-  msg.msg_control = buf;
-  msg.msg_controllen = sizeof(buf);
+    struct sockaddr_un server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
+            sizeof(server_addr.sun_path) - 1);
 
-  nbytes = recvmsg(sock, &msg, 0);
-  if (nbytes != sizeof(*resp)) {
-    // We got an error or a partial response.
-    if (nbytes < 0) {
-      perror("recvmsg");
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+      perror("connect");
+      return -1;
     }
-    return -1;
-  }
+    
+    // Send the request to the controller.
+    struct iovec iov[1];
+    iov[0].iov_base = req;
+    iov[0].iov_len = sizeof(*req);
 
-  if (fd != NULL) {
-    *fd = -1;
-    fprintf(stderr, "Checking for file descriptor...\n");
-    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-    if (cmsg != NULL && cmsg->cmsg_level == SOL_SOCKET &&
-        cmsg->cmsg_type == SCM_RIGHTS) {
-      fprintf(stderr, "Got a file descriptor!\n");
-      assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
-      // We got a file descriptor.
-      *fd = *((int *)CMSG_DATA(cmsg));
+    struct msghdr msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 1;
+
+    int nbytes = sendmsg(sock, &msg, 0);
+    if (nbytes != sizeof(*req)) {
+      // We got an error or a partial transmission.
+      if (nbytes < 0) {
+        perror("sendmsg");
+      }
+      return -1;
     }
-  }
+
+    // Block waiting for the response using recvmsg.
+    iov[0].iov_base = resp;
+    iov[0].iov_len = sizeof(*resp);
+    memset(&msg, 0, sizeof(msg));
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 1;
+
+    // We need to allocate a buffer for the ancillary data.
+    char buf[CMSG_SPACE(sizeof(int))];
+    memset(buf, 0, sizeof(buf));
+    msg.msg_control = buf;
+    msg.msg_controllen = sizeof(buf);
+
+    nbytes = recvmsg(sock, &msg, 0);
+    if (nbytes != sizeof(*resp)) {
+      // We got an error or a partial response.
+      if (nbytes < 0) {
+        perror("recvmsg");
+      }
+      return -1;
+    }
+
+    if (fd != NULL) {
+      *fd = -1;
+      fprintf(stderr, "Checking for file descriptor...\n");
+      struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+      if (cmsg != NULL && cmsg->cmsg_level == SOL_SOCKET &&
+          cmsg->cmsg_type == SCM_RIGHTS) {
+        fprintf(stderr, "Got a file descriptor!\n");
+        assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
+        // We got a file descriptor.
+        *fd = *((int *)CMSG_DATA(cmsg));
+      }
+    }
+
+  #else
+    // Windows
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        perror("WSAStartup failed");
+        return -1;
+    }
+
+    // Connect to the local AF_UNIX domain socket.
+    SOCKET sock = socket(AF_UNIX, SOCK_STREAM, 0); // Need to check support for AF_UNIX, other options: AF_INET/AF_UNSPEC
+    if (sock == INVALID_SOCKET) {
+        perror("socket creation failed");
+        WSACleanup();
+        return -1;
+    }
+
+    struct sockaddr_un server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
+            sizeof(server_addr.sun_path) - 1);
+
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {  // check connect() return value
+      perror("connect");
+      closesocket(sock);
+      WSACleanup();
+      return -1;
+    }
+
+    // Send the request to the controller.
+    WSABUF iov[1];
+    iov[0].buf = (CHAR*)req;
+    iov[0].len = sizeof(*req);
+
+    WSAMSG msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.lpBuffers = iov;
+    msg.dwBufferCount = 1;
+
+    DWORD bytesSent = 0;
+    int result = WSASendMsg(sock, &msg, 0, &bytesSent, NULL, NULL);
+    if (result == SOCKET_ERROR) {
+        perror("sendmsg");
+        return -1;
+    }
+
+    // Block waiting for the response using recvmsg.
+    iov[0].buf = (CHAR*)resp;
+    iov[0].len = sizeof(*resp);
+    memset(&msg, 0, sizeof(msg));
+    msg.lpBuffers = iov;
+    msg.dwBufferCount = 1;
+    
+    // We need to allocate a buffer for the ancillary data.
+    char buf[WSA_CMSG_SPACE(sizeof(int))];
+    memset(buf, 0, sizeof(buf));
+    msg.Control.buf = buf;
+    msg.Control.len = sizeof(buf);
+
+    // Call WSARecvMsg to receive data along with ancillary data
+    DWORD bytesReceived;
+    result = WSARecvMsg(sock, &msg, &bytesReceived, NULL, NULL);
+
+    if (result == SOCKET_ERROR) {
+        perror("recvmsg");
+        return -1;
+    }
+
+    if (fd != NULL) {
+      *fd = -1;
+      fprintf(stderr, "Checking for file descriptor...\n");
+      WSACMSGHDR *cmsg = WSA_CMSG_FIRSTHDR(&msg);
+      if (cmsg != NULL && cmsg->cmsg_level == IPPROTO_IP &&
+          (cmsg->cmsg_type == IP_ORIGINAL_ARRIVAL_IF || cmsg->cmsg_type == IP_PKTINFO || cmsg->cmsg_type == IP_ECN)) {
+        fprintf(stderr, "Got a file descriptor!\n");
+        // assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
+        // We got a file descriptor.
+        *fd = *((int *)WSA_CMSG_DATA(cmsg));
+      }
+    }
+
+  #endif
 
   return 0;
 }
@@ -280,9 +376,11 @@ int machnet_init() {
   // Sendmsg request.
   struct msghdr msg;
   memset(&msg, 0, sizeof(msg));
+
   struct iovec iov[1];
   iov[0].iov_base = &req;
   iov[0].iov_len = sizeof(req);
+
   msg.msg_name = NULL;
   msg.msg_namelen = 0;
   msg.msg_iov = iov;

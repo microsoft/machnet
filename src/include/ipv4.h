@@ -1,7 +1,13 @@
 #ifndef SRC_INCLUDE_IPV4_H_
 #define SRC_INCLUDE_IPV4_H_
 
+#ifdef __linux__
 #include <arpa/inet.h>
+#else
+#include <winsock2.h>
+#endif
+
+
 #include <types.h>
 #include <utils.h>
 

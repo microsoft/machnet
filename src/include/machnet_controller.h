@@ -11,7 +11,12 @@
 #include <machnet_ctrl.h>
 #include <machnet_engine.h>
 #include <ud_socket.h>
+
+#ifdef _WIN32
+#include "windows_uuid.h"
+#else
 #include <uuid/uuid.h>
+#endif
 
 #include <csignal>
 #include <thread>

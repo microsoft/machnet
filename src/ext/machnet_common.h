@@ -46,7 +46,14 @@ extern "C" {
 
 #include <assert.h>
 #include <fcntl.h> /* For O_* constants */
+#ifdef __linux__
 #include <sys/mman.h>
+#else
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 #include <sys/stat.h> /* For mode constants */
 
 #include "jring.h"
