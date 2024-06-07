@@ -4,3 +4,5 @@
 build/
 .history
 .vscode
+ninja_build_errors
+.vs/
