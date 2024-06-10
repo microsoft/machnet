@@ -4,6 +4,19 @@ set(MACHNET_SHIM_LIB_NAME machnet_shim)
 add_library(${MACHNET_SHIM_LIB_NAME} SHARED machnet.c)
 target_link_libraries (${MACHNET_SHIM_LIB_NAME} uuid)
 
+# # Add ws2_32.lib for winsock APIs
+if (WIN32)
+    # find_library(ws2_32_LIBRARY_PATH ws2_32)
+    target_link_libraries(${MACHNET_SHIM_LIB_NAME} msvcrt)
+    target_link_libraries(${MACHNET_SHIM_LIB_NAME} ws2_32)
+    target_link_libraries(${MACHNET_SHIM_LIB_NAME} mswsock)
+    target_link_libraries(${MACHNET_SHIM_LIB_NAME} Rpcrt4)
+# else ()
+#     target_link_libraries (${MACHNET_SHIM_LIB_NAME} uuid)
+endif (WIN32)
+
+
+
 # Configure the directories to search for header files.
 target_include_directories(${MACHNET_SHIM_LIB_NAME} PRIVATE .)
 

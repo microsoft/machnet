@@ -8,7 +8,7 @@
 
 #ifdef _WIN32
 #include "rpc.h"
-#include "Rpcdce.h"
+// #include "Rpcdce.h"
 
 void uuid_generate (uuid_t out) {
 	UuidCreate (&out);
