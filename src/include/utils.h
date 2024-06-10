@@ -27,6 +27,10 @@
 #define XXH_INLINE_ALL
 #include "xxhash.h"
 
+#ifdef _WIN32
+#include "utils_helper.h"
+#endif
+
 namespace juggler {
 namespace utils {
 
