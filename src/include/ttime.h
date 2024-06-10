@@ -8,6 +8,10 @@
 
 #include <concepts>
 
+#ifdef _WIN32
+#include "winclock.h"
+#endif
+
 namespace juggler {
 namespace time {
 
@@ -29,11 +33,22 @@ static inline uint64_t rdtsc() {
     return rdtsc();
   };
 
-  clock_gettime(CLOCK_MONOTONIC_RAW, &start);
+  #ifdef _WIN32
+    int clock_monotonic = 1;
+    clock_gettime(clock_monotonic, &start);
+  #else
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start);
+  #endif // _WIN32
   start_tsc = precise_tsc();
   for (auto i = 0; i <= 1E6; i++) precise_tsc();
   end_tsc = precise_tsc();
-  clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+
+  #ifdef _WIN32
+    clock_gettime(clock_monotonic, &end);
+  #else
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+  #endif // _WIN32
+  
 
   auto ns_diff = [](timespec s, timespec e) {
     uint64_t ns = 0;

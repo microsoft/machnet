@@ -68,6 +68,7 @@ if(DPDK_NEEDED STREQUAL "true")
     include_directories(SYSTEM "${DPDK_WINDIR}/lib/eal/x86/include")
     include_directories(SYSTEM "${DPDK_WINDIR}/build")
     include_directories(SYSTEM "${DPDK_WINDIR}/config")
+    include_directories(SYSTEM "${DPDK_WINDIR}/drivers/bus/pci")
     
 
     link_directories("${DPDK_WINDIR}/build/lib")

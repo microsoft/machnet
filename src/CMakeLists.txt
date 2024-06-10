@@ -21,6 +21,8 @@ set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointe
 # Include 'libdpdk'.
 find_package(PkgConfig REQUIRED)
 
+include_directories(ext/windows/utils_helper)
+include_directories(ext/windows/winclock)
 include_directories(ext/windows)
 include_directories(ext)
 add_subdirectory(ext)
