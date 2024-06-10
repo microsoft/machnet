@@ -1,4 +1,4 @@
-[2/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram.dir/hdr_histogram_log_no_op.c.obj
+[1/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram.dir/hdr_histogram_log_no_op.c.obj
 C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram_log_no_op.c:42:20: warning: 'strerror' is deprecated: T
 his function or variable may be unsafe. Consider using strerror_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for
 details. [-Wdeprecated-declarations]
@@ -16,7 +16,48 @@ DEPRECATE_TEXT'
 #define _CRT_DEPRECATE_TEXT(_Text) __declspec(deprecated(_Text))
                                               ^
 1 warning generated.
-[5/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram.dir/hdr_interval_recorder.c.obj
+[2/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram.dir/hdr_histogram.c.obj
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:19:2: warning: '_ReadBarrier' is deprecated: use other i
+ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
+        _ReadBarrier();
+        ^
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:152:21: note: '_ReadBarrier' has been explicitly marked deprecated here
+void __attribute__((__deprecated__(
+                    ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:25:2: warning: '_WriteBarrier' is deprecated: use other
+intrinsics or C++11 atomics instead [-Wdeprecated-declarations]
+        _WriteBarrier();
+        ^
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier' has been explicitly marked deprecated here
+void __attribute__((__deprecated__(
+                    ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:31:2: warning: '_ReadBarrier' is deprecated: use other i
+ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
+        _ReadBarrier();
+        ^
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:152:21: note: '_ReadBarrier' has been explicitly marked deprecated here
+void __attribute__((__deprecated__(
+                    ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:37:2: warning: '_WriteBarrier' is deprecated: use other
+intrinsics or C++11 atomics instead [-Wdeprecated-declarations]
+        _WriteBarrier();
+        ^
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier' has been explicitly marked deprecated here
+void __attribute__((__deprecated__(
+                    ^
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:149:23: warning: incompatible pointer types passing '
+uint32_t *' (aka 'unsigned int *') to parameter of type 'unsigned long *' [-Wincompatible-pointer-types]
+    _BitScanReverse64(&leading_zero, value);
+                      ^~~~~~~~~~~~~
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:251:48: note: passing argument to parameter '_Index' here
+unsigned char _BitScanReverse64(unsigned long *_Index, unsigned __int64 _Mask);
+                                               ^
+5 warnings generated.
+[6/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram.dir/hdr_interval_recorder.c.obj
 In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_interval_recorder.c:8:
 C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:19:2: warning: '_ReadBarrier' is deprecated: use other i
 ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
@@ -74,7 +115,7 @@ e
 static void __inline * hdr_atomic_load_pointer(void** pointer)
                                                       ^
 7 warnings generated.
-[6/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram.dir/hdr_writer_reader_phaser.c.obj
+[9/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram.dir/hdr_writer_reader_phaser.c.obj
 In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
 C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:19:2: warning: '_ReadBarrier' is deprecated: use other i
 ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
@@ -108,48 +149,7 @@ C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier'
 void __attribute__((__deprecated__(
                     ^
 4 warnings generated.
-[8/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram.dir/hdr_histogram.c.obj
-In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:19:2: warning: '_ReadBarrier' is deprecated: use other i
-ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
-        _ReadBarrier();
-        ^
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:152:21: note: '_ReadBarrier' has been explicitly marked deprecated here
-void __attribute__((__deprecated__(
-                    ^
-In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:25:2: warning: '_WriteBarrier' is deprecated: use other
-intrinsics or C++11 atomics instead [-Wdeprecated-declarations]
-        _WriteBarrier();
-        ^
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier' has been explicitly marked deprecated here
-void __attribute__((__deprecated__(
-                    ^
-In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:31:2: warning: '_ReadBarrier' is deprecated: use other i
-ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
-        _ReadBarrier();
-        ^
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:152:21: note: '_ReadBarrier' has been explicitly marked deprecated here
-void __attribute__((__deprecated__(
-                    ^
-In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:37:2: warning: '_WriteBarrier' is deprecated: use other
-intrinsics or C++11 atomics instead [-Wdeprecated-declarations]
-        _WriteBarrier();
-        ^
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier' has been explicitly marked deprecated here
-void __attribute__((__deprecated__(
-                    ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:149:23: warning: incompatible pointer types passing '
-uint32_t *' (aka 'unsigned int *') to parameter of type 'unsigned long *' [-Wincompatible-pointer-types]
-    _BitScanReverse64(&leading_zero, value);
-                      ^~~~~~~~~~~~~
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:251:48: note: passing argument to parameter '_Index' here
-unsigned char _BitScanReverse64(unsigned long *_Index, unsigned __int64 _Mask);
-                                               ^
-5 warnings generated.
-[13/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram_static.dir/hdr_histogram_log_no_op.c.obj
+[10/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram_static.dir/hdr_histogram_log_no_op.c.obj
 C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram_log_no_op.c:42:20: warning: 'strerror' is deprecated: T
 his function or variable may be unsafe. Consider using strerror_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for
 details. [-Wdeprecated-declarations]
@@ -167,7 +167,41 @@ DEPRECATE_TEXT'
 #define _CRT_DEPRECATE_TEXT(_Text) __declspec(deprecated(_Text))
                                               ^
 1 warning generated.
-[15/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram_static.dir/hdr_interval_recorder.c.obj
+[15/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram_static.dir/hdr_writer_reader_phaser.c.obj
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:19:2: warning: '_ReadBarrier' is deprecated: use other i
+ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
+        _ReadBarrier();
+        ^
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:152:21: note: '_ReadBarrier' has been explicitly marked deprecated here
+void __attribute__((__deprecated__(
+                    ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:25:2: warning: '_WriteBarrier' is deprecated: use other
+intrinsics or C++11 atomics instead [-Wdeprecated-declarations]
+        _WriteBarrier();
+        ^
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier' has been explicitly marked deprecated here
+void __attribute__((__deprecated__(
+                    ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:31:2: warning: '_ReadBarrier' is deprecated: use other i
+ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
+        _ReadBarrier();
+        ^
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:152:21: note: '_ReadBarrier' has been explicitly marked deprecated here
+void __attribute__((__deprecated__(
+                    ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:37:2: warning: '_WriteBarrier' is deprecated: use other
+intrinsics or C++11 atomics instead [-Wdeprecated-declarations]
+        _WriteBarrier();
+        ^
+C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier' has been explicitly marked deprecated here
+void __attribute__((__deprecated__(
+                    ^
+4 warnings generated.
+[16/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram_static.dir/hdr_interval_recorder.c.obj
 In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_interval_recorder.c:8:
 C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:19:2: warning: '_ReadBarrier' is deprecated: use other i
 ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
@@ -225,7 +259,7 @@ e
 static void __inline * hdr_atomic_load_pointer(void** pointer)
                                                       ^
 7 warnings generated.
-[17/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram_static.dir/hdr_histogram.c.obj
+[18/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram_static.dir/hdr_histogram.c.obj
 In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_histogram.c:18:
 C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:19:2: warning: '_ReadBarrier' is deprecated: use other i
 ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
@@ -266,81 +300,7 @@ C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:251:48: note: passing argumen
 unsigned char _BitScanReverse64(unsigned long *_Index, unsigned __int64 _Mask);
                                                ^
 5 warnings generated.
-[18/109] Building C object third_party/HdrHistogram_c/src/CMakeFiles/hdr_histogram_static.dir/hdr_writer_reader_phaser.c.obj
-In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:19:2: warning: '_ReadBarrier' is deprecated: use other i
-ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
-        _ReadBarrier();
-        ^
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:152:21: note: '_ReadBarrier' has been explicitly marked deprecated here
-void __attribute__((__deprecated__(
-                    ^
-In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:25:2: warning: '_WriteBarrier' is deprecated: use other
-intrinsics or C++11 atomics instead [-Wdeprecated-declarations]
-        _WriteBarrier();
-        ^
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier' has been explicitly marked deprecated here
-void __attribute__((__deprecated__(
-                    ^
-In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:31:2: warning: '_ReadBarrier' is deprecated: use other i
-ntrinsics or C++11 atomics instead [-Wdeprecated-declarations]
-        _ReadBarrier();
-        ^
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:152:21: note: '_ReadBarrier' has been explicitly marked deprecated here
-void __attribute__((__deprecated__(
-                    ^
-In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_writer_reader_phaser.c:13:
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/HdrHistogram_c/src/hdr_atomic.h:37:2: warning: '_WriteBarrier' is deprecated: use other
-intrinsics or C++11 atomics instead [-Wdeprecated-declarations]
-        _WriteBarrier();
-        ^
-C:\PROGRA~1\LLVM\lib\clang\12.0.0\include\intrin.h:166:21: note: '_WriteBarrier' has been explicitly marked deprecated here
-void __attribute__((__deprecated__(
-                    ^
-4 warnings generated.
-[19/109] Building C object src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj
-FAILED: src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj
-C:\PROGRA~1\LLVM\bin\clang.exe -DGLOG_USE_GLOG_EXPORT -Dmachnet_shim_EXPORTS -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows/utils
-_helper -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows/winclock -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows
- -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/. -isystem C:/cygwin64/home/rr-
-windows-vm/machnet-sumodule/build/third_party/gflags/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/glog/src -isystem
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/build/third_party/glog -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/googlete
-st/googlemock/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/googlebench/include -isystem C:/cygwin64/home/rr-windows-
-vm/machnet-sumodule/third_party/HdrHistogram_c/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/xxHash -isystem C:/cygwi
-n64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/acl -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/bbdev -isystem C:/cygwi
-n64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/bitratestats -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/bpf -isystem C
-:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/cfgfile -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/cmdline -isy
-stem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/compressdev -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/cr
-yptodev -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/distributor -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/..
-/dpdk/lib/eal -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/efd -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../d
-pdk/lib/ethdev -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/eventdev -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodul
-e/../dpdk/lib/fib -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/flow_classify -isystem C:/cygwin64/home/rr-windows-vm/machnet
--sumodule/../dpdk/lib/graph -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/gro -isystem C:/cygwin64/home/rr-windows-vm/machnet
--sumodule/../dpdk/lib/gso -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/hash -isystem C:/cygwin64/home/rr-windows-vm/machnet-
-sumodule/../dpdk/lib/ip_frag -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/ipsec -isystem C:/cygwin64/home/rr-windows-vm/mach
-net-sumodule/../dpdk/lib/jobstats -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/kni -isystem C:/cygwin64/home/rr-windows-vm/m
-achnet-sumodule/../dpdk/lib/kvargs -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/latencystats -isystem C:/cygwin64/home/rr-wi
-ndows-vm/machnet-sumodule/../dpdk/lib/lpm -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/mbuf -isystem C:/cygwin64/home/rr-win
-dows-vm/machnet-sumodule/../dpdk/lib/member -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/mempool -isystem C:/cygwin64/home/r
-r-windows-vm/machnet-sumodule/../dpdk/lib/meter -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/metrics -isystem C:/cygwin64/ho
-me/rr-windows-vm/machnet-sumodule/../dpdk/lib/net -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/node -isystem C:/cygwin64/hom
-e/rr-windows-vm/machnet-sumodule/../dpdk/lib/pci -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/pdump -isystem C:/cygwin64/hom
-e/rr-windows-vm/machnet-sumodule/../dpdk/lib/pipeline -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/port -isystem C:/cygwin64
-/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/power -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/rawdev -isystem C:/cygwi
-n64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/rcu -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/regexdev -isystem C:/cy
-gwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/reorder -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/rib -isystem C:/
-cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/ring -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/sched -isystem C:
-/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/security -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/stack -isyst
-em C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/table -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/telemetry
--isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/timer -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/vhos
-t -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/eal/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/
-lib/eal/windows/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/eal/x86/include -isystem C:/cygwin64/home/rr-windows-vm
-/machnet-sumodule/../dpdk/build -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/config -isystem C:/cygwin64/home/rr-windows-vm/mach
-net-sumodule/../dpdk/drivers/bus/pci -Wall -msse4.2 -O3 -DNDEBUG -std=gnu11 -MD -MT src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj -MF src\ext\CM
-akeFiles\machnet_shim.dir\machnet.c.obj.d -o src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj -c C:/cygwin64/home/rr-windows-vm/machnet-sumodule/sr
-c/ext/machnet.c
+[20/109] Building C object src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj
 In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:9:
 In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.h:19:
 In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet_common.h:59:
@@ -382,14 +342,14 @@ C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.2
 DEPRECATE_TEXT'
 #define _CRT_DEPRECATE_TEXT(_Text) __declspec(deprecated(_Text))
                                               ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:201:14: warning: implicit declaration of function 'WSARecvMsg' is invalid in C99 [
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:204:14: warning: implicit declaration of function 'WSARecvMsg' is invalid in C99 [
 -Wimplicit-function-declaration]
     result = WSARecvMsg(sock, &msg, &bytesReceived, NULL, NULL);
              ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:360:3: warning: 'strncpy' is deprecated: This function or variable may be unsafe.
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:458:5: warning: 'strncpy' is deprecated: This function or variable may be unsafe.
 Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [-Wdeprecated-declarations]
-  strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
-  ^
+    strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
+    ^
 C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\string.h:334:1: note: 'strncpy' has been explicitly marked deprecated here
 __DEFINE_CPP_OVERLOAD_STANDARD_NFUNC_0_2_EX(
 ^
@@ -406,24 +366,24 @@ C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.2
 DEPRECATE_TEXT'
 #define _CRT_DEPRECATE_TEXT(_Text) __declspec(deprecated(_Text))
                                               ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:377:17: error: variable has incomplete type 'struct msghdr'
-  struct msghdr msg;
-                ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:377:10: note: forward declaration of 'struct msghdr'
-  struct msghdr msg;
-         ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:388:16: warning: implicit declaration of function 'sendmsg' is invalid in C99 [-Wi
-mplicit-function-declaration]
-  int nbytes = sendmsg(g_ctrl_socket, &msg, 0);
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:507:14: warning: implicit declaration of function 'WSARecvMsg' is invalid in C99 [
+-Wimplicit-function-declaration]
+    result = WSARecvMsg(g_ctrl_socket, &msg, &bytesReceived, NULL, NULL);
+             ^
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:430:16: warning: variable 'zero_uuid' is uninitialized when used here [-Wuninitial
+ized]
+    uuid_clear(zero_uuid);
+               ^~~~~~~~~
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:429:5: note: variable 'zero_uuid' is declared here
+    uuid_t zero_uuid;
+    ^
+C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\shared\Rpcdce.h:85:16: note: expanded from macro 'uuid_t'
+#define uuid_t UUID
                ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:402:12: warning: implicit declaration of function 'recvmsg' is invalid in C99 [-Wi
-mplicit-function-declaration]
-  nbytes = recvmsg(g_ctrl_socket, &msg, 0);
-           ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:425:24: warning: unused variable 'channel' [-Wunused-variable]
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:535:24: warning: unused variable 'channel' [-Wunused-variable]
   MachnetChannelCtx_t *channel;
                        ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:517:7: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead o
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:627:7: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead o
 r define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings [-Wdeprecated-declarations]
   if (inet_addr(src_ip) == INADDR_NONE || inet_addr(dst_ip) == INADDR_ANY) {
       ^
@@ -434,7 +394,7 @@ C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um\winsock2.h:26:56:
 #define _WINSOCK_DEPRECATED_BY(replacement) __declspec(deprecated("Use " replacement " instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable
 deprecated API warnings"))
                                                        ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:517:43: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:627:43: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead
 or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings [-Wdeprecated-declarations]
   if (inet_addr(src_ip) == INADDR_NONE || inet_addr(dst_ip) == INADDR_ANY) {
                                           ^
@@ -445,7 +405,7 @@ C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um\winsock2.h:26:56:
 #define _WINSOCK_DEPRECATED_BY(replacement) __declspec(deprecated("Use " replacement " instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable
 deprecated API warnings"))
                                                        ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:529:32: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:639:32: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead
 or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings [-Wdeprecated-declarations]
   req.flow_info.src_ip = ntohl(inet_addr(src_ip));
                                ^
@@ -456,7 +416,7 @@ C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um\winsock2.h:26:56:
 #define _WINSOCK_DEPRECATED_BY(replacement) __declspec(deprecated("Use " replacement " instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable
 deprecated API warnings"))
                                                        ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:530:32: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:640:32: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead
 or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings [-Wdeprecated-declarations]
   req.flow_info.dst_ip = ntohl(inet_addr(dst_ip));
                                ^
@@ -467,11 +427,11 @@ C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um\winsock2.h:26:56:
 #define _WINSOCK_DEPRECATED_BY(replacement) __declspec(deprecated("Use " replacement " instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable
 deprecated API warnings"))
                                                        ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:546:5: warning: implicit declaration of function 'sleep' is invalid in C99 [-Wimpl
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:656:5: warning: implicit declaration of function 'sleep' is invalid in C99 [-Wimpl
 icit-function-declaration]
     sleep(1);
     ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:573:7: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead o
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:683:7: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead o
 r define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings [-Wdeprecated-declarations]
   if (inet_addr(local_ip) == INADDR_NONE) {
       ^
@@ -482,7 +442,7 @@ C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um\winsock2.h:26:56:
 #define _WINSOCK_DEPRECATED_BY(replacement) __declspec(deprecated("Use " replacement " instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable
 deprecated API warnings"))
                                                        ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:582:32: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:692:32: warning: 'inet_addr' is deprecated: Use inet_pton() or InetPton() instead
 or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings [-Wdeprecated-declarations]
   req.listener_info.ip = ntohl(inet_addr(local_ip));
                                ^
@@ -493,12 +453,15 @@ C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um\winsock2.h:26:56:
 #define _WINSOCK_DEPRECATED_BY(replacement) __declspec(deprecated("Use " replacement " instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable
 deprecated API warnings"))
                                                        ^
-C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:598:5: warning: implicit declaration of function 'sleep' is invalid in C99 [-Wimpl
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:708:5: warning: implicit declaration of function 'sleep' is invalid in C99 [-Wimpl
 icit-function-declaration]
     sleep(1);
     ^
-17 warnings and 1 error generated.
-[20/109] Building CXX object src/core/CMakeFiles/core.dir/drivers/shm/channel_bench.cc.obj
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/machnet.c:58:12: warning: unused function '_machnet_ctrl_request' [-Wunused-function]
+static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
+           ^
+18 warnings generated.
+[21/109] Building CXX object src/core/CMakeFiles/core.dir/drivers/shm/channel_bench.cc.obj
 FAILED: src/core/CMakeFiles/core.dir/drivers/shm/channel_bench.cc.obj
 C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE -DGLOG_USE_GLOG_EXPORT -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows/utils_helper -IC:/cygwin6
 4/home/rr-windows-vm/machnet-sumodule/src/ext/windows/winclock -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows -IC:/cygwin64/home/
@@ -650,7 +613,7 @@ C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext\machnet_private.h:17:10:
 #include <sys/mman.h>
          ^~~~~~~~~~~~
 3 warnings and 6 errors generated.
-[21/109] Building CXX object src/core/CMakeFiles/core.dir/drivers/shm/shmem.cc.obj
+[22/109] Building CXX object src/core/CMakeFiles/core.dir/drivers/shm/shmem.cc.obj
 FAILED: src/core/CMakeFiles/core.dir/drivers/shm/shmem.cc.obj
 C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE -DGLOG_USE_GLOG_EXPORT -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows/utils_helper -IC:/cygwin6
 4/home/rr-windows-vm/machnet-sumodule/src/ext/windows/winclock -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows -IC:/cygwin64/home/
@@ -838,7 +801,90 @@ C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/drivers/shm/shmem.cc:26
   if (mlock(mem_region_.get()->mem, mem_region_.get()->size) != 0)
       ^
 2 warnings and 19 errors generated.
-[23/109] Building CXX object src/core/CMakeFiles/core.dir/machnet_controller.cc.obj
+[23/109] Linking C shared library src\ext\machnet_shim.dll
+FAILED: src/ext/machnet_shim.dll src/ext/machnet_shim.lib
+C:\Windows\system32\cmd.exe /C "cd . && C:\PROGRA~1\LLVM\bin\clang.exe -nostartfiles -nostdlib -Wall -msse4.2 -O3 -DNDEBUG  -fuse-ld=lld-link -share
+d -o src\ext\machnet_shim.dll  -Xlinker /MANIFEST:EMBED -Xlinker /implib:src\ext\machnet_shim.lib -Xlinker /pdb:src\ext\machnet_shim.pdb -Xlinker /v
+ersion:0.0 src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj -LC:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/build/lib   -LC:/cygwin64/hom
+e/rr-windows-vm/machnet-sumodule/../dpdk/build/drivers -luuid.lib  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomd
+lg32 -ladvapi32 -loldnames  && cd ."
+lld-link: error: <root>: undefined symbol: _DllMainCRTStartup
+lld-link: error: undefined symbol: __declspec(dllimport) UuidCreate
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(uuid_generate)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __declspec(dllimport) UuidCompare
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(uuid_compare)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __declspec(dllimport) UuidToStringA
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(uuid_unparse)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __declspec(dllimport) WSAStartup
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __declspec(dllimport) socket
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __declspec(dllimport) connect
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __declspec(dllimport) WSASendMsg
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: WSARecvMsg
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __acrt_iob_func
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced 8 more times
+
+lld-link: error: undefined symbol: __declspec(dllimport) closesocket
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __declspec(dllimport) WSACleanup
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: perror
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_init)
+
+lld-link: error: undefined symbol: __stdio_common_vfprintf
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(fprintf)
+
+lld-link: error: undefined symbol: __declspec(dllimport) inet_addr
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced 2 more times
+
+lld-link: error: undefined symbol: __declspec(dllimport) ntohl
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_listen)
+
+lld-link: error: undefined symbol: memcpy
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced 27 more times
+
+lld-link: error: undefined symbol: sleep
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_connect)
+>>> referenced 19 more times
+
+lld-link: error: undefined symbol: abort
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_sendmsg)
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(_machnet_buffers_release)
+
+lld-link: error: undefined symbol: __chkstk
+>>> referenced by src/ext/CMakeFiles/machnet_shim.dir/machnet.c.obj:(machnet_recvmsg)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+[24/109] Building CXX object src/core/CMakeFiles/core.dir/machnet_controller.cc.obj
 FAILED: src/core/CMakeFiles/core.dir/machnet_controller.cc.obj
 C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE -DGLOG_USE_GLOG_EXPORT -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows/utils_helper -IC:/cygwin6
 4/home/rr-windows-vm/machnet-sumodule/src/ext/windows/winclock -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows -IC:/cygwin64/home/
@@ -986,7 +1032,139 @@ C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext\machnet_private.h:17:10:
 #include <sys/mman.h>
          ^~~~~~~~~~~~
 3 warnings and 6 errors generated.
-[24/109] Building CXX object src/core/CMakeFiles/core.dir/machnet_config.cc.obj
+[25/109] Building CXX object src/core/CMakeFiles/core.dir/drivers/dpdk/dpdk.cc.obj
+FAILED: src/core/CMakeFiles/core.dir/drivers/dpdk/dpdk.cc.obj
+C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE -DGLOG_USE_GLOG_EXPORT -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows/utils_helper -IC:/cygwin6
+4/home/rr-windows-vm/machnet-sumodule/src/ext/windows/winclock -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows -IC:/cygwin64/home/
+rr-windows-vm/machnet-sumodule/src/ext -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include -IC:/cygwin64/home/rr-windows-vm/machnet-sumodu
+le/src/core/../include -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/. -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/build/t
+hird_party/gflags/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/glog/src -isystem C:/cygwin64/home/rr-windows-vm/mach
+net-sumodule/build/third_party/glog -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/googletest/googlemock/include -isystem C:/c
+ygwin64/home/rr-windows-vm/machnet-sumodule/third_party/googlebench/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/Hdr
+Histogram_c/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/third_party/xxHash -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumo
+dule/../dpdk/lib/acl -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/bbdev -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumo
+dule/../dpdk/lib/bitratestats -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/bpf -isystem C:/cygwin64/home/rr-windows-vm/machn
+et-sumodule/../dpdk/lib/cfgfile -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/cmdline -isystem C:/cygwin64/home/rr-windows-vm
+/machnet-sumodule/../dpdk/lib/compressdev -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/cryptodev -isystem C:/cygwin64/home/r
+r-windows-vm/machnet-sumodule/../dpdk/lib/distributor -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/eal -isystem C:/cygwin64/
+home/rr-windows-vm/machnet-sumodule/../dpdk/lib/efd -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/ethdev -isystem C:/cygwin64
+/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/eventdev -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/fib -isystem C:/cygwi
+n64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/flow_classify -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/graph -isyste
+m C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/gro -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/gso -isystem
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/hash -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/ip_frag -isyst
+em C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/ipsec -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/jobstats -
+isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/kni -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/kvargs
+-isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/latencystats -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/l
+ib/lpm -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/mbuf -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/li
+b/member -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/mempool -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dp
+dk/lib/meter -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/metrics -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/.
+./dpdk/lib/net -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/node -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/..
+/dpdk/lib/pci -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/pdump -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/..
+/dpdk/lib/pipeline -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/port -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodul
+e/../dpdk/lib/power -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/rawdev -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumo
+dule/../dpdk/lib/rcu -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/regexdev -isystem C:/cygwin64/home/rr-windows-vm/machnet-s
+umodule/../dpdk/lib/reorder -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/rib -isystem C:/cygwin64/home/rr-windows-vm/machnet
+-sumodule/../dpdk/lib/ring -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/sched -isystem C:/cygwin64/home/rr-windows-vm/machne
+t-sumodule/../dpdk/lib/security -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/stack -isystem C:/cygwin64/home/rr-windows-vm/m
+achnet-sumodule/../dpdk/lib/table -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/telemetry -isystem C:/cygwin64/home/rr-window
+s-vm/machnet-sumodule/../dpdk/lib/timer -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/vhost -isystem C:/cygwin64/home/rr-wind
+ows-vm/machnet-sumodule/../dpdk/lib/eal/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/eal/windows/include -isystem C:
+/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/lib/eal/x86/include -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/build -is
+ystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/config -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/drivers/bus/pc
+i -isystem C:/cygwin64/home/rr-windows-vm/machnet-sumodule/../dpdk/build/install/usr/local/include -Wall -fno-rtti -fno-exceptions -msse4.2 -O3 -DND
+EBUG -Wno-unused-value -std=c++20 -MD -MT src/core/CMakeFiles/core.dir/drivers/dpdk/dpdk.cc.obj -MF src\core\CMakeFiles\core.dir\drivers\dpdk\dpdk.c
+c.obj.d -o src/core/CMakeFiles/core.dir/drivers/dpdk/dpdk.cc.obj -c C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/drivers/dpdk/dpdk.cc
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/drivers/dpdk/dpdk.cc:1:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\dpdk.h:4:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\ether.h:36:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\utils.h:129:20: error: type 'const std::array<uint32_t, 4>' (aka 'const array<unsigned i
+nt, 4>') does not provide a subscript operator
+      hash ^= tuple[i / 32] & (1 << (31 - i % 32));
+              ~~~~~^~~~~~~
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\utils.h:221:10: error: use of undeclared identifier 'getuid'; did you mean 'getpid'?
+  return getuid() == 0;
+         ^~~~~~
+         getpid
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\process.h:364:30: note: 'getpid' declared here
+        _ACRTIMP int __cdecl getpid(void);
+                             ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/drivers/dpdk/dpdk.cc:1:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\dpdk.h:4:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\ether.h:36:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\utils.h:221:10: warning: 'getpid' is deprecated: The POSIX name for this item is depreca
+ted. Instead, use the ISO C and C++ conformant name: _getpid. See online help for details. [-Wdeprecated-declarations]
+  return getuid() == 0;
+         ^
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\process.h:363:9: note: 'getpid' has been explicitly marked deprecated here
+        _CRT_NONSTDC_DEPRECATE(_getpid)
+        ^
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt.h:414:50: note: expanded from macro '_CRT_NONSTDC_DEPRECATE'
+        #define _CRT_NONSTDC_DEPRECATE(_NewName) _CRT_DEPRECATE_TEXT(             \
+                                                 ^
+C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.29.30133\include\vcruntime.h:310:47: note: expanded from macro '_CRT_
+DEPRECATE_TEXT'
+#define _CRT_DEPRECATE_TEXT(_Text) __declspec(deprecated(_Text))
+                                              ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/drivers/dpdk/dpdk.cc:1:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\dpdk.h:4:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\ether.h:36:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\utils.h:240:12: error: expected unqualified-id
+      std::min(sizeof(mask) * 8, static_cast<size_t>(CPU_SETSIZE));
+           ^
+C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\shared\minwindef.h:197:29: note: expanded from macro 'min'
+#define min(a,b)            (((a) < (b)) ? (a) : (b))
+                            ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/drivers/dpdk/dpdk.cc:1:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\dpdk.h:4:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\ether.h:36:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\utils.h:354:13: error: use of undeclared identifier 'vasprintf'; did you mean 'vsprintf'
+?
+  int len = vasprintf(&ptr, fmt, ap);
+            ^~~~~~~~~
+            vsprintf
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\stdio.h:1785:74: note: 'vsprintf' declared here
+        int, __RETURN_POLICY_SAME, __EMPTY_DECLSPEC, __CRTDECL, sprintf, vsprintf,
+                                                                         ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/drivers/dpdk/dpdk.cc:1:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\dpdk.h:4:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\ether.h:36:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\utils.h:354:23: error: cannot initialize a parameter of type 'char *' with an rvalue of
+type 'char **'
+  int len = vasprintf(&ptr, fmt, ap);
+                      ^~~~
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\stdio.h:1786:56: note: passing argument to parameter '_Buffer' here
+        _Pre_notnull_ _Always_(_Post_z_), char,        _Buffer,
+                                                       ^
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/core/drivers/dpdk/dpdk.cc:1:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\dpdk.h:4:
+In file included from C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\ether.h:36:
+C:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/include\utils.h:354:13: warning: 'vsprintf' is deprecated: This function or variable may be unsa
+fe. Consider using vsprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [-Wdeprecated-declarations]
+  int len = vasprintf(&ptr, fmt, ap);
+            ^
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\stdio.h:1783:5: note: 'vsprintf' has been explicitly marked deprecated here
+    __DEFINE_CPP_OVERLOAD_STANDARD_FUNC_0_1_ARGLIST(
+    ^
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt.h:839:5: note: expanded from macro '__DEFINE_CPP_OVERLOAD_STANDARD_FUNC_0_1
+_ARGLIST'
+    __DEFINE_CPP_OVERLOAD_STANDARD_FUNC_0_1_ARGLIST_EX(_ReturnType, _ReturnPolicy, _DeclSpec, _CC, _FuncName, _FuncName##_s, _VFuncName, _VFuncName#
+#_s, _SalAttributeDst, _DstType, _Dst, _TType1, _TArg1)
+    ^
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt.h:1899:17: note: expanded from macro '__DEFINE_CPP_OVERLOAD_STANDARD_FUNC_0
+_1_ARGLIST_EX'
+                _CRT_INSECURE_DEPRECATE(_SecureVFuncName) _DeclSpec _ReturnType _CC _VFuncName(_SalAttributeDst _DstType *_Dst, _TType1 _TArg1, va_l
+ist _Args);
+                ^
+C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.29.30133\include\vcruntime.h:320:55: note: expanded from macro '_CRT_
+INSECURE_DEPRECATE'
+        #define _CRT_INSECURE_DEPRECATE(_Replacement) _CRT_DEPRECATE_TEXT(    \
+                                                      ^
+C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.29.30133\include\vcruntime.h:310:47: note: expanded from macro '_CRT_
+DEPRECATE_TEXT'
+#define _CRT_DEPRECATE_TEXT(_Text) __declspec(deprecated(_Text))
+                                              ^
+2 warnings and 5 errors generated.
+[26/109] Building CXX object src/core/CMakeFiles/core.dir/machnet_config.cc.obj
 FAILED: src/core/CMakeFiles/core.dir/machnet_config.cc.obj
 C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE -DGLOG_USE_GLOG_EXPORT -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows/utils_helper -IC:/cygwin6
 4/home/rr-windows-vm/machnet-sumodule/src/ext/windows/winclock -IC:/cygwin64/home/rr-windows-vm/machnet-sumodule/src/ext/windows -IC:/cygwin64/home/
@@ -1181,58 +1359,58 @@ dy 'std::ranges::drop_view'
 6.      C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.29.30133\include\ranges:2827:105: in compound statement ('{}'
 )
 7.      C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.29.30133\include\ranges:2832:20: in compound statement ('{}')
- #0 0x00007ff64ce2debd (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x341debd)
- #1 0x00007ff64ce1c43d (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x340c43d)
- #2 0x00007ff64ce1be6f (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x340be6f)
- #3 0x00007ff64cb5e7eb (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x314e7eb)
- #4 0x00007ff64cb5e512 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x314e512)
- #5 0x00007ff64c990004 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f80004)
- #6 0x00007ff64c98dcec (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f7dcec)
- #7 0x00007ff64c987f9d (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f77f9d)
- #8 0x00007ff64c987b6f (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f77b6f)
- #9 0x00007ff64c9d05b3 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fc05b3)
-#10 0x00007ff64c9cf730 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbf730)
-#11 0x00007ff64c9d9039 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fc9039)
-#12 0x00007ff64c9cfc47 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbfc47)
-#13 0x00007ff64c9cf730 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbf730)
-#14 0x00007ff64c9d3c7f (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fc3c7f)
-#15 0x00007ff64c9cfe2e (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbfe2e)
-#16 0x00007ff64c9cf730 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbf730)
-#17 0x00007ff64c9d9039 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fc9039)
-#18 0x00007ff64c9da123 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fca123)
-#19 0x00007ff64c9df976 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fcf976)
-#20 0x00007ff64c9de5da (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fce5da)
-#21 0x00007ff64c970d97 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f60d97)
-#22 0x00007ff64c96def5 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f5def5)
-#23 0x00007ff64c98849c (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f7849c)
-#24 0x00007ff64c958cf3 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f48cf3)
-#25 0x00007ff64c957e83 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f47e83)
-#26 0x00007ff64c957729 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f47729)
-#27 0x00007ff64c98799b (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f7799b)
-#28 0x00007ff64c93440e (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f2440e)
-#29 0x00007ff64c966ad0 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f56ad0)
-#30 0x00007ff64c966583 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f56583)
-#31 0x00007ff64c987aea (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f77aea)
-#32 0x00007ff64c93440e (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f2440e)
-#33 0x00007ff64c966ad0 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f56ad0)
-#34 0x00007ff64c966583 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f56583)
-#35 0x00007ff64c987aea (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f77aea)
-#36 0x00007ff64c93440e (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f2440e)
-#37 0x00007ff64c932acb (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f22acb)
-#38 0x00007ff64c92ddae (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f1ddae)
-#39 0x00007ff64bc96022 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2286022)
-#40 0x00007ff64bc5cfcc (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x224cfcc)
-#41 0x00007ff64bcfd4ee (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x22ed4ee)
-#42 0x00007ff649a17164 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x7164)
-#43 0x00007ff649a14344 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x4344)
-#44 0x00007ff64bbe5586 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x21d5586)
-#45 0x00007ff64b4d766f (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x1ac766f)
-#46 0x00007ff64bbe4cc6 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x21d4cc6)
-#47 0x00007ff64baded67 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x20ced67)
-#48 0x00007ff64badf2f9 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x20cf2f9)
-#49 0x00007ff64baca8b6 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x20ba8b6)
-#50 0x00007ff649a13c35 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x3c35)
-#51 0x00007ff64d7990a8 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x3d890a8)
+ #0 0x00007ff70ad1debd (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x341debd)
+ #1 0x00007ff70ad0c43d (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x340c43d)
+ #2 0x00007ff70ad0be6f (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x340be6f)
+ #3 0x00007ff70aa4e7eb (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x314e7eb)
+ #4 0x00007ff70aa4e512 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x314e512)
+ #5 0x00007ff70a880004 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f80004)
+ #6 0x00007ff70a87dcec (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f7dcec)
+ #7 0x00007ff70a877f9d (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f77f9d)
+ #8 0x00007ff70a877b6f (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f77b6f)
+ #9 0x00007ff70a8c05b3 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fc05b3)
+#10 0x00007ff70a8bf730 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbf730)
+#11 0x00007ff70a8c9039 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fc9039)
+#12 0x00007ff70a8bfc47 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbfc47)
+#13 0x00007ff70a8bf730 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbf730)
+#14 0x00007ff70a8c3c7f (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fc3c7f)
+#15 0x00007ff70a8bfe2e (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbfe2e)
+#16 0x00007ff70a8bf730 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fbf730)
+#17 0x00007ff70a8c9039 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fc9039)
+#18 0x00007ff70a8ca123 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fca123)
+#19 0x00007ff70a8cf976 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fcf976)
+#20 0x00007ff70a8ce5da (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2fce5da)
+#21 0x00007ff70a860d97 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f60d97)
+#22 0x00007ff70a85def5 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f5def5)
+#23 0x00007ff70a87849c (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f7849c)
+#24 0x00007ff70a848cf3 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f48cf3)
+#25 0x00007ff70a847e83 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f47e83)
+#26 0x00007ff70a847729 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f47729)
+#27 0x00007ff70a87799b (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f7799b)
+#28 0x00007ff70a82440e (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f2440e)
+#29 0x00007ff70a856ad0 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f56ad0)
+#30 0x00007ff70a856583 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f56583)
+#31 0x00007ff70a877aea (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f77aea)
+#32 0x00007ff70a82440e (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f2440e)
+#33 0x00007ff70a856ad0 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f56ad0)
+#34 0x00007ff70a856583 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f56583)
+#35 0x00007ff70a877aea (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f77aea)
+#36 0x00007ff70a82440e (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f2440e)
+#37 0x00007ff70a822acb (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f22acb)
+#38 0x00007ff70a81ddae (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2f1ddae)
+#39 0x00007ff709b86022 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x2286022)
+#40 0x00007ff709b4cfcc (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x224cfcc)
+#41 0x00007ff709bed4ee (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x22ed4ee)
+#42 0x00007ff707907164 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x7164)
+#43 0x00007ff707904344 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x4344)
+#44 0x00007ff709ad5586 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x21d5586)
+#45 0x00007ff7093c766f (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x1ac766f)
+#46 0x00007ff709ad4cc6 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x21d4cc6)
+#47 0x00007ff7099ced67 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x20ced67)
+#48 0x00007ff7099cf2f9 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x20cf2f9)
+#49 0x00007ff7099ba8b6 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x20ba8b6)
+#50 0x00007ff707903c35 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x3c35)
+#51 0x00007ff70b6890a8 (C:\PROGRA~1\LLVM\bin\CLANG_~1.EXE+0x3d890a8)
 #52 0x00007ff842e47ac4 (C:\Windows\System32\KERNEL32.DLL+0x17ac4)
 #53 0x00007ff842f9a4e1 (C:\Windows\SYSTEM32\ntdll.dll+0x5a4e1)
 CLANG_~1: error: clang frontend command failed due to signal (use -v to see invocation)

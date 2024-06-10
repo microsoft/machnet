@@ -19,8 +19,8 @@
 #include <winsock2.h>
 #include <afunix.h>
 #include <ws2tcpip.h>
-#include "windows_uio.h"
-#endif
+// #include "windows_uio.h"
+#endif // #ifdef __linux__
 
 #include <errno.h>
 #include <sys/types.h>
@@ -159,7 +159,8 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
     strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
             sizeof(server_addr.sun_path) - 1);
 
-    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {  // check connect() return value
+    if (connect(sock, (struct sockaddr *)&server_addr, 
+                sizeof(server_addr)) == SOCKET_ERROR) {  // check connect() return value
       perror("connect");
       closesocket(sock);
       WSACleanup();
@@ -180,6 +181,8 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
     int result = WSASendMsg(sock, &msg, 0, &bytesSent, NULL, NULL);
     if (result == SOCKET_ERROR) {
         perror("sendmsg");
+        closesocket(sock);
+        WSACleanup();
         return -1;
     }
 
@@ -218,7 +221,7 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
       }
     }
 
-  #endif
+  #endif // #ifdef __linux__
 
   return 0;
 }
@@ -336,87 +339,194 @@ static inline void _machnet_buffers_release(MachnetChannelCtx_t *ctx,
 }
 
 int machnet_init() {
-  uuid_t zero_uuid;
-  uuid_clear(zero_uuid);
-  if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
-    // Already initialized.
-    return 0;
-  }
+  #ifdef __linux__
+    // Linux
 
-  // Generate a random UUID for this application.
-  uuid_generate(g_app_uuid);
-  uuid_unparse(g_app_uuid, g_app_uuid_str);
+    uuid_t zero_uuid;
+    uuid_clear(zero_uuid);
+    if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
+      // Already initialized.
+      return 0;
+    }
 
-  // Initialize the AF_UNIX socket to the controller.
-  g_ctrl_socket = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (g_ctrl_socket < 0) {
-    return -1;
-  }
+    // Generate a random UUID for this application.
+    uuid_generate(g_app_uuid);
+    uuid_unparse(g_app_uuid, g_app_uuid_str);
 
-  // Connect to the controller.
-  struct sockaddr_un server_addr;
-  memset(&server_addr, 0, sizeof(server_addr));
-  server_addr.sun_family = AF_UNIX;
-  strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
-          sizeof(server_addr.sun_path) - 1);
-  if (connect(g_ctrl_socket, (struct sockaddr *)&server_addr,
-              sizeof(server_addr)) < 0) {
-    fprintf(stderr,
-            "ERROR: Failed to connect() to the Machnet controller at %s\n",
-            MACHNET_CONTROLLER_DEFAULT_PATH);
-    return -1;
-  }
+    // Initialize the AF_UNIX socket to the controller.
+    g_ctrl_socket = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (g_ctrl_socket < 0) {
+      return -1;
+    }
 
-  // Send REGISTER message.
-  machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
-                            .msg_id = msg_id_counter++};
-  uuid_copy(req.app_uuid, g_app_uuid);
-  machnet_ctrl_msg_t resp = {};
+    // Connect to the controller.
+    struct sockaddr_un server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
+            sizeof(server_addr.sun_path) - 1);
+    if (connect(g_ctrl_socket, (struct sockaddr *)&server_addr,
+                sizeof(server_addr)) < 0) {
+      fprintf(stderr,
+              "ERROR: Failed to connect() to the Machnet controller at %s\n",
+              MACHNET_CONTROLLER_DEFAULT_PATH);
+      return -1;
+    }
 
-  // Sendmsg request.
-  struct msghdr msg;
-  memset(&msg, 0, sizeof(msg));
+    // Send REGISTER message.
+    machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
+                              .msg_id = msg_id_counter++};
+    uuid_copy(req.app_uuid, g_app_uuid);
+    machnet_ctrl_msg_t resp = {};
 
-  struct iovec iov[1];
-  iov[0].iov_base = &req;
-  iov[0].iov_len = sizeof(req);
+    // Sendmsg request.
+    struct msghdr msg;
+    memset(&msg, 0, sizeof(msg));
 
-  msg.msg_name = NULL;
-  msg.msg_namelen = 0;
-  msg.msg_iov = iov;
-  msg.msg_iovlen = 1;
-  int nbytes = sendmsg(g_ctrl_socket, &msg, 0);
-  if (nbytes < 0) {
-    fprintf(stderr, "ERROR: Failed to send register message to controller.\n");
-    perror("sendmsg(): ");
-    return -1;
-  }
+    struct iovec iov[1];
+    iov[0].iov_base = &req;
+    iov[0].iov_len = sizeof(req);
 
-  // Recvmsg response.
-  iov[0].iov_base = &resp;
-  iov[0].iov_len = sizeof(resp);
-  msg.msg_name = NULL;
-  msg.msg_namelen = 0;
-  msg.msg_iov = iov;
-  msg.msg_iovlen = 1;
-  nbytes = recvmsg(g_ctrl_socket, &msg, 0);
-  if (nbytes < 0 || nbytes != sizeof(resp)) {
-    fprintf(stderr, "Got invalid response from controller.\n");
-    return -1;
-  }
+    msg.msg_name = NULL;
+    msg.msg_namelen = 0;
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 1;
+    int nbytes = sendmsg(g_ctrl_socket, &msg, 0);
+    if (nbytes < 0) {
+      fprintf(stderr, "ERROR: Failed to send register message to controller.\n");
+      perror("sendmsg(): ");
+      return -1;
+    }
 
-  // Check the response.
-  if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
-      resp.msg_id != req.msg_id) {
-    fprintf(stderr, "Got invalid response from controller.\n");
-    return -1;
-  }
+    // Recvmsg response.
+    iov[0].iov_base = &resp;
+    iov[0].iov_len = sizeof(resp);
+    msg.msg_name = NULL;
+    msg.msg_namelen = 0;
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 1;
+    nbytes = recvmsg(g_ctrl_socket, &msg, 0);
+    if (nbytes < 0 || nbytes != sizeof(resp)) {
+      fprintf(stderr, "Got invalid response from controller.\n");
+      return -1;
+    }
 
-  // It is important that we do not close the socket here. Closing the socket
-  // will trigger the controller to de-register the application and release
-  // all its allocated resources (shared memory channels, connections etc.).
-  // When this application quits, the controller will detect that the socket
-  // was closed and de-register the application.
+    // Check the response.
+    if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
+        resp.msg_id != req.msg_id) {
+      fprintf(stderr, "Got invalid response from controller.\n");
+      return -1;
+    }
+
+    // It is important that we do not close the socket here. Closing the socket
+    // will trigger the controller to de-register the application and release
+    // all its allocated resources (shared memory channels, connections etc.).
+    // When this application quits, the controller will detect that the socket
+    // was closed and de-register the application.
+
+  #else // #ifdef __linux__
+    // Windows
+    uuid_t zero_uuid;
+    uuid_clear(zero_uuid);
+    if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
+      // Already initialized.
+      return 0;
+    }
+
+    // Generate a random UUID for this application.
+    uuid_generate(g_app_uuid);
+    uuid_unparse(g_app_uuid, g_app_uuid_str);
+
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        perror("WSAStartup failed");
+        return -1;
+    }
+
+    // Initialize the AF_UNIX socket to the controller.
+    g_ctrl_socket = socket(AF_UNIX, SOCK_STREAM, 0);  // Need to check support for AF_UNIX, other options: AF_INET/AF_UNSPEC
+    if (g_ctrl_socket == INVALID_SOCKET) {
+      WSACleanup();
+      return -1;
+    }
+
+    // Connect to the controller.
+    struct sockaddr_un server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
+            sizeof(server_addr.sun_path) - 1);
+
+    if (connect(g_ctrl_socket, (struct sockaddr *)&server_addr,
+                sizeof(server_addr)) == SOCKET_ERROR) { // check connect() return value
+      fprintf(stderr,
+              "ERROR: Failed to connect() to the Machnet controller at %s\n",
+              MACHNET_CONTROLLER_DEFAULT_PATH);
+      closesocket(g_ctrl_socket);
+      WSACleanup();
+      return -1;
+    }
+
+    // Send REGISTER message.
+    machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
+                              .msg_id = msg_id_counter++};
+    uuid_copy(req.app_uuid, g_app_uuid);
+    machnet_ctrl_msg_t resp = {};
+
+    // Sendmsg request.
+    WSAMSG msg;
+    memset(&msg, 0, sizeof(msg));
+
+    WSABUF iov[1];
+    iov[0].buf = (CHAR*)&req;
+    iov[0].len = sizeof(req);
+
+    msg.name = NULL;
+    msg.namelen = 0;
+    msg.lpBuffers = iov;
+    msg.dwBufferCount = 1;
+
+    DWORD bytesSent = 0;
+    int result = WSASendMsg(g_ctrl_socket, &msg, 0, &bytesSent, NULL, NULL);
+    if (result == SOCKET_ERROR) {
+        perror("sendmsg");
+        closesocket(g_ctrl_socket);
+        WSACleanup();
+        return -1;
+    }
+
+    // Recvmsg response.
+    iov[0].buf = (CHAR*)&resp;
+    iov[0].len = sizeof(resp);
+    msg.name = NULL;
+    msg.namelen = 0;
+    msg.lpBuffers = iov;
+    msg.dwBufferCount = 1;
+    DWORD bytesReceived;
+    result = WSARecvMsg(g_ctrl_socket, &msg, &bytesReceived, NULL, NULL);
+    if(result == SOCKET_ERROR || bytesReceived != sizeof(resp)) {
+      fprintf(stderr, "Got invalid response from controller.\n");
+      closesocket(g_ctrl_socket);
+      WSACleanup();
+      return -1;
+    }
+
+    // Check the response.
+    if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
+        resp.msg_id != req.msg_id) {
+      fprintf(stderr, "Got invalid response from controller.\n");
+      closesocket(g_ctrl_socket);
+      WSACleanup();
+      return -1;
+    }
+
+    // It is important that we do not close the socket here. Closing the socket
+    // will trigger the controller to de-register the application and release
+    // all its allocated resources (shared memory channels, connections etc.).
+    // When this application quits, the controller will detect that the socket
+    // was closed and de-register the application.
+  #endif // #ifdef __linux__
 
   return resp.status;
 }
