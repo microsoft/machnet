@@ -50,7 +50,7 @@ it from Github container registry. Pulling from GHCR requires an auth token:
 ```bash
 # Install packages required to try out Machnet
 sudo apt-get update
-sudo apt-get install -y docker.io net-tools driverctl
+sudo apt-get install -y docker.io net-tools driverctl libgflags-dev uuid-dev
 
 # Reboot like below to allow non-root users to run Docker
 sudo usermod -aG docker $USER && sudo reboot
@@ -102,13 +102,13 @@ test things end-to-end with a client-server application.
 ```bash
 # Build the Machnet helper library and hello_world example, on both VMs
 ./build_shim.sh
-cd hello_world; make
+cd examples
 
 # On VM #1, run the hello_world server
 ./hello_world --local <eth1 IP address of VM 1>
 
 # On VM #2, run the hello_world client. This should print the reply from the server.
-./hello_world --local <eth1 IP address of VM 1> --remote <eth1 IP address of VM 2>
+./hello_world --local <eth1 IP address of VM 2> --remote <eth1 IP address of VM 1>
 ```
 
 ## 5. Run the end-to-end benchmark
@@ -121,7 +121,7 @@ MSG_GEN="docker run -v /var/run/machnet:/var/run/machnet ghcr.io/microsoft/machn
 ${MSG_GEN} --local_ip <eth1 IP address of VM 1>
 
 # On VM #2, run the msg_gen client
-${MSG_GEN} --local_ip <eth1 IP address of VM 1> --remote_ip <eth1 IP address of VM 2>
+${MSG_GEN} --local_ip <eth1 IP address of VM 2> --remote_ip <eth1 IP address of VM 1>
 ```
 
 The client should print message rate and latency percentile statistics.
