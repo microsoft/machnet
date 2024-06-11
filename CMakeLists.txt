@@ -16,6 +16,7 @@ include_directories(SYSTEM ${CMAKE_BINARY_DIR}/third_party/gflags/include)
 
 # Glog doesn't correctly define its include directories, so we need to specify manually
 set(CMAKE_BUILD_TYPE Release)
+set(WITH_GFLAGS OFF)
 add_definitions(-DGLOG_USE_GLOG_EXPORT)
 add_subdirectory(third_party/glog)
 include_directories(SYSTEM third_party/glog/src)

@@ -19,7 +19,7 @@
 #include <winsock2.h>
 #include <afunix.h>
 #include <ws2tcpip.h>
-#include <mswsock.h>
+
 // #include "windows_uio.h"
 #endif // #ifdef __linux__
 
