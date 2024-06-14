@@ -15,6 +15,7 @@
 #include "ether.h"
 #include "packet.h"
 #include "packet_pool.h"
+#include "utils.h"
 
 namespace juggler {
 namespace dpdk {
@@ -58,14 +59,20 @@ class PmdRing {
         port_id_(port_id),
         ring_id_(ring_id),
         ndesc_(ndesc),
-        ppool_(nullptr) {}
+        ppool_(nullptr),
+        machnet_testing_(std::getenv("MACHNET_TESTING_ENABLED") != nullptr &&
+                         std::string(std::getenv("MACHNET_TESTING_ENABLED")) ==
+                             "1") {}
   PmdRing(const PmdPort *port, uint8_t port_id, uint16_t ring_id,
           uint16_t ndesc, uint32_t nmbufs, uint32_t mbuf_sz)
       : pmd_port_(port),
         port_id_(port_id),
         ring_id_(ring_id),
         ndesc_(ndesc),
-        ppool_(std::unique_ptr<PacketPool>(new PacketPool(nmbufs, mbuf_sz))) {}
+        ppool_(std::unique_ptr<PacketPool>(new PacketPool(nmbufs, mbuf_sz))),
+        machnet_testing_(std::getenv("MACHNET_TESTING_ENABLED") != nullptr &&
+                         std::string(std::getenv("MACHNET_TESTING_ENABLED")) ==
+                             "1") {}
 
   rte_mempool *GetPacketMemPool() const { return ppool_.get()->GetMemPool(); }
 
@@ -75,6 +82,10 @@ class PmdRing {
   const uint16_t ring_id_;
   const uint16_t ndesc_;
   const std::unique_ptr<PacketPool> ppool_;
+
+ public:
+  const bool machnet_testing_;
+  juggler::utils::FastRand fast_rand_;
 };
 
 /*
@@ -102,6 +113,25 @@ class TxRing : public PmdRing {
   TxRing &operator=(TxRing const &) = delete;
 
   void Init();
+
+  /// @brief Drops a random packet from the given array of packets.
+  /// @param pkts Array of packet pointers.
+  /// @param nb_pkts Number of packets in the array.
+  inline void pkt_idx_to_drop(Packet **pkts, uint16_t *nb_pkts) {
+    static constexpr uint32_t kBillion = 1000000000;
+    // the value below is picked randomly as probability.
+    static constexpr float kDropProb = 0.000001;
+    if (fast_rand_.next_u32() % kBillion < kDropProb * kBillion) {
+      int random_packet = fast_rand_.next_u32() % *nb_pkts;
+      LOG(INFO) << "Dropping random packet: " << random_packet << " from "
+                << *nb_pkts << " packets.";
+      Packet::Free(pkts[random_packet]);
+      for (int i = random_packet; i < *nb_pkts - 1; i++) {
+        pkts[i] = pkts[i + 1];
+      }
+      *nb_pkts = *nb_pkts - 1;
+    }
+  }
 
   /**
    * @brief Tries to send a burst of packets through this TX ring.
@@ -138,7 +168,11 @@ class TxRing : public PmdRing {
    * @param pkts Array of packet pointers to send.
    * @param nb_pkts Number of packets to send.
    */
-  void SendPackets(Packet **pkts, uint16_t nb_pkts) const {
+  void SendPackets(Packet **pkts, uint16_t nb_pkts) {
+    if (machnet_testing_) {
+      pkt_idx_to_drop(pkts, &nb_pkts);
+    }
+
     uint16_t nb_remaining = nb_pkts;
 
     do {
@@ -156,7 +190,7 @@ class TxRing : public PmdRing {
    *
    * @param batch Pointer to the PacketBatch.
    */
-  void SendPackets(PacketBatch *batch) const {
+  void SendPackets(PacketBatch *batch) {
     SendPackets(batch->pkts(), batch->GetSize());
     batch->Clear();
   }
