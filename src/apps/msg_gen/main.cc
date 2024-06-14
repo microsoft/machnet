@@ -364,7 +364,13 @@ int main(int argc, char *argv[]) {
     datapath_thread = std::thread(ServerLoop, channel_ctx);
   }
 
-  while (g_keep_running) sleep(5);
+  while (g_keep_running) {
+    #ifdef __linux__
+      sleep(5);
+    #else
+      // a cross-platform sleep function for both .c and .cc files
+    #endif
+  }
   datapath_thread.join();
   return 0;
 }

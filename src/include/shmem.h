@@ -15,7 +15,7 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <windows.h>
+// #include <windows.h>
 #endif
 #include <sys/stat.h> /* For mode constants */
 #include <utils.h>
@@ -78,20 +78,20 @@ class ShMem {
     int fd = -1;
     size_t size = 0;
     Shm(const std::string &shm_name, size_t shm_size) {
-      fd = shm_open(shm_name.c_str(), kShmFlags, kShmMode);
-      if (fd == -1) {
-        LOG(WARNING) << juggler::utils::Format(
-            "Failed to shm_open() (name: %s, errno: %d)", shm_name.c_str(),
-            errno);
-        return;
-      }
-      if (ftruncate(fd, shm_size)) {
-        LOG(WARNING) << juggler::utils::Format(
-            "Failed to ftruncate() (errno: %d)", errno);
-        close(fd);
-        fd = -1;
-        return;
-      }
+      // fd = shm_open(shm_name.c_str(), kShmFlags, kShmMode);
+      // if (fd == -1) {
+      //   LOG(WARNING) << juggler::utils::Format(
+      //       "Failed to shm_open() (name: %s, errno: %d)", shm_name.c_str(),
+      //       errno);
+      //   return;
+      // }
+      // if (ftruncate(fd, shm_size)) {
+      //   LOG(WARNING) << juggler::utils::Format(
+      //       "Failed to ftruncate() (errno: %d)", errno);
+      //   close(fd);
+      //   fd = -1;
+      //   return;
+      // }
 
       name = shm_name;
       size = shm_size;
@@ -101,11 +101,11 @@ class ShMem {
   struct ShmDeleter {
     void operator()(Shm *ptr) const noexcept {
       if (ptr == nullptr) return;
-      if (ptr->fd != -1 && shm_unlink(ptr->name.c_str()) == -1) {
-        LOG(WARNING) << juggler::utils::Format(
-            "Failed to shm_unlink() (name: %s, errno: %d)", ptr->name.c_str(),
-            errno);
-      }
+      // if (ptr->fd != -1 && shm_unlink(ptr->name.c_str()) == -1) {
+      //   LOG(WARNING) << juggler::utils::Format(
+      //       "Failed to shm_unlink() (name: %s, errno: %d)", ptr->name.c_str(),
+      //       errno);
+      // }
       delete ptr;
     }
   };
@@ -113,28 +113,28 @@ class ShMem {
   ShmPointer shmem_;
 
   struct Mmap {
-    static const int kMmapProt = (PROT_READ | PROT_WRITE);
-    static const int kMmapFlags = (MAP_SHARED | MAP_POPULATE);
+    // static const int kMmapProt = (PROT_READ | PROT_WRITE);
+    // static const int kMmapFlags = (MAP_SHARED | MAP_POPULATE);
     void *mem = nullptr;
     size_t size = 0;
-    Mmap(size_t mem_size, int fd) {
-      mem = mmap(0, mem_size, kMmapProt, kMmapFlags, fd, 0);
-      if (mem == MAP_FAILED) {
-        LOG(WARNING) << juggler::utils::Format(
-            "Failed to mmap() (fd: %d, errno: %d)", fd, errno);
-        return;
-      } else {
-        size = mem_size;
-      }
-    }
+    // Mmap(size_t mem_size, int fd) {
+    //   mem = mmap(0, mem_size, kMmapProt, kMmapFlags, fd, 0);
+    //   if (mem == MAP_FAILED) {
+    //     LOG(WARNING) << juggler::utils::Format(
+    //         "Failed to mmap() (fd: %d, errno: %d)", fd, errno);
+    //     return;
+    //   } else {
+    //     size = mem_size;
+    //   }
+    // }
   };
   struct MmapDeleter {
     void operator()(Mmap *ptr) const noexcept {
       if (ptr == nullptr) return;
-      if (ptr->mem != nullptr && ptr->mem != MAP_FAILED &&
-          munmap(ptr->mem, ptr->size) == -1)
-        LOG(WARNING) << juggler::utils::Format("Failed to munmap() (errno: %d)",
-                                               errno);
+      // if (ptr->mem != nullptr && ptr->mem != MAP_FAILED &&
+      //     munmap(ptr->mem, ptr->size) == -1)
+      //   LOG(WARNING) << juggler::utils::Format("Failed to munmap() (errno: %d)",
+      //                                          errno);
       delete ptr;
     }
   };

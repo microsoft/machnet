@@ -24,6 +24,14 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#ifdef __linux__
+// linux
+#else
+  #undef min
+  #undef max
+  #include <windows.h>
+#endif
+
 namespace juggler {
 class MachnetEngine;  // forward declaration
 }

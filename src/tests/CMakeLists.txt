@@ -7,7 +7,15 @@ file(GLOB_RECURSE TEST_FILES "${PROJECT_SOURCE_DIR}/src/*_test.cc" )
 foreach(test_name IN LISTS TEST_FILES)
   get_filename_component(test_bin ${test_name} NAME_WE)
   add_executable(${test_bin} ${test_name})
-  target_link_libraries(${test_bin} PUBLIC
-    core machnet_shim glog gtest gmock ${LIBDPDK_LIBRARIES} hugetlbfs rt)
+
+  if (WIN32)
+    target_link_libraries(${test_bin} PUBLIC
+      core machnet_shim glog gtest gmock ${LIBDPDK_LIBRARIES}) # hugetlbfs rt breaks the build
+  else ()
+    target_link_libraries(${test_bin} PUBLIC
+      core machnet_shim glog gtest gmock ${LIBDPDK_LIBRARIES} hugetlbfs rt)
+  endif ()
+
+  
   add_test(NAME ${test_bin} COMMAND ${test_bin})
 endforeach()

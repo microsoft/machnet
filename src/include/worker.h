@@ -270,7 +270,11 @@ class WorkerPool {
       }
       worker->quit();
     }
-    sleep(1);
+    #ifdef __linux__
+      sleep(1);
+    #else
+      // a cross-platform sleep function for both .c and .cc files
+    #endif
   }
 
  private:

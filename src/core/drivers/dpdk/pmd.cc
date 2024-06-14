@@ -7,6 +7,13 @@
 #include <cstring>
 #include <memory>
 
+#ifdef __linux__
+// linux
+#else
+  #include <chrono>
+  #include <thread>
+#endif
+
 namespace juggler {
 namespace dpdk {
 
@@ -289,7 +296,11 @@ void PmdPort::InitDriver(uint16_t mtu) {
         LOG(WARNING) << "rte_eth_link_get_nowait() failed.";
       }
 
-      sleep(1);
+      #ifdef __linux__
+        sleep(1);
+      #else
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      #endif
     }
 
     if (link.link_status == ETH_LINK_UP) {

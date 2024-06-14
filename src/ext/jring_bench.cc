@@ -35,12 +35,12 @@ class ProducerConsumerBenchmark : public benchmark::Fixture {
     const auto ring_mem_size = jring2_get_buf_ring_size(msg_size, kQueueSz);
 
     // Allocate memory for the rings.
-    p2c_ring_ = CHECK_NOTNULL(
-        static_cast<jring2_t*>(aligned_alloc(CACHELINE_SIZE, ring_mem_size)));
+    // p2c_ring_ = CHECK_NOTNULL(
+    //     static_cast<jring2_t*>(aligned_alloc(CACHELINE_SIZE, ring_mem_size)));
     jring2_init(p2c_ring_, kQueueSz, msg_size);
 
-    c2p_ring_ = CHECK_NOTNULL(
-        static_cast<jring2_t*>(aligned_alloc(CACHELINE_SIZE, ring_mem_size)));
+    // c2p_ring_ = CHECK_NOTNULL(
+    //     static_cast<jring2_t*>(aligned_alloc(CACHELINE_SIZE, ring_mem_size)));
     jring2_init(c2p_ring_, kQueueSz, msg_size);
 
     // Start the consumer thread.
@@ -71,7 +71,12 @@ BENCHMARK_DEFINE_F(ProducerConsumerBenchmark, ProducerBenchmark)
   CHECK_GE(msg_size, sizeof(uint64_t));
 
   juggler::utils::BindThisThreadToCore(kProducerCore);
-  sleep(2);
+
+  #ifdef __linux__
+    sleep(2);
+  #else
+    // a cross-platform sleep function for both .c and .cc files
+  #endif
 
   std::vector<uint8_t> tx_buf(msg_size, 'a');
   auto nb_tx = 0u;

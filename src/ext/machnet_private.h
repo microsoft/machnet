@@ -11,11 +11,17 @@
 extern "C" {
 #endif
 
+#ifdef __linux__
+#include <sys/mman.h>
+#include <sys/types.h>
+#else // #ifdef __linux__
+
+#endif // #ifdef __linux__
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/mman.h>
-#include <sys/types.h>
+
 #include <unistd.h>
 
 #include "machnet_common.h"
@@ -69,8 +75,8 @@ static inline size_t __machnet_channel_dataplane_calculate_size(
       ROUNDUP_U64_POW2(buffer_size + MACHNET_MSGBUF_SPACE_RESERVED +
                        MACHNET_MSGBUF_HEADROOM_MAX);
 
-  const size_t kPageSize = (is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE);
-  if (buffer_size > kPageSize) return -1;
+  // const size_t kPageSize = (is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE);
+  // if (buffer_size > kPageSize) return -1;
 
   // Add the size of the channel's header.
   size_t total_size = sizeof(MachnetChannelCtx_t);
@@ -104,13 +110,13 @@ static inline size_t __machnet_channel_dataplane_calculate_size(
   total_size += buf_ring_slot_nr * sizeof(MachnetRingSlot_t);
 
   // Align to page boundary.
-  total_size = ALIGN_TO_BOUNDARY(total_size, kPageSize);
+  // total_size = ALIGN_TO_BOUNDARY(total_size, kPageSize);
 
   // Add the size of the buffers.
   total_size += buf_ring_slot_nr * total_buffer_size;
 
   // Align to page boundary.
-  total_size = ALIGN_TO_BOUNDARY(total_size, kPageSize);
+  // total_size = ALIGN_TO_BOUNDARY(total_size, kPageSize);
 
   return total_size;
 }
@@ -239,9 +245,9 @@ static inline int __machnet_channel_dataplane_init(
 
   // Initialize the buffers. Note that the buffer pool start is aligned to the
   // page_size boundary.
-  const size_t kPageSize = is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE;
-  ctx->data_ctx.buf_pool_ofs =
-      ALIGN_TO_BOUNDARY(tmp_buffer_index_table_end_ofs, kPageSize);
+  // const size_t kPageSize = is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE;
+  // ctx->data_ctx.buf_pool_ofs =
+  //     ALIGN_TO_BOUNDARY(tmp_buffer_index_table_end_ofs, kPageSize);
   ctx->data_ctx.buf_pool_mask = buf_ring->capacity;
   ctx->data_ctx.buf_size = kTotalBufSize;
   ctx->data_ctx.buf_mss = buffer_size;
@@ -299,45 +305,45 @@ static inline MachnetChannelCtx_t *__machnet_channel_posix_create(
   MachnetChannelCtx_t *channel = NULL;
   int shm_flags, prot_flags;
 
-  // Create the shared memory segment.
-  *shm_fd = shm_open(channel_name, O_CREAT | O_EXCL | O_RDWR, 0666);
-  if (*shm_fd < 0) {
-    perror("shm_open()");
-    return NULL;
-  }
+  // // Create the shared memory segment.
+  // *shm_fd = shm_open(channel_name, O_CREAT | O_EXCL | O_RDWR, 0666);
+  // if (*shm_fd < 0) {
+  //   perror("shm_open()");
+  //   return NULL;
+  // }
 
-  // Set the size of the shared memory segment.
-  if (ftruncate(*shm_fd, channel_size) == -1) {
-    perror("ftruncate()");
-    goto fail;
-  }
+  // // Set the size of the shared memory segment.
+  // if (ftruncate(*shm_fd, channel_size) == -1) {
+  //   perror("ftruncate()");
+  //   goto fail;
+  // }
 
   // Map the shared memory segment into the address space of the process.
-  prot_flags = PROT_READ | PROT_WRITE;
-  shm_flags = MAP_SHARED | MAP_POPULATE;
-  channel = (MachnetChannelCtx_t *)mmap(NULL, channel_size, prot_flags,
-                                        shm_flags, *shm_fd, 0);
-  if (channel == MAP_FAILED) {
-    perror("mmap()");
-    goto fail;
-  }
+  // prot_flags = PROT_READ | PROT_WRITE;
+  // shm_flags = MAP_SHARED | MAP_POPULATE;
+  // channel = (MachnetChannelCtx_t *)mmap(NULL, channel_size, prot_flags,
+  //                                       shm_flags, *shm_fd, 0);
+  // if (channel == MAP_FAILED) {
+  //   perror("mmap()");
+  //   goto fail;
+  // }
 
   // Lock the memory segment in RAM.
-  if (mlock((void *)channel, channel_size) != 0) {
-    perror("mlock()");
-    goto fail;
-  }
+  // if (mlock((void *)channel, channel_size) != 0) {
+  //   perror("mlock()");
+  //   goto fail;
+  // }
 
   return channel;
 
 fail:
-  if (channel != NULL && channel != MAP_FAILED) munmap(channel, channel_size);
+  // if (channel != NULL && channel != MAP_FAILED) munmap(channel, channel_size);
 
-  if (*shm_fd != -1) {
-    close(*shm_fd);
-    shm_unlink(channel_name);
-    *shm_fd = -1;
-  }
+  // if (*shm_fd != -1) {
+  //   close(*shm_fd);
+  //   shm_unlink(channel_name);
+  //   *shm_fd = -1;
+  // }
   return NULL;
 }
 
@@ -368,46 +374,47 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
     return NULL;
   }
 
-  // Create the shared memory segment.
-  *shm_fd = memfd_create(channel_name, MFD_HUGETLB);
-  if (*shm_fd < 0) {
-    fprintf(stderr, "memfd_create() failed, error = %s\n", strerror(errno));
-    return NULL;
-  }
+  // // Create the shared memory segment.
+  // *shm_fd = memfd_create(channel_name, MFD_HUGETLB);
+  // if (*shm_fd < 0) {
+  //   fprintf(stderr, "memfd_create() failed, error = %s\n", strerror(errno));
+  //   return NULL;
+  // }
 
   // Set the size of the shared memory segment.
-  if (ftruncate(*shm_fd, channel_size) == -1) {
-    fprintf(stderr,
-            "%s: ftruncate() failed, error = %s. This can happen if (1) there "
-            "are no hugepages, or (2) the hugepage size is not 2MB.\n",
-            __FILE__, strerror(errno));
-    goto fail;
-  }
+  // if (ftruncate(*shm_fd, channel_size) == -1) {
+  //   fprintf(stderr,
+  //           "%s: ftruncate() failed, error = %s. This can happen if (1) there "
+  //           "are no hugepages, or (2) the hugepage size is not 2MB.\n",
+  //           __FILE__, strerror(errno));
+  //   goto fail;
+  // }
 
   // Map the shared memory segment into the address space of the process.
-  shm_flags = MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
-  channel = (MachnetChannelCtx_t *)mmap(
-      NULL, channel_size, PROT_READ | PROT_WRITE, shm_flags, *shm_fd, 0);
-  if (channel == MAP_FAILED) {
-    fprintf(stderr, "mmap() failed, error = %s\n", strerror(errno));
-    goto fail;
-  }
+  // shm_flags = MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
+  // channel = (MachnetChannelCtx_t *)mmap(
+  //     NULL, channel_size, PROT_READ | PROT_WRITE, shm_flags, *shm_fd, 0);
+  // if (channel == MAP_FAILED) {
+  //   fprintf(stderr, "mmap() failed, error = %s\n", strerror(errno));
+  //   goto fail;
+  // }
 
-  // Lock the memory segment in RAM.
-  if (mlock((void *)channel, channel_size) != 0) {
-    fprintf(stderr, "mlock() failed, error = %s\n", strerror(errno));
-    goto fail;
-  }
+  // // Lock the memory segment in RAM.
+  // if (mlock((void *)channel, channel_size) != 0) {
+  //   fprintf(stderr, "mlock() failed, error = %s\n", strerror(errno));
+  //   goto fail;
+  // }
 
-  return channel;
+  // return channel;
+  return NULL;
 
 fail:
-  if (channel != NULL && channel != MAP_FAILED) munmap(channel, channel_size);
+  // if (channel != NULL && channel != MAP_FAILED) munmap(channel, channel_size);
 
-  if (*shm_fd != -1) {
-    close(*shm_fd);
-  }
-  *shm_fd = -1;
+  // if (*shm_fd != -1) {
+  //   close(*shm_fd);
+  // }
+  // *shm_fd = -1;
   return NULL;
 }
 
@@ -432,15 +439,15 @@ static inline void __machnet_channel_destroy(void *mapped_mem,
   assert(mapped_mem_size > 0);
 
   // Unmap the shared memory segment.
-  munmap(mapped_mem, mapped_mem_size);
-  if (shm_fd != NULL && *shm_fd >= 0) {
-    close(*shm_fd);
-    *shm_fd = -1;
-  }
+  // munmap(mapped_mem, mapped_mem_size);
+  // if (shm_fd != NULL && *shm_fd >= 0) {
+  //   close(*shm_fd);
+  //   *shm_fd = -1;
+  // }
 
   if (is_posix_shm) {
     assert(channel_name != NULL);
-    shm_unlink(channel_name);
+    // shm_unlink(channel_name);
   }
 }
 

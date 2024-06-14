@@ -16,6 +16,14 @@
 #include "packet.h"
 #include "packet_pool.h"
 
+#ifdef __linux__
+// linux
+#else
+  #undef min
+  #undef max
+  // #include <windows.h>
+#endif
+
 namespace juggler {
 namespace dpdk {
 

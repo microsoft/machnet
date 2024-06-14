@@ -6,11 +6,18 @@
 #include <machnet_common.h>
 #include <signal.h>
 #include <ttime.h>
-#include <unistd.h>
+
 #include <utils.h>
 
 #include <numeric>
 #include <thread>
+
+#ifdef __linux__
+  #include <unistd.h>
+#else
+  // #include <chrono>
+  // #include <numeric>
+#endif
 
 static constexpr uint8_t kStackCpuCoreId = 3;
 static constexpr uint8_t kAppCpuCoreId = 5;
@@ -61,7 +68,7 @@ struct thread_conf {
 
 void stack_loop(thread_conf *conf) {
   juggler::utils::BindThisThreadToCore(conf->cpu_core);
-  LOG(INFO) << "Starting the stack thread on core " << sched_getcpu();
+  // LOG(INFO) << "Starting the stack thread on core " << sched_getcpu();
   const uint32_t kDummyIp = 0x0100007f;
   const uint16_t kDummyPort = 1234;
   auto &channel = conf->channel;
@@ -149,7 +156,7 @@ void stack_loop(thread_conf *conf) {
 
 void application_loop(thread_conf *conf) {
   juggler::utils::BindThisThreadToCore(conf->cpu_core);
-  LOG(INFO) << "Starting the app thread on core " << sched_getcpu();
+  // LOG(INFO) << "Starting the app thread on core " << sched_getcpu();
   std::vector<uint8_t> rx_buffer(conf->tx_message_size);
   std::vector<uint8_t> tx_buffer(conf->tx_message_size);
   std::iota(tx_buffer.begin(), tx_buffer.end(), 0);
@@ -166,8 +173,8 @@ void application_loop(thread_conf *conf) {
     // RX.
     MachnetFlow_t flow;
 
-    auto nbytes =
-        machnet_recv(channel->ctx(), rx_buffer.data(), rx_buffer.size(), &flow);
+    auto nbytes = 0;
+        // machnet_recv(channel->ctx(), rx_buffer.data(), rx_buffer.size(), &flow);
     if (nbytes > 0) {
       conf->messages_received++;
       CHECK_EQ(nbytes, conf->tx_message_size);
@@ -181,8 +188,8 @@ void application_loop(thread_conf *conf) {
     }
 
     // TX.
-    auto ret =
-        machnet_send(channel->ctx(), flow, tx_buffer.data(), tx_buffer.size());
+    auto ret = -1;
+        // machnet_send(channel->ctx(), flow, tx_buffer.data(), tx_buffer.size());
     if (ret == 0) {
       conf->messages_sent++;
     }
@@ -292,10 +299,10 @@ int main() {
   FLAGS_logtostderr = 1;
   signal(SIGINT, [](int) { g_should_stop.store(true); });
 
-  if (geteuid() != 0) {
-    LOG(ERROR) << "Must be run as root.";
-    return -1;
-  }
+  // if (geteuid() != 0) {
+  //   LOG(ERROR) << "Must be run as root.";
+  //   return -1;
+  // }
   LOG(INFO) << "Creating channel " << channel_name;
   ChannelManager channel_manager;
   CHECK(channel_manager.AddChannel(channel_name, kRingSlotEntries,
@@ -325,7 +332,14 @@ int main() {
     // Launch the threads.
     std::thread(&stack_loop, &stack_conf).detach();
     std::thread(&application_loop, &app_conf).detach();
-    usleep(500000);
+    
+
+    #ifdef __linux__
+        usleep(500000);
+    #else
+      std::this_thread::sleep_for(std::chrono::microseconds(500000));
+    #endif
+
     g_start.store(true);
 
     const uint32_t kTimeoutSeconds = 30;
@@ -339,13 +353,23 @@ int main() {
                   << ", App finished: " << app_conf.finished;
       }
       seconds_passed++;
-      sleep(1);
+     
+      #ifdef __linux__
+        sleep(1);
+      #else
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      #endif
     }
 
     if (!stack_conf.finished || !app_conf.finished) {
       g_should_stop.store(true);
       LOG(INFO) << "Timeout reached. Stopping the threads.";
-      sleep(1);
+      
+      #ifdef __linux__
+        sleep(1);
+      #else
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      #endif
     }
 
     print_results(stack_conf, app_conf);

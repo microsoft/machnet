@@ -7,6 +7,10 @@
  */
 
 #include "machnet.h"
+#include <errno.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include "machnet_ctrl.h"
 
 #ifdef __linux__
 #include <arpa/inet.h>
@@ -16,17 +20,17 @@
 #include <sys/un.h>
 #include <unistd.h>
 #else // #ifdef __linux__
+#undef min
+#undef max
+#include <stdio.h>
 #include <winsock2.h>
-#include <afunix.h>
-#include <ws2tcpip.h>
-
+// #include <stdlib.h>
+// #include <afunix.h>
+// #include <ws2tcpip.h>
 // #include "windows_uio.h"
 #endif // #ifdef __linux__
 
-#include <errno.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include "machnet_ctrl.h"
+
 
 #define MIN(a, b)           \
   ({                        \
@@ -140,87 +144,87 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
   #else
     // Windows
     // Initialize Winsock
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        perror("WSAStartup failed");
-        return -1;
-    }
+    // WSADATA wsaData;
+    // if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    //     perror("WSAStartup failed");
+    //     return -1;
+    // }
 
-    // Connect to the local AF_UNIX domain socket.
-    SOCKET sock = socket(AF_UNIX, SOCK_STREAM, 0); // Need to check support for AF_UNIX, other options: AF_INET/AF_UNSPEC
-    if (sock == INVALID_SOCKET) {
-        perror("socket creation failed");
-        WSACleanup();
-        return -1;
-    }
+    // // Connect to the local AF_UNIX domain socket.
+    // SOCKET sock = socket(AF_UNIX, SOCK_STREAM, 0); // Need to check support for AF_UNIX, other options: AF_INET/AF_UNSPEC
+    // if (sock == INVALID_SOCKET) {
+    //     perror("socket creation failed");
+    //     WSACleanup();
+    //     return -1;
+    // }
 
-    struct sockaddr_un server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sun_family = AF_UNIX;
-    strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
-            sizeof(server_addr.sun_path) - 1);
+    // struct sockaddr_un server_addr;
+    // memset(&server_addr, 0, sizeof(server_addr));
+    // server_addr.sun_family = AF_UNIX;
+    // strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
+    //         sizeof(server_addr.sun_path) - 1);
 
-    if (connect(sock, (struct sockaddr *)&server_addr, 
-                sizeof(server_addr)) == SOCKET_ERROR) {  // check connect() return value
-      perror("connect");
-      closesocket(sock);
-      WSACleanup();
-      return -1;
-    }
+    // if (connect(sock, (struct sockaddr *)&server_addr, 
+    //             sizeof(server_addr)) == SOCKET_ERROR) {  // check connect() return value
+    //   perror("connect");
+    //   closesocket(sock);
+    //   WSACleanup();
+    //   return -1;
+    // }
 
-    // Send the request to the controller.
-    WSABUF iov[1];
-    iov[0].buf = (CHAR*)req;
-    iov[0].len = sizeof(*req);
+    // // Send the request to the controller.
+    // WSABUF iov[1];
+    // iov[0].buf = (CHAR*)req;
+    // iov[0].len = sizeof(*req);
 
-    WSAMSG msg;
-    memset(&msg, 0, sizeof(msg));
-    msg.lpBuffers = iov;
-    msg.dwBufferCount = 1;
+    // WSAMSG msg;
+    // memset(&msg, 0, sizeof(msg));
+    // msg.lpBuffers = iov;
+    // msg.dwBufferCount = 1;
 
-    DWORD bytesSent = 0;
-    int result = WSASendMsg(sock, &msg, 0, &bytesSent, NULL, NULL);
-    if (result == SOCKET_ERROR) {
-        perror("sendmsg");
-        closesocket(sock);
-        WSACleanup();
-        return -1;
-    }
+    // DWORD bytesSent = 0;
+    // int result = WSASendMsg(sock, &msg, 0, &bytesSent, NULL, NULL);
+    // if (result == SOCKET_ERROR) {
+    //     perror("sendmsg");
+    //     closesocket(sock);
+    //     WSACleanup();
+    //     return -1;
+    // }
 
-    // Block waiting for the response using recvmsg.
-    iov[0].buf = (CHAR*)resp;
-    iov[0].len = sizeof(*resp);
-    memset(&msg, 0, sizeof(msg));
-    msg.lpBuffers = iov;
-    msg.dwBufferCount = 1;
+    // // Block waiting for the response using recvmsg.
+    // iov[0].buf = (CHAR*)resp;
+    // iov[0].len = sizeof(*resp);
+    // memset(&msg, 0, sizeof(msg));
+    // msg.lpBuffers = iov;
+    // msg.dwBufferCount = 1;
     
-    // We need to allocate a buffer for the ancillary data.
-    char buf[WSA_CMSG_SPACE(sizeof(int))];
-    memset(buf, 0, sizeof(buf));
-    msg.Control.buf = buf;
-    msg.Control.len = sizeof(buf);
+    // // We need to allocate a buffer for the ancillary data.
+    // char buf[WSA_CMSG_SPACE(sizeof(int))];
+    // memset(buf, 0, sizeof(buf));
+    // msg.Control.buf = buf;
+    // msg.Control.len = sizeof(buf);
 
-    // Call WSARecvMsg to receive data along with ancillary data
-    DWORD bytesReceived;
-    result = WSARecvMsg(sock, &msg, &bytesReceived, NULL, NULL);
+    // // Call WSARecvMsg to receive data along with ancillary data
+    // DWORD bytesReceived;
+    // result = WSARecvMsg(sock, &msg, &bytesReceived, NULL, NULL);
 
-    if (result == SOCKET_ERROR) {
-        perror("recvmsg");
-        return -1;
-    }
+    // if (result == SOCKET_ERROR) {
+    //     perror("recvmsg");
+    //     return -1;
+    // }
 
-    if (fd != NULL) {
-      *fd = -1;
-      fprintf(stderr, "Checking for file descriptor...\n");
-      WSACMSGHDR *cmsg = WSA_CMSG_FIRSTHDR(&msg);
-      if (cmsg != NULL && cmsg->cmsg_level == IPPROTO_IP &&
-          (cmsg->cmsg_type == IP_ORIGINAL_ARRIVAL_IF || cmsg->cmsg_type == IP_PKTINFO || cmsg->cmsg_type == IP_ECN)) {
-        fprintf(stderr, "Got a file descriptor!\n");
-        // assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
-        // We got a file descriptor.
-        *fd = *((int *)WSA_CMSG_DATA(cmsg));
-      }
-    }
+    // if (fd != NULL) {
+    //   *fd = -1;
+    //   fprintf(stderr, "Checking for file descriptor...\n");
+    //   WSACMSGHDR *cmsg = WSA_CMSG_FIRSTHDR(&msg);
+    //   if (cmsg != NULL && cmsg->cmsg_level == IPPROTO_IP &&
+    //       (cmsg->cmsg_type == IP_ORIGINAL_ARRIVAL_IF || cmsg->cmsg_type == IP_PKTINFO || cmsg->cmsg_type == IP_ECN)) {
+    //     fprintf(stderr, "Got a file descriptor!\n");
+    //     // assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
+    //     // We got a file descriptor.
+    //     *fd = *((int *)WSA_CMSG_DATA(cmsg));
+    //   }
+    // }
 
   #endif // #ifdef __linux__
 
@@ -427,100 +431,100 @@ int machnet_init() {
 
   #else // #ifdef __linux__
     // Windows
-    uuid_t zero_uuid;
-    uuid_clear(zero_uuid);
-    if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
-      // Already initialized.
-      return 0;
-    }
+    // uuid_t zero_uuid;
+    // uuid_clear(zero_uuid);
+    // if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
+    //   // Already initialized.
+    //   return 0;
+    // }
 
-    // Generate a random UUID for this application.
-    uuid_generate(g_app_uuid);
-    uuid_unparse(g_app_uuid, g_app_uuid_str);
+    // // Generate a random UUID for this application.
+    // uuid_generate(g_app_uuid);
+    // uuid_unparse(g_app_uuid, g_app_uuid_str);
 
-    // Initialize Winsock
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        perror("WSAStartup failed");
-        return -1;
-    }
+    // // Initialize Winsock
+    // WSADATA wsaData;
+    // if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    //     perror("WSAStartup failed");
+    //     return -1;
+    // }
 
-    // Initialize the AF_UNIX socket to the controller.
-    g_ctrl_socket = socket(AF_UNIX, SOCK_STREAM, 0);  // Need to check support for AF_UNIX, other options: AF_INET/AF_UNSPEC
-    if (g_ctrl_socket == INVALID_SOCKET) {
-      WSACleanup();
-      return -1;
-    }
+    // // Initialize the AF_UNIX socket to the controller.
+    // g_ctrl_socket = socket(AF_UNIX, SOCK_STREAM, 0);  // Need to check support for AF_UNIX, other options: AF_INET/AF_UNSPEC
+    // if (g_ctrl_socket == INVALID_SOCKET) {
+    //   WSACleanup();
+    //   return -1;
+    // }
 
-    // Connect to the controller.
-    struct sockaddr_un server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sun_family = AF_UNIX;
-    strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
-            sizeof(server_addr.sun_path) - 1);
+    // // Connect to the controller.
+    // struct sockaddr_un server_addr;
+    // memset(&server_addr, 0, sizeof(server_addr));
+    // server_addr.sun_family = AF_UNIX;
+    // strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
+    //         sizeof(server_addr.sun_path) - 1);
 
-    if (connect(g_ctrl_socket, (struct sockaddr *)&server_addr,
-                sizeof(server_addr)) == SOCKET_ERROR) { // check connect() return value
-      fprintf(stderr,
-              "ERROR: Failed to connect() to the Machnet controller at %s\n",
-              MACHNET_CONTROLLER_DEFAULT_PATH);
-      closesocket(g_ctrl_socket);
-      WSACleanup();
-      return -1;
-    }
+    // if (connect(g_ctrl_socket, (struct sockaddr *)&server_addr,
+    //             sizeof(server_addr)) == SOCKET_ERROR) { // check connect() return value
+    //   fprintf(stderr,
+    //           "ERROR: Failed to connect() to the Machnet controller at %s\n",
+    //           MACHNET_CONTROLLER_DEFAULT_PATH);
+    //   closesocket(g_ctrl_socket);
+    //   WSACleanup();
+    //   return -1;
+    // }
 
-    // Send REGISTER message.
-    machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
-                              .msg_id = msg_id_counter++};
-    uuid_copy(req.app_uuid, g_app_uuid);
-    machnet_ctrl_msg_t resp = {};
+    // // Send REGISTER message.
+    // machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
+    //                           .msg_id = msg_id_counter++};
+    // uuid_copy(req.app_uuid, g_app_uuid);
+    // machnet_ctrl_msg_t resp = {};
 
-    // Sendmsg request.
-    WSAMSG msg;
-    memset(&msg, 0, sizeof(msg));
+    // // Sendmsg request.
+    // WSAMSG msg;
+    // memset(&msg, 0, sizeof(msg));
 
-    WSABUF iov[1];
-    iov[0].buf = (CHAR*)&req;
-    iov[0].len = sizeof(req);
+    // WSABUF iov[1];
+    // iov[0].buf = (CHAR*)&req;
+    // iov[0].len = sizeof(req);
 
-    msg.name = NULL;
-    msg.namelen = 0;
-    msg.lpBuffers = iov;
-    msg.dwBufferCount = 1;
+    // msg.name = NULL;
+    // msg.namelen = 0;
+    // msg.lpBuffers = iov;
+    // msg.dwBufferCount = 1;
 
-    DWORD bytesSent = 0;
-    int result = WSASendMsg(g_ctrl_socket, &msg, 0, &bytesSent, NULL, NULL);
-    if (result == SOCKET_ERROR) {
-        perror("sendmsg");
-        closesocket(g_ctrl_socket);
-        WSACleanup();
-        return -1;
-    }
+    // DWORD bytesSent = 0;
+    // int result = WSASendMsg(g_ctrl_socket, &msg, 0, &bytesSent, NULL, NULL);
+    // if (result == SOCKET_ERROR) {
+    //     perror("sendmsg");
+    //     closesocket(g_ctrl_socket);
+    //     WSACleanup();
+    //     return -1;
+    // }
 
-    // Recvmsg response.
-    iov[0].buf = (CHAR*)&resp;
-    iov[0].len = sizeof(resp);
-    msg.name = NULL;
-    msg.namelen = 0;
-    msg.lpBuffers = iov;
-    msg.dwBufferCount = 1;
-    DWORD bytesReceived;
-    result = WSARecvMsg(g_ctrl_socket, &msg, &bytesReceived, NULL, NULL);
-    if(result == SOCKET_ERROR || bytesReceived != sizeof(resp)) {
-      fprintf(stderr, "Got invalid response from controller.\n");
-      closesocket(g_ctrl_socket);
-      WSACleanup();
-      return -1;
-    }
+    // // Recvmsg response.
+    // iov[0].buf = (CHAR*)&resp;
+    // iov[0].len = sizeof(resp);
+    // msg.name = NULL;
+    // msg.namelen = 0;
+    // msg.lpBuffers = iov;
+    // msg.dwBufferCount = 1;
+    // DWORD bytesReceived;
+    // result = WSARecvMsg(g_ctrl_socket, &msg, &bytesReceived, NULL, NULL);
+    // if(result == SOCKET_ERROR || bytesReceived != sizeof(resp)) {
+    //   fprintf(stderr, "Got invalid response from controller.\n");
+    //   closesocket(g_ctrl_socket);
+    //   WSACleanup();
+    //   return -1;
+    // }
 
-    // Check the response.
-    if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
-        resp.msg_id != req.msg_id) {
-      fprintf(stderr, "Got invalid response from controller.\n");
-      closesocket(g_ctrl_socket);
-      WSACleanup();
-      return -1;
-    }
+    // // Check the response.
+    // if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
+    //     resp.msg_id != req.msg_id) {
+    //   fprintf(stderr, "Got invalid response from controller.\n");
+    //   closesocket(g_ctrl_socket);
+    //   WSACleanup();
+    //   return -1;
+    // }
 
     // It is important that we do not close the socket here. Closing the socket
     // will trigger the controller to de-register the application and release
@@ -529,11 +533,12 @@ int machnet_init() {
     // was closed and de-register the application.
   #endif // #ifdef __linux__
 
-  return resp.status;
+  // return resp.status;
+  return -1;
 }
 
 MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size) {
-  MachnetChannelCtx_t *channel;
+  // MachnetChannelCtx_t *channel;
 //   int shm_flags;
 //   if (channel_size != NULL) *channel_size = 0;
 
@@ -654,7 +659,11 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
   do {
     ret = __machnet_channel_ctrl_cq_dequeue(ctx, 1, &resp);
     if (ret != 0) break;
-    sleep(1);
+    #ifdef __linux__
+      sleep(1);
+    #else
+      // std::this_thread::sleep_for(std::chrono::seconds(1));
+    #endif
   } while (max_tries-- > 0);
   if (ret == 0) {
     fprintf(stderr, "ERROR: Failed to dequeue response from control queue.\n");
@@ -706,7 +715,11 @@ int machnet_listen(void *channel_ctx, const char *local_ip,
   do {
     ret = __machnet_channel_ctrl_cq_dequeue(ctx, 1, &resp);
     if (ret != 0) break;
-    sleep(1);
+    #ifdef __linux__
+      sleep(1);
+    #else
+      // std::this_thread::sleep_for(std::chrono::seconds(1));
+    #endif
   } while (max_tries-- > 0);
   if (ret == 0) {
     fprintf(stderr, "ERROR: Failed to dequeue response from control queue.\n");
@@ -788,7 +801,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       uint32_t nbytes_to_copy =
           MIN(seg_bytes, __machnet_channel_buf_tailroom(buffer));
       uchar_t *buf_data = __machnet_channel_buf_append(buffer, nbytes_to_copy);
-      memcpy(buf_data, seg_data, nbytes_to_copy);
+      // memcpy(buf_data, seg_data, nbytes_to_copy);
       buffer->flags |= MACHNET_MSGBUF_FLAGS_SG;
 
       seg_data += nbytes_to_copy;
@@ -920,7 +933,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
     uint32_t remaining_space_in_seg = seg_len - seg_data_ofs;
     uint32_t nbytes_to_copy =
         MIN(remaining_space_in_seg, remaining_bytes_in_buf);
-    memcpy(seg_data, buf_data, nbytes_to_copy);
+    // memcpy(seg_data, buf_data, nbytes_to_copy);
     buf_data_ofs += nbytes_to_copy;
     seg_data_ofs += nbytes_to_copy;
     total_bytes_copied += nbytes_to_copy;

@@ -19,12 +19,16 @@ extern "C" {
 #include "machnet_common.h"
 #include "cross_platform.h"
 
+// #ifdef _WIN32
+#include "machnet_export.h"
+// #endif
+
 /**
  * @brief Descriptor for SG data that constitute a message.
  *
  * This structure resembles `struct iovec` (check writev(2)).
  */
-struct MachnetIovec {
+struct MACHNET_SHIM_EXPORT MachnetIovec {
   void *base;  ///< Pointer to the beginning of the SG data.
   size_t len;  ///< Length of the SG data.
 };
@@ -41,7 +45,7 @@ typedef struct MachnetIovec MachnetIovec_t;
  * - `msg_iovlen` is the number of `MachnetIovec_t` structures in `msg_iov`.
  * - `flags` is the message flags.
  */
-struct MachnetMsgHdr {
+struct MACHNET_SHIM_EXPORT MachnetMsgHdr {
   uint32_t msg_size;
   MachnetFlow_t flow_info;
   MachnetIovec_t *msg_iov;
@@ -60,7 +64,7 @@ extern int g_ctrl_socket;
  *
  * @return 0 on success, -1 on failure.
  */
-int machnet_init();
+MACHNET_SHIM_EXPORT int machnet_init();
 
 /**
  * @brief NOT part of the public API.
@@ -76,7 +80,7 @@ int machnet_init();
  * the size of the channel. This is optional and can be `NULL`.
  * @return A pointer to the mapped channel on success, `NULL` otherwise.
  */
-MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size);
+MACHNET_SHIM_EXPORT MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size);
 
 /**
  * @brief Creates a new channel to the Machnet controller and binds to it. A
@@ -84,7 +88,7 @@ MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size);
  *
  * @return A pointer to the channel context on success, NULL otherwise.
  */
-void *machnet_attach();
+MACHNET_SHIM_EXPORT void *machnet_attach();
 
 /**
  * @brief Listens for incoming messages on a specific IP and port.
@@ -93,7 +97,7 @@ void *machnet_attach();
  * @param[in] port The local port to listen on.
  * @return 0 on success, -1 on failure.
  */
-int machnet_listen(void *channel_ctx, const char *local_ip, uint16_t port);
+MACHNET_SHIM_EXPORT int machnet_listen(void *channel_ctx, const char *local_ip, uint16_t port);
 
 /**
  * @brief Creates a new connection to a remote peer.
@@ -106,7 +110,7 @@ int machnet_listen(void *channel_ctx, const char *local_ip, uint16_t port);
  * @return  0 on success, -1 on failure. `flow` is filled with the flow
  * information on success.
  */
-int machnet_connect(void *channel_ctx, const char *local_ip,
+MACHNET_SHIM_EXPORT int machnet_connect(void *channel_ctx, const char *local_ip,
                     const char *remote_ip, uint16_t remote_port,
                     MachnetFlow_t *flow);
 
@@ -118,7 +122,7 @@ int machnet_connect(void *channel_ctx, const char *local_ip,
  * @param[in] buf The data buffer to send to the remote peer
  * @param[in] len The length of the data buffer in bytes
  */
-int machnet_send(const void *channel_ctx, MachnetFlow_t flow, const void *buf,
+MACHNET_SHIM_EXPORT int machnet_send(const void *channel_ctx, MachnetFlow_t flow, const void *buf,
                  size_t len);
 
 /**
@@ -133,7 +137,7 @@ int machnet_send(const void *channel_ctx, MachnetFlow_t flow, const void *buf,
  * @param[in] msghdr             An `MachnetMsgHdr' descriptor
  * @return                   0 on success, -1 on failure
  */
-int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr);
+MACHNET_SHIM_EXPORT int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr);
 
 /**
  * This function sends one or more messages to a remote peer over the network.
@@ -149,7 +153,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr);
  *                               messages to be sent).
  * @return                       # of messages sent.
  */
-int machnet_sendmmsg(const void *channel_ctx,
+MACHNET_SHIM_EXPORT int machnet_sendmmsg(const void *channel_ctx,
                      const MachnetMsgHdr_t *msghdr_iovec, int vlen);
 
 /**
@@ -163,7 +167,7 @@ int machnet_sendmmsg(const void *channel_ctx,
  * @return 0 if no message is available, -1 on failure, otherwise the number of
  * bytes received.
  */
-ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
+MACHNET_SHIM_EXPORT ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
                      MachnetFlow_t *flow);
 
 /**
@@ -183,7 +187,7 @@ ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
  * @return                       0 if no pending message, 1 if a message is
  *                               received, -1 on failure
  */
-int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr);
+MACHNET_SHIM_EXPORT int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr);
 
 #ifdef __cplusplus
 }

@@ -20,11 +20,13 @@ static std::optional<std::string> GetPCIeAddressSysfs(
 
   std::string sys_net_path = "/sys/class/net";
   for (const auto &entry : std::filesystem::directory_iterator(sys_net_path)) {
-    std::string interface_name = entry.path().filename();
+    // std::string interface_name = entry.path().filename();
+    std::string interface_name = "";
     LOG(INFO) << "Checking interface " << interface_name;
 
     // Check the address file (contains the MAC) for this path.
-    std::string address_fname = entry.path() / "address";
+    // std::string address_fname = entry.path() / "address";
+    std::string address_fname = "";
     if (!std::filesystem::exists(address_fname)) {
       continue;
     }
@@ -37,7 +39,8 @@ static std::optional<std::string> GetPCIeAddressSysfs(
     const juggler::net::Ethernet::Address interface_addr(interface_l2_addr);
     if (interface_addr == l2_addr) {
       // Get the PCI address of the interface.
-      std::string dev_uevent_fname = entry.path() / "device" / "uevent";
+      // std::string dev_uevent_fname = entry.path() / "device" / "uevent";
+      std::string dev_uevent_fname = "";
       if (!std::filesystem::exists(dev_uevent_fname)) {
         continue;
       }

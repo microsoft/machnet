@@ -21,6 +21,7 @@
 #include <iostream>
 #include <optional>
 #include <vector>
+#include <algorithm>
 
 // The packets we send carry an ethernet, IPv4 and ICMP header.
 // The payload includes at least a 64-bit unsigned integer. This is being used
@@ -491,7 +492,11 @@ int main(int argc, char *argv[]) {
   WPool.Launch();
 
   while (g_keep_running) {
-    sleep(5);
+    #ifdef __linux__
+      sleep(5);
+    #else
+      // a cross-platform sleep function for both .c and .cc files
+    #endif
   }
 
   WPool.Pause();

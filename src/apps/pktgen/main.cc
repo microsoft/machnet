@@ -20,6 +20,7 @@
 #include <iostream>
 #include <optional>
 #include <vector>
+#include <algorithm>
 
 #include "ttime.h"
 
@@ -669,7 +670,11 @@ int main(int argc, char *argv[]) {
   WPool.Launch();
 
   while (g_keep_running) {
-    sleep(5);
+    #ifdef __linux__
+      sleep(5);
+    #else
+      // a cross-platform sleep function for both .c and .cc files
+    #endif
   }
 
   WPool.Pause();

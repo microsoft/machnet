@@ -37,7 +37,13 @@ uint64_t rdtsc() {
 double MeasureRdtscFreqGHz() {
   const uint64_t start_rdtsc = rdtsc();
   const uint64_t start_ns = time(NULL) * 1000000000;
-  sleep(1);
+
+  #ifdef __linux__
+    sleep(1);
+  #else
+    // a cross-platform sleep function for both .c and .cc files
+  #endif
+
   const uint64_t end_rdtsc = rdtsc();
   const uint64_t end_ns = time(NULL) * 1000000000;
 
@@ -184,7 +190,11 @@ int main() {
   std::cout << "Starting consumer thread" << std::endl;
   std::thread trecv(ConsumerThread);
 
-  sleep(1);
+  #ifdef __linux__
+    sleep(1);
+  #else
+    // a cross-platform sleep function for both .c and .cc files
+  #endif
   std::cout << "Starting producer thread" << std::endl;
   std::thread tsend(ProducerThread);
 

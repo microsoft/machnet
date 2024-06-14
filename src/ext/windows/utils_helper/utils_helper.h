@@ -54,27 +54,27 @@ static __inline int sched_priority_to_os_priority(int priority)
         return THREAD_PRIORITY_IDLE;
 }
 
-int pthread_setschedprio(pthread_t thread, int priority)
-{
-    HANDLE handle;
-    arch_thread_info *pv = (arch_thread_info *) thread;
+// int pthread_setschedprio(pthread_t thread, int priority)
+// {
+//     HANDLE handle;
+//     arch_thread_info *pv = (arch_thread_info *) thread;
 
-    if (pv != NULL) handle = pv->handle;
-    else handle = GetCurrentThread();
+//     if (pv != NULL) handle = pv->handle;
+//     else handle = GetCurrentThread();
 
-    if (SetThreadPriority(handle, sched_priority_to_os_priority(priority)) == 0)
-        return lc_set_errno(ESRCH);
+//     if (SetThreadPriority(handle, sched_priority_to_os_priority(priority)) == 0)
+//         return lc_set_errno(ESRCH);
 
-    return 0;
-}
+//     return 0;
+// }
 
-int pthread_setschedparam(pthread_t thread, int policy, const struct sched_param *param)
-{
-    if (param != NULL)
-        return pthread_setschedprio(thread, param->sched_priority);
+// int pthread_setschedparam(pthread_t thread, int policy, const struct sched_param *param)
+// {
+//     if (param != NULL)
+//         return pthread_setschedprio(thread, param->sched_priority);
 
-    return 0;
-}
+//     return 0;
+// }
 
 
 

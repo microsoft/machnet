@@ -129,11 +129,11 @@ void MachnetController::HandleNewMessage(UDSocket *s, const char *data,
       auto *client_context =
           reinterpret_cast<MachnetClientContext *>(s->GetUserData());
       client_context->registered = true;
-      juggler::utils::Copy(client_context->uuid, req->app_uuid, sizeof(uuid_t));
+      // juggler::utils::Copy(client_context->uuid, req->app_uuid, sizeof(uuid_t));
     } break;
     case MACHNET_CTRL_MSG_TYPE_REQ_CHANNEL: {
-      LOG(INFO) << "Request to create new channel: "
-                << juggler::utils::UUIDToString(req->channel_info.channel_uuid);
+      // LOG(INFO) << "Request to create new channel: "
+      //           << juggler::utils::UUIDToString(req->channel_info.channel_uuid);
       int channel_fd;
       auto ret = CreateChannel(req->app_uuid, &req->channel_info, &channel_fd);
 
@@ -162,8 +162,8 @@ void MachnetController::HandlePassiveClose(UDSocket *s) {
   auto *client_context =
       reinterpret_cast<MachnetClientContext *>(s->GetUserData());
   if (client_context->registered) {
-    LOG(INFO) << "Client " << juggler::utils::UUIDToString(client_context->uuid)
-              << " disconnected.";
+    // LOG(INFO) << "Client " << juggler::utils::UUIDToString(client_context->uuid)
+    //           << " disconnected.";
 
     UnregisterApplication(client_context->uuid);
     client_context->registered = false;
@@ -176,8 +176,9 @@ void MachnetController::HandleTimeout(UDSocket *s) {
 }
 
 bool MachnetController::RegisterApplication(
-    const uuid_t app_uuid, const machnet_app_info_t *app_info) {
-  const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
+  const uuid_t app_uuid, const machnet_app_info_t *app_info) {
+  // const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
+  const std::string app_uuid_str = "";
 
   // Check if the application is already registered.
   if (applications_registered_.find(app_uuid_str) !=
@@ -194,7 +195,8 @@ bool MachnetController::RegisterApplication(
 }
 
 void MachnetController::UnregisterApplication(const uuid_t app_uuid) {
-  const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
+  // const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
+  const std::string app_uuid_str = "";
 
   // Check if the application is registered.
   if (applications_registered_.find(app_uuid_str) ==
@@ -225,7 +227,8 @@ void MachnetController::UnregisterApplication(const uuid_t app_uuid) {
 bool MachnetController::CreateChannel(
     const uuid_t app_uuid, const machnet_channel_info_t *channel_info,
     int *fd) {
-  const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
+  // const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
+  const std::string app_uuid_str = "";
 
   // Check that this is a registered application.
   if (applications_registered_.find(app_uuid_str) ==
@@ -234,8 +237,9 @@ bool MachnetController::CreateChannel(
     return false;
   }
 
-  const std::string channel_uuid_str =
-      juggler::utils::UUIDToString(channel_info->channel_uuid);
+  // const std::string channel_uuid_str =
+  //     juggler::utils::UUIDToString(channel_info->channel_uuid);
+  const std::string channel_uuid_str = "";
   auto &app_channels = applications_registered_[app_uuid_str];
   if (app_channels.find(channel_uuid_str) != app_channels.end()) {
     LOG(ERROR) << "Channel already registered: " << channel_uuid_str;

@@ -71,10 +71,10 @@
     #endif /* _MSC_VER >= 1600 */
 
     /* inttypes.h */
-    #define PRId64      "I64d"
-    #define PRIu64      "I64u"
-    #define PRIx64      "I64x"
-    #define PRIX64      "I64X"
+    // #define PRId64      "I64d"
+    // #define PRIu64      "I64u"
+    // #define PRIx64      "I64x"
+    // #define PRIX64      "I64X"
 #endif /* _MSC_VER */
 
 #ifndef _PID_T_

@@ -7,6 +7,10 @@
 #include <random>
 #include <thread>
 
+#ifdef WIN32
+#include <numeric>
+#endif
+
 constexpr const char *file_name(const char *path) {
   const char *file = path;
   while (*path) {
