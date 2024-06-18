@@ -73,7 +73,7 @@ if(DEFINED ENV{RTE_SDK})
 
   include_directories(include)
   add_subdirectory(core)
-  add_subdirectory(benchmark)
+  # add_subdirectory(benchmark)
   # enable_testing()
   # add_subdirectory(tests)
   # add_subdirectory(apps)

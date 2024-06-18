@@ -5,3 +5,4 @@ build/
 .history
 .vscode
 .vs/
+third_party/asio/*
