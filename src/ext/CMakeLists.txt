@@ -8,7 +8,7 @@ set(MACHNET_SHIM_LIB_NAME machnet_shim)
 # List the sources
 set(MACHNET_SHIM_SOURCES
     machnet.h
-    machnet.c
+    machnet.cc
     machnet_export.h
 )
 

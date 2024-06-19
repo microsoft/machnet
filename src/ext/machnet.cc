@@ -1,5 +1,5 @@
 /**
- * @file  machnet.c
+ * @file  machnet.cc
  * @brief All of the Machnet public API functions are implemented as inline in
  * `machnet.h' and `machnet_common.h'. The functions in this translation unit
  * are simple wrappers to generate a shared library with symbols for easier FFI
@@ -19,18 +19,18 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
 #else // #ifdef __linux__
-#undef min
-#undef max
 #include <stdio.h>
-#include <winsock2.h>
-// #include <stdlib.h>
-// #include <afunix.h>
-// #include <ws2tcpip.h>
-// #include "windows_uio.h"
+#include <iostream>
+#include <filesystem>
 #endif // #ifdef __linux__
 
 
+#define ASIO_STANDALONE
+#include <asio.hpp>
+#if defined(ASIO_HAS_LOCAL_SOCKETS)
+using asio::local::stream_protocol;
 
 #define MIN(a, b)           \
   ({                        \
@@ -141,90 +141,8 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
       }
     }
 
-  #else
+  #else // #ifdef __linux__
     // Windows
-    // Initialize Winsock
-    // WSADATA wsaData;
-    // if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-    //     perror("WSAStartup failed");
-    //     return -1;
-    // }
-
-    // // Connect to the local AF_UNIX domain socket.
-    // SOCKET sock = socket(AF_UNIX, SOCK_STREAM, 0); // Need to check support for AF_UNIX, other options: AF_INET/AF_UNSPEC
-    // if (sock == INVALID_SOCKET) {
-    //     perror("socket creation failed");
-    //     WSACleanup();
-    //     return -1;
-    // }
-
-    // struct sockaddr_un server_addr;
-    // memset(&server_addr, 0, sizeof(server_addr));
-    // server_addr.sun_family = AF_UNIX;
-    // strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
-    //         sizeof(server_addr.sun_path) - 1);
-
-    // if (connect(sock, (struct sockaddr *)&server_addr, 
-    //             sizeof(server_addr)) == SOCKET_ERROR) {  // check connect() return value
-    //   perror("connect");
-    //   closesocket(sock);
-    //   WSACleanup();
-    //   return -1;
-    // }
-
-    // // Send the request to the controller.
-    // WSABUF iov[1];
-    // iov[0].buf = (CHAR*)req;
-    // iov[0].len = sizeof(*req);
-
-    // WSAMSG msg;
-    // memset(&msg, 0, sizeof(msg));
-    // msg.lpBuffers = iov;
-    // msg.dwBufferCount = 1;
-
-    // DWORD bytesSent = 0;
-    // int result = WSASendMsg(sock, &msg, 0, &bytesSent, NULL, NULL);
-    // if (result == SOCKET_ERROR) {
-    //     perror("sendmsg");
-    //     closesocket(sock);
-    //     WSACleanup();
-    //     return -1;
-    // }
-
-    // // Block waiting for the response using recvmsg.
-    // iov[0].buf = (CHAR*)resp;
-    // iov[0].len = sizeof(*resp);
-    // memset(&msg, 0, sizeof(msg));
-    // msg.lpBuffers = iov;
-    // msg.dwBufferCount = 1;
-    
-    // // We need to allocate a buffer for the ancillary data.
-    // char buf[WSA_CMSG_SPACE(sizeof(int))];
-    // memset(buf, 0, sizeof(buf));
-    // msg.Control.buf = buf;
-    // msg.Control.len = sizeof(buf);
-
-    // // Call WSARecvMsg to receive data along with ancillary data
-    // DWORD bytesReceived;
-    // result = WSARecvMsg(sock, &msg, &bytesReceived, NULL, NULL);
-
-    // if (result == SOCKET_ERROR) {
-    //     perror("recvmsg");
-    //     return -1;
-    // }
-
-    // if (fd != NULL) {
-    //   *fd = -1;
-    //   fprintf(stderr, "Checking for file descriptor...\n");
-    //   WSACMSGHDR *cmsg = WSA_CMSG_FIRSTHDR(&msg);
-    //   if (cmsg != NULL && cmsg->cmsg_level == IPPROTO_IP &&
-    //       (cmsg->cmsg_type == IP_ORIGINAL_ARRIVAL_IF || cmsg->cmsg_type == IP_PKTINFO || cmsg->cmsg_type == IP_ECN)) {
-    //     fprintf(stderr, "Got a file descriptor!\n");
-    //     // assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
-    //     // We got a file descriptor.
-    //     *fd = *((int *)WSA_CMSG_DATA(cmsg));
-    //   }
-    // }
 
   #endif // #ifdef __linux__
 
@@ -345,8 +263,6 @@ static inline void _machnet_buffers_release(MachnetChannelCtx_t *ctx,
 
 int machnet_init() {
   #ifdef __linux__
-    // Linux
-
     uuid_t zero_uuid;
     uuid_clear(zero_uuid);
     if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
@@ -430,115 +346,79 @@ int machnet_init() {
     // was closed and de-register the application.
 
   #else // #ifdef __linux__
-    // Windows
-    // uuid_t zero_uuid;
-    // uuid_clear(zero_uuid);
-    // if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
-    //   // Already initialized.
-    //   return 0;
-    // }
+    // WIN32
+    uuid_t zero_uuid;
+    uuid_clear(zero_uuid);
 
-    // // Generate a random UUID for this application.
-    // uuid_generate(g_app_uuid);
-    // uuid_unparse(g_app_uuid, g_app_uuid_str);
+    if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
+        // Already initialized
+        return 0;
+    }
 
-    // // Initialize Winsock
-    // WSADATA wsaData;
-    // if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-    //     perror("WSAStartup failed");
-    //     return -1;
-    // }
+    // Generate a random UUID for this application
+    uuid_generate(g_app_uuid);
+    uuid_unparse(g_app_uuid, g_app_uuid_str);
 
-    // // Initialize the AF_UNIX socket to the controller.
-    // g_ctrl_socket = socket(AF_UNIX, SOCK_STREAM, 0);  // Need to check support for AF_UNIX, other options: AF_INET/AF_UNSPEC
-    // if (g_ctrl_socket == INVALID_SOCKET) {
-    //   WSACleanup();
-    //   return -1;
-    // }
+    // Initialize the AF_UNIX socket to the controller
+    
+    std::filesystem::remove(MACHNET_CONTROLLER_DEFAULT_PATH); // ::unlink() the socket file before opening it
 
-    // // Connect to the controller.
-    // struct sockaddr_un server_addr;
-    // memset(&server_addr, 0, sizeof(server_addr));
-    // server_addr.sun_family = AF_UNIX;
-    // strncpy(server_addr.sun_path, MACHNET_CONTROLLER_DEFAULT_PATH,
-    //         sizeof(server_addr.sun_path) - 1);
+    asio::io_context io_context_;
+    stream_protocol::endpoint endpoint_(MACHNET_CONTROLLER_DEFAULT_PATH);
+    // asio::local::stream_protocol::acceptor acceptor(io_context_, endpoint_, false/*reuse addr*/); // acceptor listens for new connection at endpoint
+    stream_protocol::socket socket(io_context_);
 
-    // if (connect(g_ctrl_socket, (struct sockaddr *)&server_addr,
-    //             sizeof(server_addr)) == SOCKET_ERROR) { // check connect() return value
-    //   fprintf(stderr,
-    //           "ERROR: Failed to connect() to the Machnet controller at %s\n",
-    //           MACHNET_CONTROLLER_DEFAULT_PATH);
-    //   closesocket(g_ctrl_socket);
-    //   WSACleanup();
-    //   return -1;
-    // }
+    asio::error_code ec;
+    socket.connect(endpoint_, ec);
 
-    // // Send REGISTER message.
-    // machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
-    //                           .msg_id = msg_id_counter++};
-    // uuid_copy(req.app_uuid, g_app_uuid);
-    // machnet_ctrl_msg_t resp = {};
+    if (ec) {
+        std::cerr << "ERROR: Failed to connect() to the Machnet controller at " << MACHNET_CONTROLLER_DEFAULT_PATH << std::endl;
+        std::cerr << asio::system_error(ec).what() << std::endl;
+        return -1;
+    }
 
-    // // Sendmsg request.
-    // WSAMSG msg;
-    // memset(&msg, 0, sizeof(msg));
+    // Send REGISTER message.
+    machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
+                              .msg_id = msg_id_counter++};
+    uuid_copy(req.app_uuid, g_app_uuid);
+    machnet_ctrl_msg_t resp;
 
-    // WSABUF iov[1];
-    // iov[0].buf = (CHAR*)&req;
-    // iov[0].len = sizeof(req);
+    asio::const_buffer send_buffer(&req, sizeof(req));
+    size_t bytes_sent = asio::write(socket, send_buffer, ec);
+    if (ec || bytes_sent != sizeof(req)) {
+        std::cerr << "ERROR: Failed to send register message to controller." << std::endl;
+        std::cerr << asio::system_error(ec).what() << std::endl;
+        return -1;
+    }
 
-    // msg.name = NULL;
-    // msg.namelen = 0;
-    // msg.lpBuffers = iov;
-    // msg.dwBufferCount = 1;
+    // Receive response
+    asio::mutable_buffer recv_buffer(&resp, sizeof(resp));
+    size_t bytes_received = asio::read(socket, recv_buffer, ec);
+    if (ec || bytes_received != sizeof(resp)) {
+        std::cerr << "Got invalid response from controller." << std::endl;
+        std::cerr << asio::system_error(ec).what() << std::endl;
+        return -1;
+    }
 
-    // DWORD bytesSent = 0;
-    // int result = WSASendMsg(g_ctrl_socket, &msg, 0, &bytesSent, NULL, NULL);
-    // if (result == SOCKET_ERROR) {
-    //     perror("sendmsg");
-    //     closesocket(g_ctrl_socket);
-    //     WSACleanup();
-    //     return -1;
-    // }
-
-    // // Recvmsg response.
-    // iov[0].buf = (CHAR*)&resp;
-    // iov[0].len = sizeof(resp);
-    // msg.name = NULL;
-    // msg.namelen = 0;
-    // msg.lpBuffers = iov;
-    // msg.dwBufferCount = 1;
-    // DWORD bytesReceived;
-    // result = WSARecvMsg(g_ctrl_socket, &msg, &bytesReceived, NULL, NULL);
-    // if(result == SOCKET_ERROR || bytesReceived != sizeof(resp)) {
-    //   fprintf(stderr, "Got invalid response from controller.\n");
-    //   closesocket(g_ctrl_socket);
-    //   WSACleanup();
-    //   return -1;
-    // }
-
-    // // Check the response.
-    // if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
-    //     resp.msg_id != req.msg_id) {
-    //   fprintf(stderr, "Got invalid response from controller.\n");
-    //   closesocket(g_ctrl_socket);
-    //   WSACleanup();
-    //   return -1;
-    // }
+    // Validate response
+    if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE || resp.msg_id != req.msg_id) {
+        std::cerr << "Got invalid response from controller." << std::endl;
+        return -1;
+    }
 
     // It is important that we do not close the socket here. Closing the socket
     // will trigger the controller to de-register the application and release
     // all its allocated resources (shared memory channels, connections etc.).
     // When this application quits, the controller will detect that the socket
     // was closed and de-register the application.
+    return resp.status;
+    
   #endif // #ifdef __linux__
-
-  // return resp.status;
   return -1;
 }
 
 MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size) {
-  // MachnetChannelCtx_t *channel;
+//   MachnetChannelCtx_t *channel;
 //   int shm_flags;
 //   if (channel_size != NULL) *channel_size = 0;
 
@@ -628,7 +508,7 @@ void *machnet_attach() {
 int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
                     uint16_t dst_port, MachnetFlow_t *flow) {
   assert(flow != NULL);
-  MachnetChannelCtx_t *ctx = channel_ctx;
+  MachnetChannelCtx_t *ctx = static_cast<MachnetChannelCtx *> (channel_ctx);
 
   if (inet_addr(src_ip) == INADDR_NONE || inet_addr(dst_ip) == INADDR_ANY) {
     fprintf(stderr,
@@ -688,7 +568,7 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
 int machnet_listen(void *channel_ctx, const char *local_ip,
                    uint16_t local_port) {
   assert(channel_ctx != NULL);
-  MachnetChannelCtx_t *ctx = channel_ctx;
+  MachnetChannelCtx_t *ctx = static_cast<MachnetChannelCtx *>(channel_ctx);
 
   if (inet_addr(local_ip) == INADDR_NONE) {
     fprintf(stderr, "machnet_listen: Invalid IP address: %s\n", local_ip);
@@ -995,3 +875,7 @@ fail:
 }
 
 void machnet_detach(const MachnetChannelCtx_t *ctx) {}
+
+#else // defined(ASIO_HAS_LOCAL_SOCKETS)
+# error Local sockets not available on this platform.
+#endif // defined(ASIO_HAS_LOCAL_SOCKETS)

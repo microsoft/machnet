@@ -55,7 +55,7 @@ extern "C" {
 #endif
 #undef min
 #undef max
-#include <windows.h>
+// #include <windows.h>
 #endif
 #include <sys/stat.h> /* For mode constants */
 
