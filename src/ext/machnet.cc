@@ -26,7 +26,6 @@
 #include <filesystem>
 #endif // #ifdef __linux__
 
-
 #define ASIO_STANDALONE
 #include <asio.hpp>
 #if defined(ASIO_HAS_LOCAL_SOCKETS)
@@ -143,6 +142,39 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
 
   #else // #ifdef __linux__
     // Windows
+    asio::io_context io_context_;
+    stream_protocol::endpoint endpoint_(MACHNET_CONTROLLER_DEFAULT_PATH);
+    // asio::local::stream_protocol::acceptor acceptor(io_context_, endpoint_, false/*reuse addr*/); // acceptor listens for new connection at endpoint
+    stream_protocol::socket socket(io_context_);
+
+    asio::error_code ec;
+    socket.connect(endpoint_, ec);
+
+    if (ec) {
+        std::cerr << "ERROR: Failed to connect() to the Machnet controller at " << MACHNET_CONTROLLER_DEFAULT_PATH << std::endl;
+        std::cerr << asio::system_error(ec).what() << std::endl;
+        return -1;
+    }
+
+    asio::const_buffer send_buffer(req, sizeof(*req));
+    size_t bytes_sent = asio::write(socket, send_buffer, ec);
+    if (ec || bytes_sent != sizeof(*req)) {
+        std::cerr << "ERROR: Failed to send register message to controller." << std::endl;
+        if(ec) std::cerr << asio::system_error(ec).what() << std::endl;
+        return -1;
+    }
+
+    // Receive response
+    asio::mutable_buffer recv_buffer(resp, sizeof(*resp));
+    size_t bytes_received = asio::read(socket, recv_buffer, ec);
+    if (ec || bytes_received != sizeof(*resp)) {
+        std::cerr << "Got invalid response from controller." << std::endl;
+        if(ec) std::cerr << asio::system_error(ec).what() << std::endl;
+        return -1;
+    }
+
+    // [TODO rushrukh]
+    // file descriptor check after shm implementation
 
   #endif // #ifdef __linux__
 
