@@ -41,6 +41,9 @@ using asio::local::stream_protocol;
 // Main socket/connection to the Machnet controller.
 int g_ctrl_socket = -1;
 
+asio::io_context g_io_context;
+stream_protocol::socket g_socket(g_io_context);
+
 // Application UUID.
 uuid_t g_app_uuid;
 char g_app_uuid_str[37];
@@ -395,13 +398,13 @@ int machnet_init() {
     
     std::filesystem::remove(MACHNET_CONTROLLER_DEFAULT_PATH); // ::unlink() the socket file before opening it
 
-    asio::io_context io_context_;
+    // asio::io_context io_context_;
     stream_protocol::endpoint endpoint_(MACHNET_CONTROLLER_DEFAULT_PATH);
     // asio::local::stream_protocol::acceptor acceptor(io_context_, endpoint_, false/*reuse addr*/); // acceptor listens for new connection at endpoint
-    stream_protocol::socket socket(io_context_);
+    // stream_protocol::socket socket(io_context_);
 
     asio::error_code ec;
-    socket.connect(endpoint_, ec);
+    g_socket.connect(endpoint_, ec);
 
     if (ec) {
         std::cerr << "ERROR: Failed to connect() to the Machnet controller at " << MACHNET_CONTROLLER_DEFAULT_PATH << std::endl;
@@ -416,7 +419,7 @@ int machnet_init() {
     machnet_ctrl_msg_t resp;
 
     asio::const_buffer send_buffer(&req, sizeof(req));
-    size_t bytes_sent = asio::write(socket, send_buffer, ec);
+    size_t bytes_sent = asio::write(g_socket, send_buffer, ec);
     if (ec || bytes_sent != sizeof(req)) {
         std::cerr << "ERROR: Failed to send register message to controller." << std::endl;
         std::cerr << asio::system_error(ec).what() << std::endl;
@@ -425,7 +428,7 @@ int machnet_init() {
 
     // Receive response
     asio::mutable_buffer recv_buffer(&resp, sizeof(resp));
-    size_t bytes_received = asio::read(socket, recv_buffer, ec);
+    size_t bytes_received = asio::read(g_socket, recv_buffer, ec);
     if (ec || bytes_received != sizeof(resp)) {
         std::cerr << "Got invalid response from controller." << std::endl;
         std::cerr << asio::system_error(ec).what() << std::endl;
