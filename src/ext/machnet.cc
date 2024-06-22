@@ -497,41 +497,41 @@ MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size) {
 }
 
 void *machnet_attach() {
-  // uuid_t uuid;        // UUID for the shared memory channel.
-  // char uuid_str[37];  // 36 chars + null terminator for UUID string.
+  uuid_t uuid;        // UUID for the shared memory channel.
+  char uuid_str[37];  // 36 chars + null terminator for UUID string.
 
-  // uuid_generate(uuid);
-  // uuid_unparse(uuid, uuid_str);
+  uuid_generate(uuid);
+  uuid_unparse(uuid, uuid_str);
 
-  // // Generate a request to attach to the Machnet control plane.
-  // machnet_ctrl_msg_t req = {};
-  // req.type = MACHNET_CTRL_MSG_TYPE_REQ_CHANNEL;
-  // req.msg_id = msg_id_counter++;
-  // uuid_copy(req.app_uuid, g_app_uuid);
-  // uuid_copy(req.channel_info.channel_uuid, uuid);
-  // /* Request the default. */
-  // req.channel_info.desc_ring_size = MACHNET_CHANNEL_INFO_DESC_RING_SIZE_DEFAULT;
-  // req.channel_info.buffer_count = MACHNET_CHANNEL_INFO_BUFFER_COUNT_DEFAULT;
+  // Generate a request to attach to the Machnet control plane.
+  machnet_ctrl_msg_t req = {};
+  req.type = MACHNET_CTRL_MSG_TYPE_REQ_CHANNEL;
+  req.msg_id = msg_id_counter++;
+  uuid_copy(req.app_uuid, g_app_uuid);
+  uuid_copy(req.channel_info.channel_uuid, uuid);
+  /* Request the default. */
+  req.channel_info.desc_ring_size = MACHNET_CHANNEL_INFO_DESC_RING_SIZE_DEFAULT;
+  req.channel_info.buffer_count = MACHNET_CHANNEL_INFO_BUFFER_COUNT_DEFAULT;
 
-  // // Send the request to the Machnet control plane.
-  // int channel_fd;
-  // machnet_ctrl_msg_t resp;
-  // if (_machnet_ctrl_request(&req, &resp, &channel_fd) != 0) {
-  //   fprintf(stderr, "ERROR: Failed to send request to controller.");
-  //   return NULL;
-  // }
+  // Send the request to the Machnet control plane.
+  int channel_fd;
+  machnet_ctrl_msg_t resp;
+  if (_machnet_ctrl_request(&req, &resp, &channel_fd) != 0) {
+    fprintf(stderr, "ERROR: Failed to send request to controller.");
+    return NULL;
+  }
 
-  // // Check the response from the Machnet control plane.
-  // if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
-  //     resp.msg_id != req.msg_id) {
-  //   fprintf(stderr, "Got invalid response from controller.\n");
-  //   return NULL;
-  // }
+  // Check the response from the Machnet control plane.
+  if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
+      resp.msg_id != req.msg_id) {
+    fprintf(stderr, "Got invalid response from controller.\n");
+    return NULL;
+  }
 
-  // if (resp.status != MACHNET_CTRL_STATUS_SUCCESS || channel_fd < 0) {
-  //   fprintf(stderr, "Failure %d.\n", channel_fd);
-  //   return NULL;
-  // }
+  if (resp.status != MACHNET_CTRL_STATUS_SUCCESS || channel_fd < 0) {
+    fprintf(stderr, "Failure %d.\n", channel_fd);
+    return NULL;
+  }
 
   // return machnet_bind(channel_fd, NULL);
   return NULL;
