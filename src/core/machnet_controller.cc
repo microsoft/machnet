@@ -10,6 +10,9 @@
 #include <memory>
 #include <thread>
 
+#define ASIO_STANDLONE
+#include <asio.hpp>
+
 namespace juggler {
 
 struct MachnetClientContext {
@@ -317,15 +320,20 @@ void MachnetController::RunController() {
     this->HandleTimeout(socket);
   };
 
-  server_ = std::make_unique<UDServer>(socket_path, on_connect_cb, on_close_cb,
+  asio::io_context io_context;
+  server_ = std::make_unique<UDServer>(io_context, socket_path, on_connect_cb, on_close_cb,
                                        on_message_cb, on_timeout_cb);
 
-  server_->Run();
+  io_context.run();
+  // server_ = std::make_unique<UDServer>(socket_path, on_connect_cb, on_close_cb,
+  //                                      on_message_cb, on_timeout_cb);
+
+  // server_->Run();
 }
 
 void MachnetController::Stop() {
   CHECK_NOTNULL(server_);
-  server_->Stop();
+  // server_->Stop();
 }
 
 }  // namespace juggler
