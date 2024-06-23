@@ -48,7 +48,7 @@ void uuid_clear (uuid_t uu) {
 	uu.Data2 = 0;
 	uu.Data3 = 0;
  
-	memset (uu.Data4, 8 * sizeof (char), 0);
+	memset (uu.Data4, 0, 8 * sizeof (char));
 }
 
 #endif

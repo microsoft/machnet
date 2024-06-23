@@ -1,17 +1,16 @@
 #include <ipv4.h>
 
 #include <optional>
+#define ASIO_STANDLONE
+#include <asio.hpp>
 
 namespace juggler {
 namespace net {
 
 bool Ipv4::Address::IsValid(const std::string &addr) {
-  #ifdef __linux__
-    struct sockaddr_in sa;
-    int result = inet_pton(AF_INET, addr.c_str(), &(sa.sin_addr));
-    return result != 0;
-  #endif  // __linux__
-  return 0;
+  struct sockaddr_in sa;
+  int result = inet_pton(AF_INET, addr.c_str(), &(sa.sin_addr));
+  return result != 0;
 }
 
 std::optional<Ipv4::Address> Ipv4::Address::MakeAddress(

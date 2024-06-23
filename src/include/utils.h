@@ -36,6 +36,7 @@
 
 #ifdef _WIN32
 #include "utils_helper.h"
+#include "windows_uuid.h"
 #include <array>
 #include <algorithm>
 #endif
@@ -199,12 +200,25 @@ namespace utils {
       uuid[15]);
 }
 
-[[maybe_unused]] static inline std::string UUIDToString(
-    const unsigned char uuid[16]) {
-  char uuid_str[37] = {};
-  UUIDUnparse(uuid, uuid_str);
-  return std::string(uuid_str);
-}
+#ifdef _WIN32
+
+  [[maybe_unused]] static inline std::string UUIDToString(
+      const uuid_t uuid) {
+    char uuid_str[37] = {};
+    uuid_unparse(uuid, uuid_str);
+    return std::string(uuid_str);
+  }
+
+#else
+
+  [[maybe_unused]] static inline std::string UUIDToString(
+      const unsigned char uuid[16]) {
+    char uuid_str[37] = {};
+    UUIDUnparse(uuid, uuid_str);
+    return std::string(uuid_str);
+  }
+
+#endif
 
 [[maybe_unused]] static bool BindThisThreadToCore(uint8_t core) {
   cpu_set_t cpuset;
