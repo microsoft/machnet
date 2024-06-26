@@ -716,7 +716,7 @@ int machnet_sendmsg(const void *channel_ctx, const MachnetMsgHdr_t *msghdr) {
       uint32_t nbytes_to_copy =
           MIN(seg_bytes, __machnet_channel_buf_tailroom(buffer));
       uchar_t *buf_data = __machnet_channel_buf_append(buffer, nbytes_to_copy);
-      // memcpy(buf_data, seg_data, nbytes_to_copy);
+      memcpy(buf_data, seg_data, nbytes_to_copy);
       buffer->flags |= MACHNET_MSGBUF_FLAGS_SG;
 
       seg_data += nbytes_to_copy;
@@ -848,7 +848,7 @@ int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr) {
     uint32_t remaining_space_in_seg = seg_len - seg_data_ofs;
     uint32_t nbytes_to_copy =
         MIN(remaining_space_in_seg, remaining_bytes_in_buf);
-    // memcpy(seg_data, buf_data, nbytes_to_copy);
+    memcpy(seg_data, buf_data, nbytes_to_copy);
     buf_data_ofs += nbytes_to_copy;
     seg_data_ofs += nbytes_to_copy;
     total_bytes_copied += nbytes_to_copy;

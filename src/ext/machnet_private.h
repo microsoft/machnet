@@ -365,57 +365,64 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
   assert(channel_name != NULL);
   assert(shm_fd != NULL);
   MachnetChannelCtx_t *channel = NULL;
-  int shm_flags;
 
-  // Check if channel size is huge page aligned.
-  if ((channel_size & (HUGE_PAGE_2M_SIZE - 1)) != 0) {
-    fprintf(stderr, "Channel size %zu is not huge page aligned.\n",
-            channel_size);
+  #ifdef __linux__
+    int shm_flags;
+
+    // Check if channel size is huge page aligned.
+    if ((channel_size & (HUGE_PAGE_2M_SIZE - 1)) != 0) {
+      fprintf(stderr, "Channel size %zu is not huge page aligned.\n",
+              channel_size);
+      return NULL;
+    }
+
+    // Create the shared memory segment.
+    *shm_fd = memfd_create(channel_name, MFD_HUGETLB);
+    if (*shm_fd < 0) {
+      fprintf(stderr, "memfd_create() failed, error = %s\n", strerror(errno));
+      return NULL;
+    }
+
+    // Set the size of the shared memory segment.
+    if (ftruncate(*shm_fd, channel_size) == -1) {
+      fprintf(stderr,
+              "%s: ftruncate() failed, error = %s. This can happen if (1) there "
+              "are no hugepages, or (2) the hugepage size is not 2MB.\n",
+              __FILE__, strerror(errno));
+      goto fail;
+    }
+
+    // Map the shared memory segment into the address space of the process.
+    shm_flags = MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
+    channel = (MachnetChannelCtx_t *)mmap(
+        NULL, channel_size, PROT_READ | PROT_WRITE, shm_flags, *shm_fd, 0);
+    if (channel == MAP_FAILED) {
+      fprintf(stderr, "mmap() failed, error = %s\n", strerror(errno));
+      goto fail;
+    }
+
+    // Lock the memory segment in RAM.
+    if (mlock((void *)channel, channel_size) != 0) {
+      fprintf(stderr, "mlock() failed, error = %s\n", strerror(errno));
+      goto fail;
+    }
+
+    return channel;
+
+  fail:
+    if (channel != NULL && channel != MAP_FAILED) munmap(channel, channel_size);
+
+    if (*shm_fd != -1) {
+      close(*shm_fd);
+    }
+    *shm_fd = -1;
     return NULL;
-  }
+  #else // #ifdef __linux__
 
-  // // Create the shared memory segment.
-  // *shm_fd = memfd_create(channel_name, MFD_HUGETLB);
-  // if (*shm_fd < 0) {
-  //   fprintf(stderr, "memfd_create() failed, error = %s\n", strerror(errno));
-  //   return NULL;
-  // }
+    
 
-  // Set the size of the shared memory segment.
-  // if (ftruncate(*shm_fd, channel_size) == -1) {
-  //   fprintf(stderr,
-  //           "%s: ftruncate() failed, error = %s. This can happen if (1) there "
-  //           "are no hugepages, or (2) the hugepage size is not 2MB.\n",
-  //           __FILE__, strerror(errno));
-  //   goto fail;
-  // }
+  #endif // #ifdef __linux__
 
-  // Map the shared memory segment into the address space of the process.
-  // shm_flags = MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
-  // channel = (MachnetChannelCtx_t *)mmap(
-  //     NULL, channel_size, PROT_READ | PROT_WRITE, shm_flags, *shm_fd, 0);
-  // if (channel == MAP_FAILED) {
-  //   fprintf(stderr, "mmap() failed, error = %s\n", strerror(errno));
-  //   goto fail;
-  // }
-
-  // // Lock the memory segment in RAM.
-  // if (mlock((void *)channel, channel_size) != 0) {
-  //   fprintf(stderr, "mlock() failed, error = %s\n", strerror(errno));
-  //   goto fail;
-  // }
-
-  // return channel;
-  return NULL;
-
-fail:
-  // if (channel != NULL && channel != MAP_FAILED) munmap(channel, channel_size);
-
-  // if (*shm_fd != -1) {
-  //   close(*shm_fd);
-  // }
-  // *shm_fd = -1;
-  return NULL;
 }
 
 /**
