@@ -42,6 +42,7 @@ include_directories(SYSTEM ${CMAKE_BINARY_DIR}/third_party/gflags/include)
 # Glog doesn't correctly define its include directories, so we need to specify manually
 set(WITH_GFLAGS OFF)
 set(WITH_GTEST OFF)
+add_definitions(-DGLOG_NO_ABBREVIATED_SEVERITIES)
 add_subdirectory(third_party/glog)
 include_directories(SYSTEM third_party/glog/src)
 include_directories(SYSTEM ${CMAKE_BINARY_DIR}/third_party/glog)
@@ -70,6 +71,13 @@ include_directories(SYSTEM third_party/xxHash)
 
 # Common sub-projects: asio
 include_directories(SYSTEM third_party/asio/include)
+
+# Common sub-projects: boost/interprocess
+if(WIN32)
+    add_definitions(-DWIN32_LEAN_AND_MEAN)
+    add_definitions(-DBOOST_USE_WINDOWS_H)
+endif()
+include_directories(SYSTEM third_party/boost_1_82_0)
 
 if (WIN32)
   # Common sub-projects: nlohmann/json

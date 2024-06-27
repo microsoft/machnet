@@ -6,6 +6,8 @@
  */
 #ifndef SRC_EXT_MACHNET_PRIVATE_H_
 #define SRC_EXT_MACHNET_PRIVATE_H_
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/mapped_region.hpp>
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,6 +17,7 @@ extern "C" {
 #include <sys/mman.h>
 #include <sys/types.h>
 #else // #ifdef __linux__
+
 
 #endif // #ifdef __linux__
 

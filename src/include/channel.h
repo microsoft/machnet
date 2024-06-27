@@ -6,6 +6,7 @@
 #ifndef SRC_INCLUDE_CHANNEL_H_
 #define SRC_INCLUDE_CHANNEL_H_
 
+#include <boost/interprocess/shared_memory_object.hpp>
 #include <channel_msgbuf.h>
 #include <common.h>
 #include <flow_key.h>

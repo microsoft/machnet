@@ -6,3 +6,4 @@ build/
 .vscode
 .vs/
 third_party/asio/*
+third_party/boost_1_82_0/*
