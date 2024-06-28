@@ -4,6 +4,7 @@
 #include <glog/logging.h>
 #include <machnet.h>
 #include <machnet_common.h>
+#include <pause.h>
 #include <signal.h>
 #include <ttime.h>
 #include <unistd.h>
@@ -75,7 +76,7 @@ void stack_loop(thread_conf *conf) {
 
   // Wait for flag to start.
   while (!g_start.load()) {
-    __asm__ volatile("pause" ::: "memory");
+    machnet_pause();
   }
 
   // Use a high precision timer to measure time in nanoseconds for this
@@ -157,7 +158,7 @@ void application_loop(thread_conf *conf) {
 
   // Wait for flag to start.
   while (!g_start.load()) {
-    __asm__ volatile("pause" ::: "memory");
+    machnet_pause();
   }
 
   // Now start receiving messages.

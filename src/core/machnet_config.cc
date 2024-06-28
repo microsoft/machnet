@@ -150,6 +150,7 @@ utils::CmdLineOpts MachnetConfigProcessor::GetEalOpts() const {
   // TODO(ilias) : What cpu mask to set for EAL?
   eal_opts.Append({"-c", "0x1"});
   eal_opts.Append({"-n", "4"});
+  eal_opts.Append({"--telemetry"});
   for (const auto &interface : interfaces_config_) {
     if (interface.pcie_addr() != "") {
       eal_opts.Append({"-a", interface.pcie_addr()});

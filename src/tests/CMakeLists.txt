@@ -8,6 +8,6 @@ foreach(test_name IN LISTS TEST_FILES)
   get_filename_component(test_bin ${test_name} NAME_WE)
   add_executable(${test_bin} ${test_name})
   target_link_libraries(${test_bin} PUBLIC
-    core machnet_shim glog gtest gmock ${LIBDPDK_LIBRARIES} hugetlbfs rt)
+    core machnet_shim glog gtest gmock gflags ${LIBDPDK_LIBRARIES} hugetlbfs rt)
   add_test(NAME ${test_bin} COMMAND ${test_bin})
 endforeach()

@@ -1,0 +1,9 @@
+*.so
+*.o
+.cache/
+build/
+.history
+.vscode
+Dockerfile
+*.dockerfile
+docker-bake.hcl
