@@ -421,11 +421,30 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
     *shm_fd = -1;
     return NULL;
   #else // #ifdef __linux__
+    using namespace boost::interprocess;
+    // Check if channel size is huge page aligned. [RR: skipping for now]
 
-    
+    // Create the shared memory segment.
+    shared_memory_object shm_obj(
+      create_only,
+      channel_name,
+      read_write
+    );
 
+    // Set the size of the shared memory segment.
+    shm_obj.truncate(static_cast<offset_t>(channel_size));    
+
+    // Map the shared memory segment into the address space of the process.
+    mapped_region region(shm_obj, read_write);
+    channel = (MachnetChannelCtx_t *) region.get_address();
+
+    // Lock the memory segment in RAM. [RR: skipping for now]
+
+    // setting a placeholder fd [RR: update to have no fd]
+    *shm_fd = 99;
+    return channel;
   #endif // #ifdef __linux__
-
+  return NULL;
 }
 
 /**

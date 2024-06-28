@@ -6,6 +6,9 @@
  * integration.
  */
 
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+
 #include "machnet.h"
 #include <errno.h>
 #include <sys/types.h>
@@ -452,51 +455,76 @@ int machnet_init() {
   return -1;
 }
 
-MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size) {
-//   MachnetChannelCtx_t *channel;
-//   int shm_flags;
-//   if (channel_size != NULL) *channel_size = 0;
+MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size, const char *shm_object_name) {
 
-//   // Check whether the shmem fd is open.
-//   if (fcntl(shm_fd, F_GETFD) == -1) {
-//     fprintf(stderr, "Invalid shared memory file descriptor: %d", shm_fd);
-//     goto fail;
-//   }
+#ifdef __linux__
+  MachnetChannelCtx_t *channel;
+  int shm_flags;
+  if (channel_size != NULL) *channel_size = 0;
 
-//   // Get the size of the shared memory segment.
-//   struct stat stat_buf;
-//   if (fstat(shm_fd, &stat_buf) == -1) {
-//     perror("fstat()");
-//     goto fail;
-//   }
+  // Check whether the shmem fd is open.
+  if (fcntl(shm_fd, F_GETFD) == -1) {
+    fprintf(stderr, "Invalid shared memory file descriptor: %d", shm_fd);
+    goto fail;
+  }
 
-//   // Map the shared memory segment into the address space of the process.
-//   shm_flags = MAP_SHARED | MAP_POPULATE;
-//   if (stat_buf.st_blksize > getpagesize()) {
-//     /* TODO(ilias): Hack to detect if mapping is huge page backed. */
-//     shm_flags |= MAP_HUGETLB;
-//   }
-//   channel = (MachnetChannelCtx_t *)mmap(
-//       NULL, stat_buf.st_size, PROT_READ | PROT_WRITE, shm_flags, shm_fd, 0);
-//   if (channel == MAP_FAILED) {
-//     perror("mmap()");
-//     goto fail;
-//   }
+  // Get the size of the shared memory segment.
+  struct stat stat_buf;
+  if (fstat(shm_fd, &stat_buf) == -1) {
+    perror("fstat()");
+    goto fail;
+  }
 
-//   if (channel->magic != MACHNET_CHANNEL_CTX_MAGIC) {
-//     fprintf(stderr, "Invalid magic number: %u\n", channel->magic);
-//     goto fail;
-//   }
+  // Map the shared memory segment into the address space of the process.
+  shm_flags = MAP_SHARED | MAP_POPULATE;
+  if (stat_buf.st_blksize > getpagesize()) {
+    /* TODO(ilias): Hack to detect if mapping is huge page backed. */
+    shm_flags |= MAP_HUGETLB;
+  }
+  channel = (MachnetChannelCtx_t *)mmap(
+      NULL, stat_buf.st_size, PROT_READ | PROT_WRITE, shm_flags, shm_fd, 0);
+  if (channel == MAP_FAILED) {
+    perror("mmap()");
+    goto fail;
+  }
 
-//   // Success.
-//   if (channel_size != NULL) *channel_size = stat_buf.st_size;
+  if (channel->magic != MACHNET_CHANNEL_CTX_MAGIC) {
+    fprintf(stderr, "Invalid magic number: %u\n", channel->magic);
+    goto fail;
+  }
 
-//   return channel;
+  // Success.
+  if (channel_size != NULL) *channel_size = stat_buf.st_size;
 
-// fail:
-//   if (shm_fd > 0) close(shm_fd);
-//   return NULL;
+  return channel;
+
+fail:
+  if (shm_fd > 0) close(shm_fd);
   return NULL;
+#else // #ifdef __linux__
+  using namespace boost::interprocess;
+  MachnetChannelCtx_t *channel;
+
+  if (channel_size != NULL) *channel_size = 0;
+
+  //Open already created shared memory object.
+  shared_memory_object shm_object(
+    open_only, 
+    shm_object_name, 
+    read_write
+  );
+
+  // Map the shared memory segment into the address space of the process.
+  mapped_region region(shm_object, read_write);
+  channel = (MachnetChannelCtx_t *) region.get_address();
+
+  // Get the size of the shared memory segment.
+  *channel_size = region.get_size();
+
+  // Success.
+  return channel;
+
+#endif // #ifdef __linux__
 }
 
 void *machnet_attach() {
@@ -536,8 +564,8 @@ void *machnet_attach() {
     return NULL;
   }
 
-  // return machnet_bind(channel_fd, NULL);
-  return NULL;
+  return machnet_bind(channel_fd, NULL, uuid_str);
+  // return NULL;
 }
 
 int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,

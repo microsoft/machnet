@@ -161,3 +161,5 @@ endif()
 
 # set(BUILD_TESTING ON)
 add_subdirectory(src)
+
+# add_subdirectory(examples)

@@ -26,13 +26,13 @@ void assert_with_msg(bool cond, const char *msg) {
 }
 
 int main(int argc, char *argv[]) {
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   int ret = machnet_init();
   assert_with_msg(ret == 0, "machnet_init() failed");
 
-  // void *channel = machnet_attach();
-  // assert_with_msg(channel != nullptr, "machnet_attach() failed");
+  void *channel = machnet_attach();
+  assert_with_msg(channel != nullptr, "machnet_attach() failed");
 
   ret = machnet_listen(channel, FLAGS_local.c_str(), kPort);
   assert_with_msg(ret == 0, "machnet_listen() failed");
@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
       const ssize_t ret = machnet_recv(channel, buf.data(), buf.size(), &flow);
       assert_with_msg(ret >= 0, "machnet_recvmsg() failed");
       if (ret == 0) {
-        usleep(10);
+        _sleep(10);
         continue;
       }
 
