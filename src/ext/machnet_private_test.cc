@@ -7,6 +7,8 @@
 #include <random>
 #include <thread>
 
+#include "pause.h"
+
 TEST(MachnetPrivateTest, NSaasChannelCalcShMemSize) {
   auto calc_func = [](size_t machnet_r_slots, size_t app_r_slots,
                       size_t buf_r_slots, size_t buffer_size) {
@@ -177,7 +179,7 @@ TEST(MachnetBufferPool, Concurrency) {
 
     // Wait for parent to notify start of work.
     while (!barrier.load()) {
-      __asm__("pause");
+      machnet_pause();
     }
 
     LOG(INFO) << "Thread " << std::this_thread::get_id() << " running.";
@@ -219,7 +221,7 @@ TEST(MachnetBufferPool, Concurrency) {
 
   // Wait for all threads to complete.
   while (thread_count.load() > 0) {
-    __asm__("pause");
+    machnet_pause();
   }
 
   // Check the buffer pool state.

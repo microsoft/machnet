@@ -10,11 +10,13 @@ set_target_properties(core PROPERTIES
            SOVERSION 1
            PUBLIC_HEADER dpdk.h)
 
-#target_include_directories(core PRIVATE ${LIBDPDK_INCLUDE_DIRS})
-target_include_directories(core SYSTEM PUBLIC $ENV{RTE_SDK}/build/install/usr/local/include)
+find_package(nlohmann_json REQUIRED)
+
 target_include_directories(core PUBLIC ../include)
 target_include_directories(core PRIVATE .)
 target_link_libraries(core PRIVATE)
+target_link_libraries(core PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(core PUBLIC PkgConfig::LIBDPDK_STATIC)
 
 # link_directories($ENV{RTE_SDK}/$ENV{RTE_TARGET}/lib/)
 # find_library(DPDK_LIB NAMES libdpdk.a dpdk)

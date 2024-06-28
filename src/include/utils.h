@@ -15,7 +15,6 @@
 #include <cstring>
 #include <functional>
 #include <iomanip>
-#include <locale>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -231,7 +230,8 @@ namespace utils {
 [[maybe_unused]] static inline constexpr cpu_set_t calculate_cpu_mask(
     std::size_t mask) {
   cpu_set_t m;
-  CPU_ZERO(&m);
+  // Zero the cpu set. CPU_ZERO uses memset which makes constexpr unhappy.
+  CPU_XOR(&m, &m, &m);
   const auto mask_bitsize =
       std::min(sizeof(mask) * 8, static_cast<size_t>(CPU_SETSIZE));
   for (std::size_t i = 0; i < mask_bitsize; i++) {

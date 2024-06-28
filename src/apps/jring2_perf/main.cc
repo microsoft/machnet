@@ -1,6 +1,7 @@
 
 #include <bits/stdc++.h>
 #include <pthread.h>
+#include <rte_cycles.h>
 #include <sched.h>
 #include <time.h>
 #include <unistd.h>
@@ -28,11 +29,7 @@ jring2_t *g_p2c_ring;  // Producer to consumer ring
 jring2_t *g_c2p_ring;  // Consumer to producer ring
 double g_rdtsc_freq_ghz = 0.0;
 
-uint64_t rdtsc() {
-  uint32_t lo, hi;
-  asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
-  return ((uint64_t)hi << 32) | lo;
-}
+uint64_t rdtsc() { return rte_rdtsc(); }
 
 double MeasureRdtscFreqGHz() {
   const uint64_t start_rdtsc = rdtsc();

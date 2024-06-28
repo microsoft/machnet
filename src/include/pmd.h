@@ -475,7 +475,6 @@ class PmdPort {
   std::vector<rte_eth_rss_reta_entry64> rss_reta_conf_;
   struct rte_eth_stats port_stats_;
   std::vector<uint8_t> rss_hash_key_;
-  std::string pci_info_;
   bool initialized_;
 };
 }  // namespace dpdk

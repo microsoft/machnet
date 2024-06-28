@@ -16,6 +16,8 @@
 #include <random>
 #include <thread>
 
+#include "pause.h"
+
 constexpr const char *file_name(const char *path) {
   const char *file = path;
   while (*path) {
@@ -257,7 +259,7 @@ TEST(ChannelFullDuplex, SendRecvMsg) {
     // Parent process.
     // Busy-wait until the child process is ready.
     while (__machnet_channel_app_ring_pending(channel->ctx()) == 0) {
-      __asm__("pause");
+      machnet_pause();
     }
 
     size_t msg_tx = 0, msg_rx = 0;

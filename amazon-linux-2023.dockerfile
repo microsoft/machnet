@@ -1,5 +1,4 @@
-# Stage 1: Install system packages and build dependencies
-FROM ubuntu:22.04 AS machnet_build_base
+FROM docker.io/library/amazonlinux:2023 AS machnet_build_base
 
 # Fixes QEMU-based builds so they don't emulate an x86-64-v1 CPU
 ENV QEMU_CPU max
@@ -8,25 +7,43 @@ ARG timezone
 
 # Set timezone and configure apt
 RUN ln -snf /usr/share/zoneinfo/${timezone} /etc/localtime && \
-    echo ${timezone} > /etc/timezone && \
-    echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
-    echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker
+    echo ${timezone} > /etc/timezone
 
 # Update and install dependencies
-RUN apt-get update && \
-    apt-get install --no-install-recommends -y \
-        git \
-        build-essential cmake meson pkg-config libudev-dev \
-        libnl-3-dev libnl-route-3-dev python3-dev \
-        python3-docutils python3-pyelftools libnuma-dev \
-        ca-certificates autoconf \
-        libhugetlbfs-dev pciutils libunwind-dev uuid-dev nlohmann-json3-dev
+RUN dnf update -y && \
+    dnf install -y \
+        git make automake gcc gcc-c++ kernel-devel ninja-build  \
+        cmake meson pkg-config libudev-devel \
+        libnl3-devel python3-devel \
+        python3-docutils numactl-devel numactl \
+        ca-certificates autoconf libasan libasan-static \
+        pciutils libunwind-devel libuuid-devel xz-devel \
+        python3-pip glibc-devel tar which iproute sudo
+
+RUN python3 -m pip install pyelftools
+
+ENV BUILDTYPE NATIVEONLY
+
+ENV LIBHUGETLBFS_DIR /root/libhugetlbfs-2.24
+ADD https://github.com/libhugetlbfs/libhugetlbfs/releases/download/2.24/libhugetlbfs-2.24.tar.gz /root
+RUN cd /root && tar xf *.tar.gz && cd ${LIBHUGETLBFS_DIR} && \
+    cd ${LIBHUGETLBFS_DIR} && \
+    ./autogen.sh && ./configure && make obj/hugectl obj/hugeedit obj/hugeadm obj/pagesize && make install && \
+    cd / && rm -rf ${LIBHUGETLBFS_DIR} /root/libhugetlbfs*.tar.gz
+
+# libhugetlbfs is both picky and not particularly performance sensitive.
+ARG CFLAGS
+ARG CXXFLAGS
+
+ENV NLOHMANN_JSON_DIR /root/nlohmann_json
+ADD https://github.com/nlohmann/json.git#v3.10.5 ${NLOHMANN_JSON_DIR}
+RUN cd ${NLOHMANN_JSON_DIR} && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../ && ninja install && cd / && rm -rf ${NLOHMANN_JSON_DIR}
 
 # Remove conflicting packages
-RUN apt-get --purge -y remove rdma-core librdmacm1 ibverbs-providers libibverbs-dev libibverbs1
+# RUN apt-get --purge -y remove rdma-core librdmacm1 ibverbs-providers libibverbs-dev libibverbs1
 
 # Cleanup after package install
-RUN rm -rf /var/lib/apt/lists/*
+# RUN rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root
 
@@ -39,9 +56,8 @@ RUN git clone -b 'stable-v52' --single-branch --depth 1 https://github.com/linux
     mkdir build && \
     cd build && \
     cmake -GNinja -DNO_PYVERBS=1 -DNO_MAN_PAGES=1 ../ && \
-    ninja install
-
-RUN echo /usr/local/lib64 > /etc/ld.so.conf.d/usr_local.conf && ldconfig
+    ninja install && \
+    cd / && rm -rf ${RDMA_CORE}
 
 # Set env variable for DPDK
 ENV RTE_SDK /root/dpdk
@@ -83,7 +99,9 @@ meson setup build --buildtype=${DPDK_MESON_BUILD_PRESET} -Dexamples='' -Dplatfor
     cd / && \
     rm -rf ${RTE_SDK}
 
-# # Stage 2: Build Machnet
+RUN echo /usr/local/lib64 > /etc/ld.so.conf.d/usr_local.conf && ldconfig
+
+# Stage 2: Build Machnet
 FROM machnet_build_base AS machnet
 
 WORKDIR /root/machnet
@@ -99,13 +117,25 @@ RUN ldconfig && \
     mkdir release_build && \
     cd release_build && \
     cmake -DCMAKE_BUILD_TYPE=Release -GNinja ../ && \
-    ninja
+    ninja install machnet msg_gen pktgen shmem_test machnet_test
 
 # Do a Debug build
 RUN ldconfig && \
     mkdir debug_build && \
     cd debug_build && \
     cmake -DCMAKE_BUILD_TYPE=Debug -GNinja ../ && \
-    ninja
+    ninja install machnet msg_gen pktgen shmem_test machnet_test
 
-ENTRYPOINT ["/bin/bash"]
+#
+# Cleanup phase
+#
+
+RUN find /usr/local/lib64 -name "*/librte_*.a" | xargs rm -f
+
+
+# ENTRYPOINT ["/root/machnet/release_build/src/apps/machnet/machnet"]
+
+FROM scratch AS machnet_compressed_worker
+COPY --from=machnet / /
+
+CMD /root/machnet/release_build/src/apps/machnet/machnet --config_json /var/run/machnet/local_config.json

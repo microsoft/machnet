@@ -145,7 +145,8 @@ struct MachnetChannelCtx {
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 typedef struct MachnetChannelCtx MachnetChannelCtx_t;
 
-static_assert(sizeof(MachnetChannelCtx_t) % CACHE_LINE_SIZE == 0);
+static_assert(sizeof(MachnetChannelCtx_t) % CACHE_LINE_SIZE == 0,
+              "MachnetChannelCtx_t is not cache line aligned");
 
 struct MachnetChannelAppStats {
   uint64_t tx_msg_drops;
