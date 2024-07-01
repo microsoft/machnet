@@ -10,25 +10,25 @@
 #include "rpc.h"
 // #include "Rpcdce.h"
 
-void uuid_generate (uuid_t out) {
+inline void uuid_generate (uuid_t out) {
 	UuidCreate (&out);
 }
 
-void uuid_copy (uuid_t dst, const uuid_t src) {
+inline void uuid_copy (uuid_t dst, const uuid_t src) {
 	dst.Data1 = src.Data1;
 	dst.Data2 = src.Data2;
 	dst.Data3 = src.Data3;
 	memcpy (dst.Data4, src.Data4, 8 * sizeof (char));
 }
  
-int uuid_compare (const uuid_t uu1, const uuid_t uu2) {
+inline int uuid_compare (const uuid_t uu1, const uuid_t uu2) {
 	RPC_STATUS status;
  
 	int res = UuidCompare ((UUID *) &uu1, (UUID*)  &uu2,  &status);
 	return res;
 }
 
-void uuid_unparse (const uuid_t uu, char *out_s) {
+inline void uuid_unparse (const uuid_t uu, char *out_s) {
 	const static size_t S_UUID_STRING_SIZE = 36;
     RPC_CSTR *str_p = NULL;
 	RPC_STATUS status = UuidToString (&uu, str_p);
@@ -43,7 +43,7 @@ void uuid_unparse (const uuid_t uu, char *out_s) {
 		}
 }
 
-void uuid_clear (uuid_t uu) {
+inline void uuid_clear (uuid_t uu) {
 	uu.Data1 = 0;
 	uu.Data2 = 0;
 	uu.Data3 = 0;

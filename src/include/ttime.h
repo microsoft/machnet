@@ -35,7 +35,7 @@ static inline uint64_t rdtsc() {
 
   #ifdef _WIN32
     int clock_monotonic = 1;
-    clock_gettime(clock_monotonic, &start);
+    // clock_gettime(clock_monotonic, &start);
   #else
     clock_gettime(CLOCK_MONOTONIC_RAW, &start);
   #endif // _WIN32
@@ -44,7 +44,7 @@ static inline uint64_t rdtsc() {
   end_tsc = precise_tsc();
 
   #ifdef _WIN32
-    clock_gettime(clock_monotonic, &end);
+    // clock_gettime(clock_monotonic, &end);
   #else
     clock_gettime(CLOCK_MONOTONIC_RAW, &end);
   #endif // _WIN32
