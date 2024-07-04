@@ -13,7 +13,13 @@
 #define ASIO_STANDLONE
 #include <asio.hpp>
 
+// adding for debugging
+#include <filesystem>
+#include <iostream>
+
 namespace juggler {
+
+asio::io_context io_context;
 
 struct MachnetClientContext {
   bool registered;
@@ -49,6 +55,8 @@ void MachnetController::Run() {
     return;
   }
 
+  std::cout << "number of PMD ports available: " << dpdk_.GetNumPmdPortsAvailable() << std::endl;
+
   std::vector<cpu_set_t> cpu_masks;
   // Find the PMD port id for each interface.
   for (const auto &interface : config_processor_.interfaces_config()) {
@@ -61,6 +69,7 @@ void MachnetController::Run() {
     const_cast<NetworkInterfaceConfig &>(interface).set_dpdk_port_id(
         pmd_port_id.value());
 
+    std::cout << "initializing PMD port in MachnetController::Run() in machnet_controller.cc" << std::endl;
     // Initialize the PMD port.
     const uint16_t rx_rings_nr = interface.engine_threads(),
                    tx_rings_nr = interface.engine_threads();
@@ -69,27 +78,37 @@ void MachnetController::Run() {
         dpdk::PmdRing::kDefaultRingDescNr, dpdk::PmdRing::kDefaultRingDescNr));
     pmd_ports_.back()->InitDriver();
 
+    std::cout << "creating MachnetEngineSharedState in MachnetController::Run() in machnet_controller.cc" << std::endl;
     // Create the MachnetEngineShared State.
     auto shared_state = std::make_shared<MachnetEngineSharedState>(
         pmd_ports_.back()->GetRSSKey(), pmd_ports_.back()->GetL2Addr(),
         std::vector<net::Ipv4::Address>(1, interface.ip_addr()));
+    
+    std::cout << "creating MachnetEngine's in MachnetController::Run() in machnet_controller.cc" << std::endl;
     // Create the Machnet engines.
     for (size_t i = 0; i < interface.engine_threads(); ++i) {
       engines_.emplace_back(std::make_shared<juggler::MachnetEngine>(
           pmd_ports_.back(), i, i, shared_state));
+      
       // Create the CPU mask for the engine threads.
       cpu_masks.emplace_back(interface.cpu_mask());
     }
+
+    std::cout << "Number of MachnetEngines in engines_: " << engines_.size() << std::endl;
+    std::cout << "Number of cpu_masks: " << cpu_masks.size() << std::endl;
   }
 
+  std::cout << "engine_thread_pool init and launch in machnet_controller.cc" << std::endl;
   WorkerPool<MachnetEngine> engine_thread_pool{engines_, cpu_masks};
   engine_thread_pool.Init();
   engine_thread_pool.Launch();
 
-  // Start the controller server, wait and handle connections.
+  // std::cout << "Calling RunController() in machnet_controller.cc" << std::endl;
+  // // Start the controller server, wait and handle connections.
   RunController();
 
-  // The previous call will block until the server is stopped (e.g. by SIGINT).
+  // std::cout << "Calling engine_thread_pool Pause and Terminate() in machnet_controller.cc" << std::endl;
+  // // The previous call will block until the server is stopped (e.g. by SIGINT).
   engine_thread_pool.Pause();
   engine_thread_pool.Terminate();
 
@@ -302,6 +321,8 @@ bool MachnetController::CreateChannel(
 }
 
 void MachnetController::RunController() {
+  std::cout << "inside MachnetController::RunController()" << std::endl;
+
   const std::string socket_path = MACHNET_CONTROLLER_DEFAULT_PATH;
 
   const UDServer::on_connect_cb_t on_connect_cb = std::bind(
@@ -322,20 +343,50 @@ void MachnetController::RunController() {
     this->HandleTimeout(socket);
   };
 
-  asio::io_context io_context;
-  server_ = std::make_unique<UDServer>(io_context, socket_path, on_connect_cb, on_close_cb,
-                                       on_message_cb, on_timeout_cb);
+  // std::cout << "defining io_context" << '\n';
+  // asio::io_context io_context;
+  // std::cout << "callin UDServer constructor" << '\n';
+  
+  LOG(INFO) << "callin UDServer constructor";
+  
 
-  io_context.run();
+  // for(int i = 0; i < 99; i++) {
+  //   std::cout << "before UDserver " << i << std::endl;
+  // }
+  
+  // server_ = std::make_unique<UDServer>(io_context, socket_path, on_connect_cb, 
+  //                                   on_close_cb, on_message_cb, on_timeout_cb);
+
+  // for(int i = 0; i < 200; i++) {
+  //   std::cout << "after UDserver " << i << std::endl;
+  // }
+  
+  // std::cout << "io_context run fire from machnet_controller.cc" << '\n';
+  // LOG(INFO) << "before io_context run from machnet_controller.cc";
+  // io_context.run();
+  // LOG(INFO) << "after io_context run from machnet_controller.cc";
+  
   // server_ = std::make_unique<UDServer>(socket_path, on_connect_cb, on_close_cb,
   //                                      on_message_cb, on_timeout_cb);
 
   // server_->Run();
+
+  try {
+    std::filesystem::remove(socket_path);
+    server_ = std::make_unique<UDServer>(io_context, socket_path, on_connect_cb, 
+                                    on_close_cb, on_message_cb, on_timeout_cb);
+    io_context.run();
+  }
+  catch (std::exception& e) {
+    std::cerr << "Exception in mnController: " << e.what() << "\n";
+    LOG(FATAL) << "Exception in mnController: " << e.what();
+  }
 }
 
 void MachnetController::Stop() {
   CHECK_NOTNULL(server_);
   // server_->Stop();
+  io_context.stop();
 }
 
 }  // namespace juggler

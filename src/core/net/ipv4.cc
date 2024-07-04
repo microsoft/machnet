@@ -1,16 +1,28 @@
+#include <asio/ip/address.hpp>
 #include <ipv4.h>
-
 #include <optional>
-#define ASIO_STANDLONE
-#include <asio.hpp>
+// #define ASIO_STANDLONE
+// #include <asio.hpp>
+
 
 namespace juggler {
 namespace net {
 
 bool Ipv4::Address::IsValid(const std::string &addr) {
-  struct sockaddr_in sa;
-  int result = inet_pton(AF_INET, addr.c_str(), &(sa.sin_addr));
-  return result != 0;
+  #ifdef __linux__
+    struct sockaddr_in sa;
+    int result = inet_pton(AF_INET, addr.c_str(), &(sa.sin_addr));
+    return result != 0;
+  #else // __linux__
+    asio::error_code ec;
+    asio::ip::address::from_string(addr, ec);
+    if(ec) {
+      std::cerr << ec.message() << std::endl;
+      return false;
+    }
+
+    return true;
+  #endif // __linux__
 }
 
 std::optional<Ipv4::Address> Ipv4::Address::MakeAddress(
@@ -21,6 +33,7 @@ std::optional<Ipv4::Address> Ipv4::Address::MakeAddress(
 }
 
 bool Ipv4::Address::FromString(std::string str) {
+  std::cout << "Ipv4 Fromstring enters" << std::endl;
   if (!Ipv4::Address::IsValid(str)) return false;
   unsigned char bytes[4];
   uint8_t len = sscanf(str.c_str(), "%hhu.%hhu.%hhu.%hhu", &bytes[0], &bytes[1],
@@ -28,15 +41,29 @@ bool Ipv4::Address::FromString(std::string str) {
   if (len != Ipv4::Address::kSize) return false;
   address = be32_t((uint32_t)(bytes[0]) << 24 | (uint32_t)(bytes[1]) << 16 |
                    (uint32_t)(bytes[2]) << 8 | (uint32_t)(bytes[3]));
-
+  std::cout << "Ipv4 Fromstring returns" << std::endl;
   return true;
 }
 
 std::string Ipv4::Address::ToString() const {
   const std::vector<uint8_t> bytes(address.ToByteVector());
   CHECK_EQ(bytes.size(), 4);
-  return juggler::utils::Format("%hhu.%hhu.%hhu.%hhu", bytes[0], bytes[1],
+  
+  #ifdef __linux__
+    return juggler::utils::Format("%hhu.%hhu.%hhu.%hhu", bytes[0], bytes[1],
                                 bytes[2], bytes[3]);
+  #else
+    std::string ret;
+    char addr[12];
+
+    int length = snprintf(addr, sizeof(addr),
+                    "%hhu.%hhu.%hhu.%hhu", bytes[0],
+                    bytes[1], bytes[2], bytes[3]);
+
+    ret = std::string(addr);
+    return ret;
+
+  #endif
 }
 
 std::string Ipv4::ToString() const {

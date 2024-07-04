@@ -110,8 +110,9 @@ template <>
 struct hash<juggler::net::Ethernet::Address> {
   size_t operator()(const juggler::net::Ethernet::Address &addr) const {
     return juggler::utils::hash<uint32_t>(
-        reinterpret_cast<const char *>(addr.bytes),
-        juggler::net::Ethernet::Address::kSize);
+          reinterpret_cast<const char *>(addr.bytes),
+          juggler::net::Ethernet::Address::kSize
+        );
   }
 };
 }  // namespace std

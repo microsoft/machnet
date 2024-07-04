@@ -29,6 +29,9 @@ extern "C" {
 
 #include "machnet_common.h"
 
+// Debugging
+#include <iostream>
+
 #define MACHNET_CHANNEL_CTRL_SQ_SLOT_NR 2
 #define MACHNET_CHANNEL_CTRL_CQ_SLOT_NR (MACHNET_CHANNEL_CTRL_SQ_SLOT_NR)
 
@@ -303,6 +306,7 @@ static inline int __machnet_channel_dataplane_init(
  */
 static inline MachnetChannelCtx_t *__machnet_channel_posix_create(
     const char *channel_name, size_t channel_size, int *shm_fd) {
+  std::cout << "__machnet_channel_posix_create fired" << std::endl;
   assert(channel_name != NULL);
   assert(shm_fd != NULL);
   MachnetChannelCtx_t *channel = NULL;
@@ -365,6 +369,7 @@ fail:
  */
 static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
     const char *channel_name, size_t channel_size, int *shm_fd) {
+  std::cout << "__machnet_channel_hugetlbfs_create fired" << std::endl;
   assert(channel_name != NULL);
   assert(shm_fd != NULL);
   MachnetChannelCtx_t *channel = NULL;

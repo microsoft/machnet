@@ -16,6 +16,7 @@
 
 #define ASIO_STANDLONE
 #include <asio.hpp>
+#if defined(ASIO_HAS_LOCAL_SOCKETS)
 using asio::local::stream_protocol;
 
 namespace juggler {
@@ -76,5 +77,9 @@ private:
 
 }  // namespace net
 }  // namespace juggler
+
+#else // defined(ASIO_HAS_LOCAL_SOCKETS)
+# error Local sockets not available on this platform.
+#endif // defined(ASIO_HAS_LOCAL_SOCKETS)
 
 #endif  // SRC_INCLUDE_UD_SOCKET_H_

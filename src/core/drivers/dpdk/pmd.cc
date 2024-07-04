@@ -105,17 +105,24 @@ void RxRing::Init() {
 }
 
 void PmdPort::InitDriver(uint16_t mtu) {
+  std::cout << "inside PmdPort::InitDriver " << std::endl;
   if (is_dpdk_primary_process_) {
+    std::cout << "is_dpdk_primary_proces_: " << is_dpdk_primary_process_ << std::endl;
     // Get DPDK port info.
     FetchDpdkPortInfo(port_id_, &devinfo_, &l2_addr_, &pci_info_);
     device_ = devinfo_.device;
 
+    std::cout << "devinfo_.driver_name: " << std::string(devinfo_.driver_name) << std::endl;
     if (std::string(devinfo_.driver_name) == "net_netvsc") {
+      std::cout << "devinfo_.driver_name is net_netvsc " << std::endl;
       // For Azure's 'netvsc' driver, we need to find the associated VF so that
       // we can register DMA memory directly with the NIC. Otherwise DMA memory
       // registration is not supported by the synthetic driver.
       auto vf_port_id = dpdk::FindSlaveVfPortId(port_id_);
       if (vf_port_id.has_value()) {
+        
+        std::cout << "vf port id: " << static_cast<int>(vf_port_id.value()) << ", port_id: " << port_id_ << std::endl;
+
         LOG(INFO) << "Found VF port id: "
                   << static_cast<int>(vf_port_id.value())
                   << " for port id: " << static_cast<int>(port_id_);
@@ -129,6 +136,8 @@ void PmdPort::InitDriver(uint16_t mtu) {
         // If the VF is using an 'mlx4*' driver, we need extra checks.
         if (std::string(vf_devinfo_.driver_name).find("mlx4") !=
             std::string::npos) {
+          
+          std::cout << "vf_devinfo_.driver_name is mlx4 " << std::endl;
           // Mellanox CX3 and CX3-Pro NICs do not support non-power-of-two RSS
           // queues. Furthermore, RETA table cannot be configured.
           if (!utils::is_power_of_two(rx_rings_nr_)) {
@@ -141,6 +150,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
       }
     }
 
+    std::cout << "Rings nr: " << rx_rings_nr_ << std::endl;
     LOG(INFO) << "Rings nr: " << rx_rings_nr_;
     const rte_eth_conf portconf = DefaultEthConf(&devinfo_);
     int ret =
@@ -150,6 +160,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
                  << static_cast<int>(port_id_);
     }
 
+    std::cout << "Checking if the MTU is set correctly " << std::endl;
     // Check if the MTU is set correctly.
     CHECK(GetMTU().has_value())
         << "Failed to get MTU for port " << static_cast<int>(port_id_);
@@ -163,6 +174,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
       }
     }
 
+    std::cout << "getting RSS config from the device: " << std::endl;
     // Try to get the RSS configuration from the device.
     rss_hash_key_.resize(devinfo_.hash_key_size, 0);
     struct rte_eth_rss_conf rss_conf;
@@ -175,9 +187,12 @@ void PmdPort::InitDriver(uint16_t mtu) {
                    << rte_strerror(ret);
     }
 
+    std::cout << "Ret for rte_eth_dev_rss_hash_conf_get: " << ret << std::endl;
+
     rss_reta_conf_.resize(devinfo_.reta_size / RTE_ETH_RETA_GROUP_SIZE,
                           {-1ull, {0}});
 
+    std::cout << "initializing RETA table: " << std::endl;
     for (auto i = 0u; i < devinfo_.reta_size; i++) {
       // Initialize the RETA table in a round-robin fashion.
       auto index = i / RTE_ETH_RETA_GROUP_SIZE;
@@ -188,6 +203,8 @@ void PmdPort::InitDriver(uint16_t mtu) {
 
     ret = rte_eth_dev_rss_reta_update(port_id_, rss_reta_conf_.data(),
                                       devinfo_.reta_size);
+    std::cout << "Ret for rte_eth_dev_rss_reta_update: " << ret << std::endl;
+
     if (ret != 0) {
       // By default the RSS RETA table is configured and it works when the
       // number of RX queues is a power of two. In case of non-power-of-two it
@@ -199,10 +216,15 @@ void PmdPort::InitDriver(uint16_t mtu) {
       LOG(WARNING) << "Failed to update RSS RETA configuration for port "
                    << static_cast<int>(port_id_) << ". Error "
                    << rte_strerror(ret);
+      std::cout << "Failed to update RSS RETA configuration for port "
+                   << static_cast<int>(port_id_) << ". Error "
+                   << rte_strerror(ret) << std::endl;
     }
 
     ret = rte_eth_dev_rss_reta_query(port_id_, rss_reta_conf_.data(),
                                      devinfo_.reta_size);
+    std::cout << "Ret for rte_eth_dev_rss_reta_query: " << ret << std::endl;
+
     if (ret != 0) {
       LOG(WARNING) << "Failed to get RSS RETA configuration for port "
                    << static_cast<int>(port_id_) << ". Error "
@@ -237,6 +259,8 @@ void PmdPort::InitDriver(uint16_t mtu) {
 
     ret = rte_eth_dev_adjust_nb_rx_tx_desc(port_id_, &rx_ring_desc_nr_,
                                            &tx_ring_desc_nr_);
+
+    std::cout << "Ret for rte_eth_dev_adjust_nb_rx_tx_desc: " << ret << std::endl;                                           
     if (ret != 0) {
       LOG(FATAL)
           << "rte_eth_dev_adjust_nb_rx_tx_desc() failed for port with id: "
@@ -246,6 +270,8 @@ void PmdPort::InitDriver(uint16_t mtu) {
     const auto mbuf_data_size =
         mtu + RTE_ETHER_HDR_LEN + RTE_ETHER_CRC_LEN + RTE_PKTMBUF_HEADROOM;
 
+
+    std::cout << "setting up the TX queues" << std::endl;
     // Setup the TX queues.
     for (auto q = 0; q < tx_rings_nr_; q++) {
       LOG(INFO) << "Initializing TX ring: " << q;
@@ -258,6 +284,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
       tx_rings_.emplace_back(std::move(tx_ring));
     }
 
+    std::cout << "setting up the RX queues" << std::endl;
     // Setup the RX queues.
     for (auto q = 0; q < rx_rings_nr_; q++) {
       LOG(INFO) << "Initializing RX ring: " << q;
@@ -269,22 +296,27 @@ void PmdPort::InitDriver(uint16_t mtu) {
     }
 
     ret = rte_eth_promiscuous_enable(port_id_);
+    std::cout << "Ret for rte_eth_promiscuous_enable: " << ret << std::endl;
     if (ret != 0)
       LOG(WARNING) << "rte_eth_promiscuous_enable() failed.";
     else
       LOG(INFO) << "Promiscuous mode enabled.";
 
     ret = rte_eth_stats_reset(port_id_);
+    std::cout << "Ret for rte_eth_stats_reset: " << ret << std::endl;
     if (ret != 0) LOG(WARNING) << "Failed to reset port statistics.";
 
     ret = rte_eth_dev_set_link_up(port_id_);
+    std::cout << "Ret for rte_eth_dev_set_link_up: " << ret << std::endl;
     if (ret != 0) LOG(WARNING) << "rte_eth_dev_set_link_up() failed.";
 
     ret = rte_eth_dev_start(port_id_);
+    std::cout << "Ret for rte_eth_dev_start: " << ret << std::endl;
     if (ret != 0) {
       LOG(FATAL) << "rte_eth_dev_start() failed.";
     }
 
+    std::cout << "Waiting for the link to get up ..." << std::endl;
     LOG(INFO) << "Waiting for link to get up...";
     struct rte_eth_link link;
     memset(&link, '0', sizeof(link));
@@ -303,12 +335,15 @@ void PmdPort::InitDriver(uint16_t mtu) {
       #endif
     }
 
+    std::cout << "link.link_status: " << link.link_status << std::endl;
     if (link.link_status == ETH_LINK_UP) {
+      std::cout << "link.link_status is ETH_LINK_UP" << std::endl;
       LOG(INFO) << "[PMDPORT: " << static_cast<int>(port_id_) << "] "
                 << "Link is UP " << link.link_speed
                 << (link.link_autoneg ? " (AutoNeg)" : " (Fixed)")
                 << (link.link_duplex ? " Full Duplex" : " Half Duplex");
     } else {
+      std::cout << "link.link_status is LINK is DOWN for port_id: " << static_cast<int>(port_id_) << std::endl;
       LOG(INFO) << "[PMDPORT: " << static_cast<int>(port_id_) << "] "
                 << "Link is DOWN.";
     }

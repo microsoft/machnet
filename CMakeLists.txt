@@ -13,10 +13,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin") # testing channel_bench linking error
 
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "Setting build type to 'Release' as none was specified.")
-  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
-endif()
+# if(NOT CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT CMAKE_CONFIGURATION_TYPES)
+#   message(STATUS "Setting build type to 'Release' as none was specified.")
+#   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+# endif()
 
 include(CTest)
 set(BUILD_TESTING OFF) # Disable testing for third-party modules
@@ -160,6 +160,8 @@ else()
 endif()
 
 # set(BUILD_TESTING ON)
+# set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build." FORCE)
+
 add_subdirectory(src)
 
 # add_subdirectory(examples)

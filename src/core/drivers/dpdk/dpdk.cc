@@ -62,6 +62,7 @@ std::optional<uint16_t> Dpdk::GetPmdPortIdByMac(
 
     int ret = rte_eth_macaddr_get(
         port_id, reinterpret_cast<rte_ether_addr *>(lladdr.bytes));
+    std::cout << "ret value inside GetPmdPortIdByMac > RTE_ETF:FOREACH_DEV: " << ret << std::endl;
     if (ret != 0) {
       LOG(WARNING)
           << "rte_eth_macaddr_get() failed. Cannot retrieve eth device "
@@ -75,6 +76,10 @@ std::optional<uint16_t> Dpdk::GetPmdPortIdByMac(
     if (lladdr == l2_addr) {
       p_id = port_id;
     }
+
+    std::cout << "lladdr: " << lladdr.ToString() << std::endl;
+    std::cout << "l2_addr: " << l2_addr.ToString() << std::endl;
+    std::cout << "port id: " << port_id << std::endl;
   }
 
   return p_id;

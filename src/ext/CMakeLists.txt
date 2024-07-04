@@ -1,7 +1,6 @@
 if (NOT DEFINED MACHNET_SHIM_EXPORT_STATIC)
 	set(MACHNET_SHIM_EXPORT_STATIC FALSE)
 endif()
-
 # Declare the library target.
 set(MACHNET_SHIM_LIB_NAME machnet_shim)
 
@@ -14,7 +13,7 @@ set(MACHNET_SHIM_SOURCES
 
 if (MACHNET_SHIM_EXPORT_STATIC)
     # if static
-
+    # add_library(${MACHNET_SHIM_LIB_NAME} STATIC ${MACHNET_SHIM_SOURCES})
 else() 
     # dynamic
     add_library(${MACHNET_SHIM_LIB_NAME} SHARED ${MACHNET_SHIM_SOURCES})
@@ -32,7 +31,8 @@ target_link_libraries (${MACHNET_SHIM_LIB_NAME} uuid)
 # # Add ws2_32.lib for winsock APIs
 if (WIN32)
     # find_library(ws2_32_LIBRARY_PATH ws2_32)
-    target_link_libraries(${MACHNET_SHIM_LIB_NAME} msvcrt)
+    # target_link_libraries(${MACHNET_SHIM_LIB_NAME} msvcrt)
+    # target_link_libraries(${MACHNET_SHIM_LIB_NAME} msvcrtd)
     target_link_libraries(${MACHNET_SHIM_LIB_NAME} ws2_32)
     # target_link_libraries(${MACHNET_SHIM_LIB_NAME} mswsock)
     target_link_libraries(${MACHNET_SHIM_LIB_NAME} rpcrt4)

@@ -18,6 +18,9 @@
 #include <memory>
 #include <functional>
 
+// adding iostream for debugging
+#include <iostream>
+
 #define ASIO_STANDLONE
 #include <asio.hpp>
 #if defined(ASIO_HAS_LOCAL_SOCKETS)
@@ -31,13 +34,16 @@ UDSocket::UDSocket(stream_protocol::socket socket, on_connect_cb_t on_connect,
     : socket_(std::move(socket)), 
     on_connect_(on_connect),
     on_close_(on_close),
-    on_message_(on_message) {}
+    on_message_(on_message) {
+        std::cout << "inside UDSocket constructor" << std::endl;
+    }
 
 UDSocket::~UDSocket() {
     on_close_(this);
 }
 
 void UDSocket::start() {
+    std::cout << "inside UDSocket::start() and firing on_connect_ cb" << std::endl;
     on_connect_(this);
     do_read();
 }
@@ -56,6 +62,7 @@ bool UDSocket::AllocateUserData(size_t size) {
 }
 
 void UDSocket::do_read() {
+    std::cout << "inside UDSocket::do_read() " << std::endl;
     auto self(shared_from_this());
     asio::async_read(socket_, 
         asio::buffer(reinterpret_cast<char *>(&req), sizeof(req)),
@@ -63,6 +70,9 @@ void UDSocket::do_read() {
             if (!ec) {
                 on_message_(self.get(), reinterpret_cast<char *>(&req),
                     bytes_transferred, 0);
+            }
+            else {
+                std::cout << "error: " << ec.message() << std::endl;
             }
         }
     );
@@ -100,14 +110,21 @@ UDServer::UDServer(asio::io_context &io_context, const std::string &path,
         on_close_(CHECK_NOTNULL(on_close)),
         on_message_(CHECK_NOTNULL(on_message)),
         on_timeout_(CHECK_NOTNULL(on_timeout)) {
+
+    std::cout << "inside UDServer constructor" << std::endl;
+    LOG(INFO) << "UDServer constructor is called";
     do_accept();
 }
 
 void UDServer::do_accept() {
+    std::cout << "inside UDServer do_accept" << std::endl;
     acceptor_.async_accept(
         [this](std::error_code ec, stream_protocol::socket socket) {
             if (!ec) {
                 std::make_shared<UDSocket>(std::move(socket), on_connect_, on_message_, on_close_) -> start();
+            }
+            else {
+                std::cout << "UDServer::do_accept() error: " << ec.message() << std::endl;
             }
 
             do_accept();
