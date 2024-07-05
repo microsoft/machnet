@@ -29,13 +29,12 @@ x86_list = [for dpdk_platform in ["x86-64-v2", "x86-64-v3", "x86-64-v4"] : {
     cflags = "-march=${dpdk_platform}",
     label = "${dpdk_platform}",
 }]
-// configs = setunion(arm_list, x86_list)
-// configs = x86_list
-configs = arm_list
+
+configs = setunion(arm_list, x86_list)
 
 target "machnet-amazon-linux" {
     name = "machnet-amazon-linux-${item.label}"
-    dockerfile = "amazon-linux-2023.dockerfile"
+    dockerfile = "dockerfiles/amazon-linux-2023.dockerfile"
     platforms = ["${item.platform}"]
     tags = [
         "ghcr.io/microsoft/machnet/machnet:${item.label}", "ghcr.io/microsoft/machnet/machnet:amazon-linux-${item.label}",
@@ -55,7 +54,7 @@ target "machnet-amazon-linux" {
 
 target "machnet-ubuntu" {
     name = "machnet-ubuntu-${item.label}"
-    dockerfile = "Dockerfile"
+    dockerfile = "dockerfiles/ubuntu-22.04.dockerfile"
     tags = [
         "ghcr.io/microsoft/machnet/machnet:${item.label}", "ghcr.io/microsoft/machnet/machnet:ubuntu-${item.label}", "ghcr.io/microsoft/machnet/machnet:ubuntu-22.04-${item.label}"
     ]
