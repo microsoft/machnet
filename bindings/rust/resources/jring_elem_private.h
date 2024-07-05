@@ -269,7 +269,7 @@ static inline __attribute__((always_inline)) void __jring_wait_until_equal_32(
     volatile uint32_t *addr, uint32_t expected, int memorder) {
   // assert(memorder == __ATOMIC_ACQUIRE || memorder == __ATOMIC_RELAXED);
 
-  while (__atomic_load_n(addr, memorder) != expected) __asm__("pause;");
+  while (__atomic_load_n(addr, memorder) != expected) machnet_pause();
 }
 
 static inline __attribute__((always_inline)) void __jring_update_tail(

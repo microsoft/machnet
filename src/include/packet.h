@@ -7,7 +7,6 @@
 #include <ipv4.h>
 #include <rte_mbuf.h>
 #include <utils.h>
-#include <x86intrin.h>
 
 #include <cstdint>
 

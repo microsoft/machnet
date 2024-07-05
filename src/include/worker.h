@@ -8,6 +8,7 @@
 #include <common.h>
 #include <glog/logging.h>
 #include <packet_pool.h>
+#include <pause.h>
 #include <rte_lcore.h>
 #include <ttime.h>
 
@@ -137,7 +138,7 @@ class Worker {
 
     LOG(INFO) << "Worker [" << static_cast<uint32_t>(id_) << "] stopped..";
     do {
-      __asm__("pause;");
+      machnet_pause();
       now_ = juggler::time::rdtsc();
     } while (isStopped());
   }
@@ -259,14 +260,14 @@ class WorkerPool {
   }
   void Pause() {
     for (auto &worker : workers_)
-      while (!worker.get()->stop()) __asm__("pause;");
+      while (!worker.get()->stop()) machnet_pause();
   }
 
   void Terminate() {
     for (auto &worker : workers_) {
       while (!worker->isStopped()) {
         worker->stop();
-        __asm__("pause;");
+        machnet_pause();
       }
       worker->quit();
     }

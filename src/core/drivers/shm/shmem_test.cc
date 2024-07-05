@@ -5,6 +5,7 @@
  */
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
+#include <pause.h>
 #include <shmem.h>
 #include <unistd.h>
 
@@ -60,7 +61,7 @@ TEST(BasicShmTest, BasicShmTest2) {
     // before parent the flag will be "false".
     do {
       // Parent is working on the shared memory region.
-      __asm__("pause;");
+      machnet_pause();
     } while (flag->load(std::memory_order_acquire) == false);
 
     // Check the sequence written by the parent process.
