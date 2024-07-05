@@ -41,13 +41,13 @@ The `examples` directory contains detailed scripts/instructions to launch VMs fo
 
 ## 2. Get the Docker image 
 
-The docker image will contain both Machnet, and DPDK's dpdk-testpmd. 
-dpdk-testpmd can be thought of as a cli version of DPDK, albeit a limited
-one, and allows for more extensive troubleshooting than machnet provides. 
 
-## 2.1. With a pre-built Machnet
+## 2.1. Option 1: With a pre-built Machnet
 
-To use a pre-built image pull, it from Github container registry. 
+The pre-built images include support for common NIC models (e.g., public cloud
+vNICs, ConnectX, Intel 10/100 GbE).
+
+To use a pre-built image, pull it from Github container registry. 
 Pulling from GHCR requires an auth token:
 
  1. Generate a Github personal access token for yourself (https://github.com/settings/tokens) with the read:packages scope. and store it in the `GITHUB_PAT` environment variable.
@@ -66,13 +66,7 @@ echo ${GITHUB_PAT} | docker login ghcr.io -u <github_username> --password-stdin
 docker pull ghcr.io/microsoft/machnet/machnet:latest
 ```
 
-The pre-built images have Marvell Octeon CN9K, Octeon CN10K, Octeon TX 1 and 
-Octeon TX 2, as well as NXP QorIQ DPAA disabled by default, due to their 
-large impact on final container size. Additionally, Intel FPGA support has been 
-disabled for the same reason. Please build the container yourself using docker 
-directly (2.2.2) if you need to support any of these devices. 
-
-## 2.2. Build the container yourself
+## 2.2. Option 2: Build the container yourself
 
 ## 2.2.1. Using the bake file
 
@@ -80,24 +74,18 @@ The provided makefile allows building x86 and arm64 docker images across a
 variety of microarchitecture capability levels (x86) or SOC targets (arm64). 
 Invoking "make" will create them for the architecture of the host. 
 
-You may also use the following to build particular targets, for instance if
-you are only interested in Ubuntu for x86-64-v4 CPUs. 
+To build a Machnet image for a specific architecture, e.g, x86-64-v4
 
 ```bash
-$ docker buildx bake -f docker-bake $TARGETS
+$ docker buildx bake -f docker-bake x86-64-v4
 ```
-
-Since we make use of microarchitectual optimizations, we cannot build 
-multi-arch images in a way that generally makes sense, so bundling multiple 
-images into a manifest for deployment is left as an exercise to the user.
 
 ## 2.2.2. Using docker directly
 
-Using docker directly, you can override the defaults given by the bake file,
-allowing you to produce a container optimized for your organization. It is
-advisable to examine the inputs given to a target by the bakefile and use
-those as a starting point, and to also read the dockerfile, since that will
-contain additional comments on customization. 
+Using docker directly, you can override the defaults given by the bake file.
+Please go over the inputs given to a target by the bakefile and use those as a
+starting point; the dockerfiles also contain additional comments on
+customization. 
 
 ## 3. Start the Machnet process on both VMs
 
@@ -172,7 +160,6 @@ cd machnet
 rm -rf build; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=Release ..; make -j
 MSG_GEN="~/machnet/build/src/apps/msg_gen/msg_gen"
 ```
-
 
 
 ## Machnet API
