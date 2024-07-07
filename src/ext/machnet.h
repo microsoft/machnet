@@ -8,9 +8,9 @@
 #ifndef SRC_EXT_MACHNET_H_
 #define SRC_EXT_MACHNET_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -189,8 +189,8 @@ MACHNET_SHIM_EXPORT ssize_t machnet_recv(const void *channel_ctx, void *buf, siz
  */
 MACHNET_SHIM_EXPORT int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr);
 
-#ifdef __cplusplus
-}
-#endif
+// #ifdef __cplusplus
+// }
+// #endif
 
 #endif  // SRC_EXT_MACHNET_H_

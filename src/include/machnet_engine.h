@@ -418,7 +418,7 @@ class MachnetEngine {
    * @param now The current TSC.
    */
   void Run(uint64_t now) {
-    std::cout << "MachnetEngine Run(now) fired with: " << now << std::endl;
+    // std::cout << "MachnetEngine Run(now) fired with: " << now << std::endl;
     // Calculate the time elapsed since the last periodic processing.
     const auto elapsed = time::cycles_to_us(now - last_periodic_timestamp_);
     if (elapsed >= kSlowTimerIntervalUs) {

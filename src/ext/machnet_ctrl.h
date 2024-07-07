@@ -1,16 +1,18 @@
 #ifndef SRC_EXT_MACHNET_CTRL_H_
 #define SRC_EXT_MACHNET_CTRL_H_
 
-#include "machnet_common.h"
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifdef _WIN32
 #include "windows_uuid.h"
 #else
 #include <uuid/uuid.h>
 #endif
+
+
+#include "machnet_common.h"
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
+
 
 #define MACHNET_CONTROLLER_DEFAULT_PATH "machnet.sock"
 
@@ -78,8 +80,8 @@ typedef struct machnet_ctrl_msg machnet_ctrl_msg_t;
 
 extern uuid_t g_app_uuid;
 
-#ifdef __cplusplus
-}
-#endif
+// #ifdef __cplusplus
+// }
+// #endif
 
 #endif  // SRC_EXT_MACHNET_CTRL_H_

@@ -1,14 +1,17 @@
-cmake_minimum_required(VERSION 3.0)
-project(HelloWorld VERSION 1.0)
+set(target_name hello_world)
+include_directories(../src/ext)
+include_directories(../src/ext/windows)
+link_directories(../build/bin)
+add_executable (${target_name} hello_world.cc)
+# target_include_directories(
+#     ${target_name} 
+#     PUBLIC 
+#     ${CMAKE_SOURCE_DIR}/src/ext
+#     ${CMAKE_SOURCE_DIR}/src/ext/windows
+# )
 
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-
-include_directories(${PROJECT_SOURCE_DIR}/../src/ext)
-include_directories(${PROJECT_SOURCE_DIR}/../src/ext/windows)
-include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/../build/third_party/gflags/include)
-link_directories(${PROJECT_SOURCE_DIR}/../build)
-
-add_executable(hello_world hello_world.cc)
-
-target_link_libraries(hello_world machnet_shim gflags ${LIBDPDK_LIBRARIES})
+if (WIN32)
+    target_link_libraries(${target_name} PUBLIC glog core machnet_shim gflags) # rt breaks the build
+else ()
+    target_link_libraries(${target_name} PUBLIC glog core machnet_shim rt ${LIBDPDK_LIBRARIES})
+endif ()

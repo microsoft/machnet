@@ -26,7 +26,7 @@ target_compile_definitions(
     MACHNET_SHIM_EXPORT_BUILD
 )
 
-target_link_libraries (${MACHNET_SHIM_LIB_NAME} uuid)
+# target_link_libraries (${MACHNET_SHIM_LIB_NAME} uuid)
 
 # # Add ws2_32.lib for winsock APIs
 if (WIN32)

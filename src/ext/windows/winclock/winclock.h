@@ -32,9 +32,9 @@
 
 #include <pthread_types.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
 
 /* We have POSIX timers.  */
 #ifndef _POSIX_TIMERS
@@ -85,9 +85,9 @@ int clock_nanosleep(clockid_t clock_id, int flags,
                            const struct timespec *request,
                            struct timespec *remain);
 
-#ifdef __cplusplus
-}
-#endif
+// #ifdef __cplusplus
+// }
+// #endif
 
 /** @} */
 

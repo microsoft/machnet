@@ -1,0 +1,83 @@
+Inside HandleNewMessage
+socket sent from udsocket async_read is okay, not NULL
+size of data during read: 154
+inside msg type control request register
+before calling RegisterApplication
+utils uuidtostring op: 623b3582-ee0d-450d-b118-d3e7fd8bd198
+after RegisterApplication, ret: 1
+resp.status, 1 means success, 0 means failure: 0
+before SendMsg check
+inside SendMsg, len: 154
+After ctrl msg size check
+after SendMsg check
+before getting client context:
+inside ud_socket GetUserData
+user_data_ is not NULL
+before uuid_copy in HandleNewMessage:: req register
+HandleNewMessage unparsed req_app_uuid_string: 623b3582-ee0d-450d-b118-d3e7fd8bd198
+after on_message_ cb in socket do_read async_read
+before calling do_read() from SendMsg async_write
+bytes_transferred in async_write: 154
+inside UDSocket::do_read()
+after do_read() in sendmsg async_write
+inside server async_accept: calling socket start()
+inside UDSocket constructor
+inside UDSocket::start() and firing on_connect_ cb
+Inside AllocateUserData
+inside ud_socket GetUserData
+user_data_ is not NULL
+inside UDSocket::do_read()
+inside UDServer do_accept
+inside UDSocket::do_read() async_read lamda
+before on_message_ cb, bytes_transferred: 154
+Inside HandleNewMessage
+socket sent from udsocket async_read is okay, not NULL
+size of data during read: 154
+inside msg type request channel: utils uuidtostring op: cbf19a4e-39d2-42dd-9128-43a47fdd1076
+cbf19a4e-39d2-42dd-9128-43a47fdd1076
+utils uuidtostring op: cbf19a4e-39d2-42dd-9128-43a47fdd1076
+before CreateChannel
+utils uuidtostring op: 623b3582-ee0d-450d-b118-d3e7fd8bd198
+Inside CreateChannel, app_uuid_str: 623b3582-ee0d-450d-b118-d3e7fd8bd198
+before checking registered application:
+utils uuidtostring op: cbf19a4e-39d2-42dd-9128-43a47fdd1076
+Inside CreateChannel, channel_uuid_str: cbf19a4e-39d2-42dd-9128-43a47fdd1076
+before checking channel is registered:
+before calling channel_manager_.AddChannel():
+Inside ChannelManager::AddChannel() | channel name: cbf19a4e-39d2-42dd-9128-43a47fdd1076
+Before __machnet_channel_create from ChannelManager::AddChannel()
+inside __machnet_channel_create, checking assertions
+after asstertions, nothing is NULL
+Before calling __machnet_channel_dataplane_calculate_size
+inside __machnet_channel_dataplane_calculate_size
+before checking if params are power of 2
+after checking if params are power of 2
+total_buffer_size: 2048
+Given buffer_size: 1418
+before returning total_size: 8426048
+After __machnet_channel_dataplane_calculate_size, channel_mem_size: 000000013F8FDEB8
+Before calling __machnet_channel_hugetlbfs_create
+__machnet_channel_hugetlbfs_create fired
+checking channel_name and shm_fd assertions
+inside windows block in __machnet_channel_hugetlbfs_create
+before creating the shared_memory_objet shm_obj
+after creating the shared_memory_objet shm_obj
+before setting size of the shared_memory_objet shm_obj
+After setting size: 8426048
+before mapping shm segment into address space of process
+After getting the mapped_region address into MachnetChannelCtx_t *channel
+channel is not NULL from mapped_region get_address()
+After calling __machnet_channel_hugetlbfs_create
+MachnetChannelCtx_t *channel is not NULL, going to out
+inside out block in __machnet_channel_create
+before __machnet_channel_dataplane_init
+inside __machnet_channel_dataplane_init
+inside __machnet_channel_dataplane_calculate_size
+before checking if params are power of 2
+after checking if params are power of 2
+total_buffer_size: 2048
+Given buffer_size: 1418
+before returning total_size: 8426048
+new calc size: 8426048
+given size: 8426048
+before creating memory layout __machnet_channel_dataplane_init

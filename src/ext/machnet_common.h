@@ -1,9 +1,9 @@
 #ifndef SRC_EXT_MACHNET_COMMON_H_
 #define SRC_EXT_MACHNET_COMMON_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
 
 /**
  * A MachnetChannelHeader is always constructed at the beginning (offset 0), of
@@ -784,8 +784,8 @@ __machnet_channel_machnet_ring_dequeue(const MachnetChannelCtx_t *ctx,
   return jring_sc_dequeue_burst(machnet_ring, bufs, n, NULL);
 }
 
-#ifdef __cplusplus
-}
-#endif
+// #ifdef __cplusplus
+// }
+// #endif
 
 #endif  // SRC_EXT_MACHNET_COMMON_H_

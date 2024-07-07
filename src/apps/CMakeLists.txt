@@ -2,6 +2,7 @@ include_directories(../modules)
 
 # add_subdirectory(pktgen)
 add_subdirectory(machnet)
+add_subdirectory(hello_world)
 # add_subdirectory(msg_gen)
 # add_subdirectory(ping)
 # add_subdirectory(rocksdb_server)

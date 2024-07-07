@@ -129,6 +129,12 @@ bool MachnetController::HandleNewConnection(UDSocket *s) {
 
 void MachnetController::HandleNewMessage(UDSocket *s, const char *data,
                                          size_t length) {
+  
+  std::cout << "Inside HandleNewMessage" << std::endl;
+  if(s == NULL) std::cout << "socket sent from udsocket async_read is NULL" << std::endl;
+  else std::cout << "socket sent from udsocket async_read is okay, not NULL" << std::endl;
+  std::cout << "size of data during read: " << length << std::endl;
+
   CHECK_NOTNULL(s);
   if (length != sizeof(machnet_ctrl_msg_t)) {
     LOG(ERROR) << "Invalid message length";
@@ -138,19 +144,33 @@ void MachnetController::HandleNewMessage(UDSocket *s, const char *data,
   auto *req = reinterpret_cast<const machnet_ctrl_msg_t *>(data);
   switch (req->type) {
     case MACHNET_CTRL_MSG_TYPE_REQ_REGISTER: {
+      std::cout << "inside msg type control request register" << std::endl;
       machnet_ctrl_msg_t resp;
       resp.type = MACHNET_CTRL_MSG_TYPE_RESPONSE;
       resp.msg_id = req->msg_id;
 
+      std::cout << "before calling RegisterApplication" << std::endl;
       auto ret = RegisterApplication(req->app_uuid, &req->app_info);
+      std::cout << "after RegisterApplication, ret: " << ret << std::endl;
+
       resp.status =
           ret ? MACHNET_CTRL_STATUS_SUCCESS : MACHNET_CTRL_STATUS_FAILURE;
+      
+      std::cout << "resp.status, 1 means success, 0 means failure: " << resp.status << std::endl;
+      std::cout << "before SendMsg check" << std::endl;
       CHECK(s->SendMsg(reinterpret_cast<char *>(&resp), sizeof(resp)));
+      std::cout << "after SendMsg check" << std::endl;
 
+      std::cout << "before getting client context: " << std::endl;
       // Get client context.
       auto *client_context =
           reinterpret_cast<MachnetClientContext *>(s->GetUserData());
       client_context->registered = true;
+
+      std::cout << "before uuid_copy in HandleNewMessage:: req register" << std::endl;
+      char req_app_uuid_str[37];
+      uuid_unparse(req -> app_uuid, req_app_uuid_str);
+      std::cout << "HandleNewMessage unparsed req_app_uuid_string: " << req_app_uuid_str << std::endl;
 
       #ifdef _WIN32
         uuid_copy(client_context->uuid, req->app_uuid);
@@ -159,19 +179,25 @@ void MachnetController::HandleNewMessage(UDSocket *s, const char *data,
       #endif
     } break;
     case MACHNET_CTRL_MSG_TYPE_REQ_CHANNEL: {
+      std::cout << "inside msg type request channel: " << juggler::utils::UUIDToString(req->channel_info.channel_uuid) << std::endl;
       LOG(INFO) << "Request to create new channel: "
               << juggler::utils::UUIDToString(req->channel_info.channel_uuid);
 
+      std::cout << "before CreateChannel" << std::endl;
       int channel_fd;
       auto ret = CreateChannel(req->app_uuid, &req->channel_info, &channel_fd);
+      std::cout << "after CreateChannel, ret value: " << ret << std::endl;
 
       machnet_ctrl_msg_t resp;
       resp.type = MACHNET_CTRL_MSG_TYPE_RESPONSE;
       resp.msg_id = req->msg_id;
 
+      std::cout << "before calling SendMsgWithFd" << std::endl;
+      std::cout << "ret value: " << ret << ", channel_fd: " << channel_fd << std::endl;
       if (ret && channel_fd >= 0) {
         resp.status = MACHNET_CTRL_STATUS_SUCCESS;
         LOG(INFO) << "Sending channel fd: " << channel_fd << " to client.";
+        std::cout << "Sending channel fd: " << channel_fd << " to client." << std::endl;
         CHECK(s->SendMsgWithFd(reinterpret_cast<char *>(&resp), sizeof(resp),
                                channel_fd));
       } else {
@@ -254,22 +280,30 @@ bool MachnetController::CreateChannel(
     const uuid_t app_uuid, const machnet_channel_info_t *channel_info,
     int *fd) {
   const std::string app_uuid_str = juggler::utils::UUIDToString(app_uuid);
+  std::cout << "Inside CreateChannel, app_uuid_str: " << app_uuid_str << std::endl;
 
+  std::cout << "before checking registered application: " << std::endl;
   // Check that this is a registered application.
   if (applications_registered_.find(app_uuid_str) ==
       applications_registered_.end()) {
+    
+    std::cout << "Application not registered: " << app_uuid_str << std::endl;    
     LOG(ERROR) << "Application not registered: " << app_uuid_str;
     return false;
   }
 
   const std::string channel_uuid_str = juggler::utils::UUIDToString(channel_info->channel_uuid);
+  std::cout << "Inside CreateChannel, channel_uuid_str: " << channel_uuid_str << std::endl;
   
+  std::cout << "before checking channel is registered: " << std::endl;
   auto &app_channels = applications_registered_[app_uuid_str];
   if (app_channels.find(channel_uuid_str) != app_channels.end()) {
+    std::cout << "Channel already registered: " << channel_uuid_str << std::endl;
     LOG(ERROR) << "Channel already registered: " << channel_uuid_str;
     return false;
   }
 
+  std::cout << "before calling channel_manager_.AddChannel(): " << std::endl;
   // TODO(ilias): Figure out a way to dynamically infer the buffer size to be
   // used.
   const auto channel_buffer_size =
@@ -282,9 +316,13 @@ bool MachnetController::CreateChannel(
     return false;
   }
 
+  std::cout << "after channel_manager_.AddChannel(): " << std::endl;
+
   // Add the channel to the list of channels for this application.
   app_channels.insert(channel_uuid_str);
 
+
+  std::cout << "passing promise to machnet engine: " << std::endl;
   // Pass a promise to the Machnet engine and wait for the channel to be
   // activated.
   std::promise<bool> p;
@@ -293,30 +331,48 @@ bool MachnetController::CreateChannel(
       utils::hash<size_t>(channel_uuid_str.c_str(), channel_uuid_str.size()) %
       engines_.size();
   const auto &engine = engines_[engine_index];
+
+  std::cout << "before calling engine->AddChannel: " << std::endl;
   engine->AddChannel(
       CHECK_NOTNULL(channel_manager_.GetChannel(channel_uuid_str.c_str())),
       std::move(p));
+  std::cout << "After calling engine->AddChannel: " << std::endl;
 
+  std::cout << "before checking promise status " << std::endl;
   // TODO(ilias): Add a timeout here.
   auto status = fstatus.get();
 
   if (status != true) {
+    std::cout << "promise status: Failed to create channel. Returning from CreateChannel()" << std::endl;
     LOG(ERROR) << "Failed to create channel.";
     *fd = -1;
     return false;
   }
 
+  std::cout << "after checking promise status " << std::endl;
+
+
+  std::cout << "before registering channel buffer memory with NIC DPDK Driver " << std::endl;
+
   if (kShmZeroCopyEnabled) {
+    std::cout << "Registering channel buffer memory with NIC DPDK driver." << std::endl;
     LOG(INFO) << "Registering channel buffer memory with NIC DPDK driver.";
+    
+    std::cout << "before calling RegisterMemForDMA" << std::endl;
     // Register channel buffer memory with NIC DPDK driver.
     auto device = engine->GetPmdPort()->GetDevice();
     CHECK(channel_manager_.GetChannel(channel_uuid_str.c_str())
               ->RegisterMemForDMA(device));
+    std::cout << "after calling RegisterMemForDMA" << std::endl;
   } else {
+    std::cout << "Not registering channel buffer memory with NIC DPDK driver." << std::endl;
     LOG(INFO) << "Not registering channel buffer memory with NIC DPDK driver.";
   }
 
+  std::cout << "after registering channel buffer memory with NIC DPDK Driver " << std::endl;
+
   *fd = channel_manager_.GetChannel(channel_uuid_str.c_str())->GetFd();
+  std::cout << "fd value in CreateChannel: " << *fd << std::endl;
   return status;
 }
 

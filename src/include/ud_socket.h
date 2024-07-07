@@ -42,6 +42,9 @@ public:
     bool AllocateUserData(size_t size);
     template <typename Q = void *>
     Q GetUserData() const {
+        printf("inside ud_socket GetUserData\n");
+        if(user_data_ == NULL) printf("user_data_ is NULL\n");
+        else printf("user_data_ is not NULL\n");
         return reinterpret_cast<Q>(user_data_);
     }
     

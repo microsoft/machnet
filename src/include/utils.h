@@ -14,6 +14,7 @@
 #endif
 #endif
 
+#include "windows_uuid.h"
 #include <glog/logging.h>
 #include <sched.h>
 #include <sys/stat.h>
@@ -36,13 +37,15 @@
 
 #ifdef _WIN32
 #include "utils_helper.h"
-#include "windows_uuid.h"
+
 #include <array>
 #include <algorithm>
 #endif
 
 namespace juggler {
 namespace utils {
+
+
 
 // Placeholder in case we want to experiment with memory copy more.
 [[maybe_unused]] static inline void Copy(void *__restrict__ dest,
@@ -206,6 +209,7 @@ namespace utils {
       const uuid_t uuid) {
     char uuid_str[37] = {};
     uuid_unparse(uuid, uuid_str);
+    printf("utils uuidtostring op: %s\n", uuid_str);
     return std::string(uuid_str);
   }
 

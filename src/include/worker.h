@@ -105,7 +105,7 @@ class Worker {
 
   bool start() {
     bool is_running = isRunning();
-    std::cout << "worker isRunning? " << is_running << std::endl;
+    // std::cout << "worker isRunning? " << is_running << std::endl;
 
     if (isRunning()) return true;
     auto expected = WORKER_STOPPED;
@@ -124,12 +124,12 @@ class Worker {
   }
 
   bool shouldStop() const {
-    std::cout << "inside shouldStop state_.load value: " << state_.load(std::memory_order_relaxed) << std::endl;
+    // std::cout << "inside shouldStop state_.load value: " << state_.load(std::memory_order_relaxed) << std::endl;
     return state_.load(std::memory_order_relaxed) == WORKER_STOPPING;
   }
 
   bool shouldQuit() const {
-    std::cout << "inside shouldQuit state_.load value: " << state_.load(std::memory_order_relaxed) << std::endl;
+    // std::cout << "inside shouldQuit state_.load value: " << state_.load(std::memory_order_relaxed) << std::endl;
     return state_.load(std::memory_order_relaxed) == WORKER_FINISHED;
   }
 
@@ -139,17 +139,17 @@ class Worker {
   friend class WorkerPool<T>;
 
   void idle() {
-    std::cout << "inside worker::idle()" << std::endl;
+    // std::cout << "inside worker::idle()" << std::endl;
     auto expected = WORKER_STOPPING;
     auto desired = WORKER_STOPPED;
     if (!std::atomic_compare_exchange_strong(&state_, &expected, desired)) {
-      std::cout << "failed to stop in idle()" << std::endl;
+      // std::cout << "failed to stop in idle()" << std::endl;
       return;  // Failed to stop. 'quit()' requested in the meantime?
     }
       
 
     LOG(INFO) << "Worker [" << static_cast<uint32_t>(id_) << "] stopped..";
-    std::cout << "Worker [" << static_cast<uint32_t>(id_) << "] stopped.." << std::endl;
+    // std::cout << "Worker [" << static_cast<uint32_t>(id_) << "] stopped.." << std::endl;
     do {
       __asm__("pause;");
       now_ = juggler::time::rdtsc();
@@ -157,7 +157,7 @@ class Worker {
   }
 
   void loop() {
-    std::cout << "inside worker::loop()" << std::endl;
+    // std::cout << "inside worker::loop()" << std::endl;
     // Set worker's affinity.
     // Get this thread's native handle.
     pthread_setaffinity_np(pthread_self(), sizeof(cpuset_p_), &cpuset_p_);
@@ -170,38 +170,38 @@ class Worker {
               << utils::cpuset_to_sizet(cpuset_p_) << std::dec
               << ") starting..";
 
-    std::cout << "Worker [" << static_cast<uint32_t>(id_)
-              << "] (cpu_mask: " << std::hex
-              << utils::cpuset_to_sizet(cpuset_p_) << std::dec
-              << ") starting.."
-              << std::endl;
+    // std::cout << "Worker [" << static_cast<uint32_t>(id_)
+              // << "] (cpu_mask: " << std::hex
+              // << utils::cpuset_to_sizet(cpuset_p_) << std::dec
+              // << ") starting.."
+              // << std::endl;
 
 
-    std::cout << "getting starting timestamp" << std::endl;
+    // std::cout << "getting starting timestamp" << std::endl;
     // Get the starting timestamp.
     start_time_ = juggler::time::rdtsc();
 
-    std::cout << "starting timestamp in worker::loop(): " << start_time_ << std::endl;
+    // std::cout << "starting timestamp in worker::loop(): " << start_time_ << std::endl;
 
     cycles_ = 0;
     accounting_cycles_ = 0;
     do {
-      std::cout << "inside do while in worker::loop()" << std::endl;
+      // std::cout << "inside do while in worker::loop()" << std::endl;
       now_ = juggler::time::rdtsc();
 
       int tmp_ = cycles_ & kAccountingMask_;
-      std::cout << "loop breaking condition value: " << tmp_ << std::endl;
+      // std::cout << "loop breaking condition value: " << tmp_ << std::endl;
       if ((cycles_ & kAccountingMask_) == 0) {
         // We do accounting/reporting in this round.
         ++accounting_cycles_;
         if (shouldStop()) idle();
         if (shouldQuit()) {
-          std::cout << "breaking out of do while in worker::loop()" << std::endl;
+          // std::cout << "breaking out of do while in worker::loop()" << std::endl;
           break;
         }
       }
 
-      std::cout << "calling engine_ ->Run from worker::loop()" << std::endl;
+      // std::cout << "calling engine_ ->Run from worker::loop()" << std::endl;
       engine_->Run(now_);
       cycles_++;
     } while (true);
@@ -211,9 +211,9 @@ class Worker {
               << "] terminating.. [Total cycles: " << cycles_
               << " , Accounting Cycles: " << accounting_cycles_ << "]";
 
-    std::cout << "Worker [" << static_cast<uint32_t>(id_)
-              << "] terminating.. [Total cycles: " << cycles_
-              << " , Accounting Cycles: " << accounting_cycles_ << "]" << std::endl;
+    // std::cout << "Worker [" << static_cast<uint32_t>(id_)
+              // << "] terminating.. [Total cycles: " << cycles_
+              // << " , Accounting Cycles: " << accounting_cycles_ << "]" << std::endl;
   }
 
  private:
@@ -278,7 +278,7 @@ class WorkerPool {
   }
 
   void Init() {
-    std::cout << "inside worker pool Init()" << std::endl;
+    // std::cout << "inside worker pool Init()" << std::endl;
     for (uint8_t i = 0; i < workers_nr_; i++) {
       workers_.emplace_back(
           std::make_unique<Worker<T>>(i, tasks_[i], cpuset_p_[i]));
@@ -286,9 +286,9 @@ class WorkerPool {
       worker_threads_.emplace_back(std::thread(&Worker<T>::loop, &*worker));
     }
 
-    std::cout << "workers size: " << workers_.size() << std::endl;
-    std::cout << "worker_threads_ size: " << worker_threads_.size() << std::endl;
-    std::cout << "exiting worker pool Init()" << std::endl;
+    // std::cout << "workers size: " << workers_.size() << std::endl;
+    // std::cout << "worker_threads_ size: " << worker_threads_.size() << std::endl;
+    // std::cout << "exiting worker pool Init()" << std::endl;
   }
 
   void LaunchWorker(uint8_t wid) {
@@ -297,14 +297,14 @@ class WorkerPool {
   }
 
   void Launch() {
-    std::cout << "inside worker pool Launch()" << std::endl;
+    // std::cout << "inside worker pool Launch()" << std::endl;
     for (auto &worker_thread : worker_threads_) {
-      std::cout << "detached worker_thread" << std::endl;
+      // std::cout << "detached worker_thread" << std::endl;
       worker_thread.detach();
     }
 
     for (auto &worker : workers_) {
-      std::cout << "calling worker.get() -> start() inside the loop" << std::endl;
+      // std::cout << "calling worker.get() -> start() inside the loop" << std::endl;
       worker.get()->start();
     }
   }

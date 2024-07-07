@@ -9,11 +9,16 @@
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 
+#include <boost/uuid/uuid.hpp>            
+#include <boost/uuid/uuid_generators.hpp> 
+#include <boost/uuid/uuid_io.hpp>
+
+#include "machnet_ctrl.h"
 #include "machnet.h"
 #include <errno.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include "machnet_ctrl.h"
+
 
 #ifdef __linux__
 #include <arpa/inet.h>
@@ -24,15 +29,17 @@
 #include <unistd.h>
 
 #else // #ifdef __linux__
-#include <stdio.h>
 #include <iostream>
+#include <stdio.h>
 #include <filesystem>
+
 #endif // #ifdef __linux__
 
-#define ASIO_STANDALONE
+// #define ASIO_STANDALONE
 #include <asio.hpp>
 #if defined(ASIO_HAS_LOCAL_SOCKETS)
 using asio::local::stream_protocol;
+using uuid_t = boost::uuids::uuid;
 
 #define MIN(a, b)           \
   ({                        \
@@ -48,7 +55,8 @@ asio::io_context g_io_context;
 stream_protocol::socket g_socket(g_io_context);
 
 // Application UUID.
-uuid_t g_app_uuid;
+boost::uuids::nil_generator nil_gen;
+uuid_t g_app_uuid = nil_gen();
 char g_app_uuid_str[37];
 
 // Monotonically increasing counter for generating unique IDs.
@@ -148,36 +156,57 @@ static int _machnet_ctrl_request(machnet_ctrl_msg_t *req,
 
   #else // #ifdef __linux__
     // Windows
+    std::cout << "inside _machnet_ctrl_request" << std::endl;
+
     asio::io_context io_context_;
-    stream_protocol::endpoint endpoint_(MACHNET_CONTROLLER_DEFAULT_PATH);
+    // stream_protocol::endpoint endpoint_(MACHNET_CONTROLLER_DEFAULT_PATH);
     // asio::local::stream_protocol::acceptor acceptor(io_context_, endpoint_, false/*reuse addr*/); // acceptor listens for new connection at endpoint
     stream_protocol::socket socket(io_context_);
 
+    std::cout << "before connection ctrl req socket to main socket" << std::endl;
     asio::error_code ec;
-    socket.connect(endpoint_, ec);
+    socket.connect(MACHNET_CONTROLLER_DEFAULT_PATH, ec);
 
     if (ec) {
+        std::cout << "Failed to connect() to the Machnet Controller: " << asio::system_error(ec).what() << std::endl;
         std::cerr << "ERROR: Failed to connect() to the Machnet controller at " << MACHNET_CONTROLLER_DEFAULT_PATH << std::endl;
         std::cerr << asio::system_error(ec).what() << std::endl;
         return -1;
     }
 
+    std::cout << "after connection ctrl req socket to main socket" << std::endl;
+    std::cout << "before sending buffer to controller" << std::endl;
+
     asio::const_buffer send_buffer(req, sizeof(*req));
     size_t bytes_sent = asio::write(socket, send_buffer, ec);
     if (ec || bytes_sent != sizeof(*req)) {
+        std::cout << "ERROR: Failed to send register message to controller." << std::endl;
         std::cerr << "ERROR: Failed to send register message to controller." << std::endl;
-        if(ec) std::cerr << asio::system_error(ec).what() << std::endl;
+        // if(ec) std::cerr << asio::system_error(ec).what() << std::endl;
+        if(ec) std::cout << "ec from sending: " << asio::system_error(ec).what() << std::endl;
+        if(ec) std::cout << "ec value: " << ec.value() << std::endl;
         return -1;
     }
+
+    std::cout << "after sending buffer, bytes_sent: " << bytes_sent << std::endl;
+
+    std::cout << "before receiving buffer" << std::endl;
 
     // Receive response
     asio::mutable_buffer recv_buffer(resp, sizeof(*resp));
     size_t bytes_received = asio::read(socket, recv_buffer, ec);
     if (ec || bytes_received != sizeof(*resp)) {
-        std::cerr << "Got invalid response from controller." << std::endl;
-        if(ec) std::cerr << asio::system_error(ec).what() << std::endl;
+        std::cout << "Got invalid response from controller." << std::endl;
+        // std::cerr << "Got invalid response from controller." << std::endl;
+        // if(ec) std::cerr << asio::system_error(ec).what() << std::endl;
+        if(ec) std::cout << "ec from receiving: " << asio::system_error(ec).what() << std::endl;
+        if(ec) std::cout << "ec value: " << ec.value() << std::endl;
+        std::cout << "bytes received: " << bytes_received << std::endl;
+        std::cout << "sizeof resp: " << sizeof(*resp) << std::endl;
         return -1;
     }
+
+    std::cout << "after receiving buffer, bytes_received: " << bytes_received << std::endl;
 
     // [TODO rushrukh]
     // file descriptor check after shm implementation
@@ -385,64 +414,99 @@ int machnet_init() {
 
   #else // #ifdef __linux__
     // WIN32
-    uuid_t zero_uuid;
-    uuid_clear(zero_uuid);
+    std::cout << "inside machnet_init()" << std::endl;
+    
+    // uuid_t zero_uuid;
+    // uuid_clear(zero_uuid);
 
-    if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
+    std::cout << "comparing zero_uuid and g_app_uuid" << std::endl;
+    // if (uuid_compare(zero_uuid, g_app_uuid) != 0) {
+    //     std::cout << "comparing zero_uuid and g_app_uuid returned non zero value: returning" << std::endl;
+    //     // Already initialized
+    //     return 0;
+    // }
+    if (g_app_uuid.is_nil() == false) {
+        std::cout << "g_app_uuid already initialized: returning" << std::endl;
         // Already initialized
         return 0;
     }
 
+    std::cout << "Generating random UUID for this application" << std::endl;
     // Generate a random UUID for this application
     uuid_generate(g_app_uuid);
     uuid_unparse(g_app_uuid, g_app_uuid_str);
+    std::cout << "g_app_uuid_str: " << g_app_uuid_str << std::endl;
 
     // Initialize the AF_UNIX socket to the controller
     
-    std::filesystem::remove(MACHNET_CONTROLLER_DEFAULT_PATH); // ::unlink() the socket file before opening it
+    // std::filesystem::remove(MACHNET_CONTROLLER_DEFAULT_PATH); // ::unlink() the socket file before opening it
 
     // asio::io_context io_context_;
-    stream_protocol::endpoint endpoint_(MACHNET_CONTROLLER_DEFAULT_PATH);
+    // stream_protocol::endpoint endpoint_(MACHNET_CONTROLLER_DEFAULT_PATH);
     // asio::local::stream_protocol::acceptor acceptor(io_context_, endpoint_, false/*reuse addr*/); // acceptor listens for new connection at endpoint
     // stream_protocol::socket socket(io_context_);
 
+    std::cout << "connection to endpoint_" << std::endl;
+    std::cout << "current working directory: " << std::filesystem::current_path().string() << std::endl;
     asio::error_code ec;
-    g_socket.connect(endpoint_, ec);
+    // g_socket.connect(endpoint_, ec);
+    g_socket.connect(MACHNET_CONTROLLER_DEFAULT_PATH, ec);
 
     if (ec) {
+        std::cout << "ERROR: Failed to connect() to the Machnet controller at " << MACHNET_CONTROLLER_DEFAULT_PATH << std::endl;
+        std::cout << asio::system_error(ec).what() << std::endl;
+        std::cout << ec.value() << std::endl;
         std::cerr << "ERROR: Failed to connect() to the Machnet controller at " << MACHNET_CONTROLLER_DEFAULT_PATH << std::endl;
         std::cerr << asio::system_error(ec).what() << std::endl;
         return -1;
     }
 
+    std::cout << "Send REGISTER message." << std::endl;
     // Send REGISTER message.
     machnet_ctrl_msg_t req = {.type = MACHNET_CTRL_MSG_TYPE_REQ_REGISTER,
                               .msg_id = msg_id_counter++};
     uuid_copy(req.app_uuid, g_app_uuid);
+    char req_app_uuid_str[37];
+    uuid_unparse(req.app_uuid, req_app_uuid_str);
+    std::cout << "machnet init unparsed req_app_uuid_string: " << req_app_uuid_str << std::endl;
     machnet_ctrl_msg_t resp;
 
+    std::cout << "before sending buffer mn_init()" << std::endl;
     asio::const_buffer send_buffer(&req, sizeof(req));
     size_t bytes_sent = asio::write(g_socket, send_buffer, ec);
     if (ec || bytes_sent != sizeof(req)) {
+        std::cout << "ERROR: Failed to send register message to controller." << std::endl;
+        std::cout << asio::system_error(ec).what() << std::endl;
         std::cerr << "ERROR: Failed to send register message to controller." << std::endl;
         std::cerr << asio::system_error(ec).what() << std::endl;
         return -1;
     }
 
+    std::cout << "after sending buffer, bytes_send: " << bytes_sent << std::endl;
+
+    std::cout << "before receiving response in machnet_init()" << std::endl;
     // Receive response
     asio::mutable_buffer recv_buffer(&resp, sizeof(resp));
     size_t bytes_received = asio::read(g_socket, recv_buffer, ec);
     if (ec || bytes_received != sizeof(resp)) {
+        std::cout << "Got invalid response from controller." << std::endl;
+        std::cout << asio::system_error(ec).what() << std::endl;
         std::cerr << "Got invalid response from controller." << std::endl;
         std::cerr << asio::system_error(ec).what() << std::endl;
         return -1;
     }
 
+    std::cout << "after receiving response, bytes_received: " << bytes_received << std::endl;
+
+    std::cout << "before response validation machnet_init()" << std::endl;
     // Validate response
     if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE || resp.msg_id != req.msg_id) {
+        std::cout << "Got invalid response from controller." << std::endl;
         std::cerr << "Got invalid response from controller." << std::endl;
         return -1;
     }
+
+    std::cout << "after response validation machnet_init(): " << resp.status << std::endl;
 
     // It is important that we do not close the socket here. Closing the socket
     // will trigger the controller to de-register the application and release
@@ -505,8 +569,11 @@ fail:
   using namespace boost::interprocess;
   MachnetChannelCtx_t *channel;
 
+  std::cout << "inside machnet_bind()" << std::endl;
+
   if (channel_size != NULL) *channel_size = 0;
 
+  std::cout << "opening already created shared memory object" << std::endl;
   //Open already created shared memory object.
   shared_memory_object shm_object(
     open_only, 
@@ -514,12 +581,15 @@ fail:
     read_write
   );
 
+  std::cout << "Map the shared memory segment into the address space of the process." << std::endl;
   // Map the shared memory segment into the address space of the process.
   mapped_region region(shm_object, read_write);
   channel = (MachnetChannelCtx_t *) region.get_address();
 
+  std::cout << "Get the size of the shared memory segment." << std::endl;
   // Get the size of the shared memory segment.
   *channel_size = region.get_size();
+  std::cout << "shm segment size: " << *channel_size << std::endl;
 
   // Success.
   return channel;
@@ -528,12 +598,20 @@ fail:
 }
 
 void *machnet_attach() {
+  std::cout << "inside machnet_attach" << std::endl;
+
   uuid_t uuid;        // UUID for the shared memory channel.
   char uuid_str[37];  // 36 chars + null terminator for UUID string.
 
+  std::cout << "before generating uuid for shm channel in machnet_attach" << std::endl;
   uuid_generate(uuid);
+  std::cout << "after generating uuid for shm channel in machnet_attach: " << std::endl;
+  std::cout << "before unparsing uuid to uuid_str" << std::endl;
   uuid_unparse(uuid, uuid_str);
+  std::cout << "after unparsing uuid to uuid_str: " << uuid_str << std::endl;
+  
 
+  std::cout << "Before Generating a request to attach to the Machnet control plane." << std::endl;
   // Generate a request to attach to the Machnet control plane.
   machnet_ctrl_msg_t req = {};
   req.type = MACHNET_CTRL_MSG_TYPE_REQ_CHANNEL;
@@ -543,27 +621,42 @@ void *machnet_attach() {
   /* Request the default. */
   req.channel_info.desc_ring_size = MACHNET_CHANNEL_INFO_DESC_RING_SIZE_DEFAULT;
   req.channel_info.buffer_count = MACHNET_CHANNEL_INFO_BUFFER_COUNT_DEFAULT;
+  std::cout << "after Generating a request to attach to the Machnet control plane." << std::endl;
 
   // Send the request to the Machnet control plane.
   int channel_fd;
   machnet_ctrl_msg_t resp;
+
+  std::cout << "before calling _machnet_ctrl_request" << std::endl;
   if (_machnet_ctrl_request(&req, &resp, &channel_fd) != 0) {
+    std::cout << "ERROR: Failed to send request to controller." << std::endl;
     fprintf(stderr, "ERROR: Failed to send request to controller.");
     return NULL;
   }
+  std::cout << "after calling _machnet_ctrl_request" << std::endl;
 
+  std::cout << "before Checking the response from the Machnet control plane." << std::endl;
   // Check the response from the Machnet control plane.
   if (resp.type != MACHNET_CTRL_MSG_TYPE_RESPONSE ||
       resp.msg_id != req.msg_id) {
+    std::cout << "Got invalid response from controller." << std::endl;
     fprintf(stderr, "Got invalid response from controller.\n");
     return NULL;
   }
 
+  std::cout << "checking values in machnet_attach()" << std::endl;
+  std::cout << "after Checking the response from the Machnet control plane." << std::endl;
+  std::cout << "resp.msg_id: " << resp.msg_id << std::endl;
+  std::cout << "req.msg_id: " << req.msg_id << std::endl;
+  std::cout << "channel_fd: " << channel_fd << std::endl;
+
   if (resp.status != MACHNET_CTRL_STATUS_SUCCESS || channel_fd < 0) {
+    std::cout << "resp.status is not success and channel_fd: " << channel_fd << std::endl;
     fprintf(stderr, "Failure %d.\n", channel_fd);
     return NULL;
   }
 
+  std::cout << "before firing machnet_bind()" << std::endl;
   return machnet_bind(channel_fd, NULL, uuid_str);
   // return NULL;
 }
@@ -605,7 +698,7 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
     #ifdef __linux__
       sleep(1);
     #else
-      // std::this_thread::sleep_for(std::chrono::seconds(1));
+      std::this_thread::sleep_for(std::chrono::seconds(1));
     #endif
   } while (max_tries-- > 0);
   if (ret == 0) {
@@ -661,7 +754,7 @@ int machnet_listen(void *channel_ctx, const char *local_ip,
     #ifdef __linux__
       sleep(1);
     #else
-      // std::this_thread::sleep_for(std::chrono::seconds(1));
+      std::this_thread::sleep_for(std::chrono::seconds(1));
     #endif
   } while (max_tries-- > 0);
   if (ret == 0) {

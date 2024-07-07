@@ -6,17 +6,19 @@
 #ifndef SRC_INCLUDE_MACHNET_CONTROLLER_H_
 #define SRC_INCLUDE_MACHNET_CONTROLLER_H_
 
+#ifdef _WIN32
+#include "windows_uuid.h"
+#else
+#include <uuid/uuid.h>
+#endif
+
 #include <channel.h>
 #include <machnet_config.h>
 #include <machnet_ctrl.h>
 #include <machnet_engine.h>
 #include <ud_socket.h>
 
-#ifdef _WIN32
-#include "windows_uuid.h"
-#else
-#include <uuid/uuid.h>
-#endif
+
 
 #include <csignal>
 #include <thread>
@@ -36,6 +38,7 @@ class MachnetController {
   using UDSocket = juggler::net::UDSocket;
   using UDServer = juggler::net::UDServer;
   using ChannelManager = juggler::shm::ChannelManager<juggler::shm::Channel>;
+  
   // Timeout for idle connections in seconds.
   static constexpr uint32_t kConnectionTimeoutInSec = 2;
   MachnetController(const MachnetController &) = delete;

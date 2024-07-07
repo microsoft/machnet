@@ -33,6 +33,9 @@
   // #include <windows.h>
 #endif
 
+// Debugging
+#include <iostream>
+
 namespace juggler {
 class MachnetEngine;  // forward declaration
 }
@@ -546,16 +549,23 @@ class ChannelManager {
   bool AddChannel(const char *name, size_t machnet_ring_slot_nr,
                   size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
                   size_t buffer_size) {
+    
+    std::cout << "Inside ChannelManager::AddChannel() | channel name: " << name << std::endl;
+
     const std::lock_guard<std::mutex> lock(mtx_);
     if (channels_.size() >= kMaxChannelNr) {
+      std::cout << "Too many channels." << std::endl;
       LOG(WARNING) << "Too many channels.";
       return false;
     }
 
     if (channels_.find(name) != channels_.end()) {
+      std::cout << "Channel " << name << " already exists." << std::endl;
       LOG(WARNING) << "Channel " << name << " already exists.";
       return false;
     }
+
+    std::cout << "Before __machnet_channel_create from ChannelManager::AddChannel()" << std::endl;
 
     int channel_fd;
     size_t shm_segment_size;
@@ -563,7 +573,11 @@ class ChannelManager {
     auto *ctx = __machnet_channel_create(
         name, machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr,
         buffer_size, &shm_segment_size, &is_posix_shm, &channel_fd);
+
+    std::cout << "After __machnet_channel_create from ChannelManager::AddChannel()" << std::endl;
+    
     if (ctx == nullptr) {
+      std::cout << "Failed to create channel " << name << " with requested size " << shm_segment_size << ". RETURNING" << std::endl;
       LOG(WARNING) << "Failed to create channel " << name
                    << " with requested size " << shm_segment_size << ".";
       return false;

@@ -160,8 +160,6 @@ else()
 endif()
 
 # set(BUILD_TESTING ON)
-# set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build." FORCE)
 
 add_subdirectory(src)
-
 # add_subdirectory(examples)
