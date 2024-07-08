@@ -549,6 +549,7 @@ int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   gflags::SetUsageMessage("Simple packet generator.");
+  FLAGS_logtostderr = 1;
 
   signal(SIGINT, int_handler);
 

@@ -13,6 +13,7 @@ int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   gflags::SetUsageMessage("Main Machnet daemon.");
+  FLAGS_logtostderr = 1;
 
   juggler::MachnetController *controller =
       CHECK_NOTNULL(juggler::MachnetController::Create(FLAGS_config_json));

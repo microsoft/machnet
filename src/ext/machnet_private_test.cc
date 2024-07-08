@@ -249,6 +249,7 @@ TEST(MachnetBufferPool, Concurrency) {
 int main(int argc, char **argv) {
   ::google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
+  FLAGS_logtostderr = 1;
 
   int ret = RUN_ALL_TESTS();
   return ret;

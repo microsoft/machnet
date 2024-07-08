@@ -140,6 +140,5 @@ else
         -v /var/run/machnet:/var/run/machnet \
         ghcr.io/microsoft/machnet/machnet:latest \
         ${machnet_bin} \
-        --config_json /var/run/machnet/local_config.json \
-        --logtostderr=1
+        --config_json /var/run/machnet/local_config.json
 fi

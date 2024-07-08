@@ -440,6 +440,7 @@ TEST(MachnetTest, InvalidSendRecv) {
 int main(int argc, char **argv) {
   ::google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
+  FLAGS_logtostderr = 1;
 
   // Create and initialize the channel.
   size_t channel_size;

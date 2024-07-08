@@ -510,6 +510,7 @@ TEST_F(FlowTest, RXQueue_Push_OutOfOrder2) {
 int main(int argc, char **argv) {
   ::google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
+  FLAGS_logtostderr = 1;
 
   // Initialize DPDK
   auto kEalOpts = juggler::utils::CmdLineOpts(
