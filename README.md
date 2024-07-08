@@ -56,7 +56,7 @@ Pulling from GHCR requires an auth token:
 ```bash
 # Install packages required to try out Machnet
 sudo apt-get update
-sudo apt-get install -y docker.io net-tools driverctl libgflags-dev uuid-dev
+sudo apt-get install -y docker.io net-tools driverctl uuid-dev
 
 # Reboot like below to allow non-root users to run Docker
 sudo usermod -aG docker $USER && sudo reboot

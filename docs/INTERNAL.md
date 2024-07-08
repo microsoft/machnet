@@ -10,7 +10,7 @@ Dockerfile.
 
 ```bash
 # On latest Ubuntu:
-sudo apt -y install cmake libgflags-dev pkg-config nlohmann-json3-dev ninja-build gcc-10 g++-10 doxygen graphviz python3-pip meson libhugetlbfs-dev libnl-3-dev libnl-route-3-dev
+sudo apt -y install cmake pkg-config nlohmann-json3-dev ninja-build gcc-10 g++-10 doxygen graphviz python3-pip meson libhugetlbfs-dev libnl-3-dev libnl-route-3-dev
 pip3 install pyelftools
 ```
 
@@ -41,11 +41,14 @@ ldconfig
 
 ### Build DPDK
 
-We use DPDK v21.11 LTS, like so:
+Download and extract DPDK 23.11, then:
 
 ```bash
-export RTE_SDK=/path/to/dpdk-21.11/
-cd ${RTE_SDK} && meson build && cd build && ninja && DESTDIR=${PWD}/install ninja install
+cd dpdk-23.11
+meson build --prefix=${PWD}/build/install/usr/local
+ninja -C build
+ninja -C build install
+export PKG_CONFIG_PATH="${PWD}/build/install/usr/local/lib/pkgconfig"
 ```
 
 ### Build Machnet
