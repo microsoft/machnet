@@ -7,6 +7,7 @@
 #define SRC_INCLUDE_CHANNEL_H_
 
 #include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/mapped_region.hpp>
 #include <channel_msgbuf.h>
 #include <common.h>
 #include <flow_key.h>
@@ -32,6 +33,8 @@
   #undef max
   // #include <windows.h>
 #endif
+
+using namespace boost::interprocess;
 
 // Debugging
 #include <iostream>
@@ -570,9 +573,15 @@ class ChannelManager {
     int channel_fd;
     size_t shm_segment_size;
     int is_posix_shm;
+
+    // std::shared_ptr<shared_memory_object> shm_obj;
+    // std::shared_ptr<mapped_region> region;
+    shared_memory_object shm_obj;
+    mapped_region region;
+
     auto *ctx = __machnet_channel_create(
         name, machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr,
-        buffer_size, &shm_segment_size, &is_posix_shm, &channel_fd);
+        buffer_size, &shm_segment_size, &is_posix_shm, &channel_fd, shm_obj, region);
 
     std::cout << "After __machnet_channel_create from ChannelManager::AddChannel()" << std::endl;
     
@@ -586,6 +595,9 @@ class ChannelManager {
     channels_.insert(
         std::make_pair(name, std::make_shared<T>(name, ctx, shm_segment_size,
                                                  is_posix_shm, channel_fd)));
+
+    channels_mapped_regions[name] = region;
+    channels_shm_objects[name] = shm_obj;
     return true;
   }
 
@@ -637,6 +649,8 @@ class ChannelManager {
  private:
   std::mutex mtx_;
   std::unordered_map<std::string, std::shared_ptr<T>> channels_;
+  std::unordered_map<std::string, mapped_region&> channels_mapped_regions;
+  std::unordered_map<std::string, shared_memory_object&> channels_shm_objects;
 };
 
 }  // namespace shm

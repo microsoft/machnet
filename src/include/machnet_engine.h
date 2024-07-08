@@ -396,9 +396,17 @@ class MachnetEngine {
   // Adds a channel to be served by this engine.
   void AddChannel(std::shared_ptr<shm::Channel> channel,
                   std::promise<bool> &&status) {
+
+    std::cout << "inside MachnetEngine::AddChannel" << std::endl;             
     const std::lock_guard<std::mutex> lock(mtx_);
+
+    std::cout << "before making tuple and moving shm::Channel channel" << std::endl;
+
     auto channel_info =
         std::make_tuple(std::move(CHECK_NOTNULL(channel)), std::move(status));
+
+    std::cout << "before emplacing channel_info into channels_to_enqueue" << std::endl;
+
     channels_to_enqueue_.emplace_back(std::move(channel_info));
   }
 

@@ -349,7 +349,7 @@ bool MachnetController::CreateChannel(
     return false;
   }
 
-  std::cout << "after checking promise status " << std::endl;
+  std::cout << "after checking promise status: " << status << std::endl;
 
 
   std::cout << "before registering channel buffer memory with NIC DPDK Driver " << std::endl;
