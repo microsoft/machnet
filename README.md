@@ -70,7 +70,7 @@ docker pull ghcr.io/microsoft/machnet/machnet:latest
 
 ## 2.2.1. Using the bake file
 
-The provided makefile allows building x86 and arm64 docker images across a 
+The top-level makefile allows building x86 and arm64 docker images across a 
 variety of microarchitecture capability levels (x86) or SOC targets (arm64). 
 Invoking "make" will create them for the architecture of the host. 
 
