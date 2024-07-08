@@ -107,7 +107,7 @@ if [ $BARE_METAL -eq 1 ]; then
         exit 1
     fi
 
-    sudo ${machnet_bin} --config_json /var/run/machnet/local_config.json --logtostderr=1
+    sudo ${machnet_bin} --config_json /var/run/machnet/local_config.json
 else
     if ! command -v docker &> /dev/null
     then
