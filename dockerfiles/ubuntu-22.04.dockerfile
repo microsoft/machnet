@@ -46,8 +46,7 @@ RUN echo /usr/local/lib64 > /etc/ld.so.conf.d/usr_local.conf && ldconfig
 # Set env variable for DPDK
 ENV RTE_SDK /root/dpdk
 
-# Parts of DPDK that aren't needed for Machnet are disabled to help with the container size and so that LTO hopefully has an easier time finding optimizations.
-
+# Parts of DPDK that aren't needed for Machnet are disabled to help with the container size
 ENV DPDK_DISABLED_APPS dumpcap,graph,pdump,proc-info,test-acl,test-bbdev,test-cmdline,test-compress-perf,test-crypto-perf,test-dma-perf,test-eventdev,test-fib,test-flow-perf,test-gpudev,test-mldev,test-pipeline,test-regex,test-sad,test-security-perf
 ENV DPDK_DISABLED_DRIVER_GROUPS raw/*,crypto/*,baseband/*,dma/*,event/*,regex/*,ml/*,gpu/*,vdpa/*,compress/*
 ENV DPDK_DISABLED_COMMON_DRIVERS common/qat,common/octeontx,common/octeontx2,common/cnxk,common/dpaax

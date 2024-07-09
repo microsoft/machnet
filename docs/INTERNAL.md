@@ -6,7 +6,7 @@ users of the Machnet service. For users, see the [README](README.md).
 ### Building the standard x86 image
 
 ```bash
-docker build --no-cache -f dockerfiles/ubuntu-22.04.dockerfile --target  machnet .
+docker build --no-cache -f dockerfiles/ubuntu-22.04.dockerfile --target machnet --tag machnet .
 ```
 
 ### Building custom images
