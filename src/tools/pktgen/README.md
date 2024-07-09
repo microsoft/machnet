@@ -30,7 +30,7 @@ When running in this mode the application is actively generating packets. It als
 # Send packets to a remote host.
 REMOTE_IP="10.0.0.254"
 cd ${REPOROOT}/build/
-sudo GLOG_logtostderr=1 ./src/apps/pktgen/pktgen --remote_ip $REMOTE_IP --active-generator
+sudo GLOG_logtostderr=1 ./src/tools/pktgen/pktgen --remote_ip $REMOTE_IP --active-generator
 
 # If ran from a different directory, you may need to specify the path to the config file:
 sudo GLOG_logtostderr=1 ./pktgen --config_file ${REPOROOT}/src/apps/machnet/config.json --remote_ip $REMOTE_IP --active-generator
@@ -41,7 +41,7 @@ The above command will run the `pktgen` application to a remote machine with IP 
 
 ```bash
 # From ${REPOROOT}/build/
-sudo GLOG_logtostderr=1 ./src/apps/pktgen/pktgen --remote_ip $REMOTE_IP --active-generator --pkt_size 1500
+sudo GLOG_logtostderr=1 ./src/tools/pktgen/pktgen --remote_ip $REMOTE_IP --active-generator --pkt_size 1500
 ```
 
 ### Running in ping mode (RTT measurement)
@@ -53,7 +53,7 @@ The `pktgen` is collecting roundtrip time measurements. When stopping the apppli
 ```bash
 REMOTE_IP="10.0.0.254"
 # From ${REPOROOT}/build/
-sudo GLOG_logtostderr=1 ./src/apps/pktgen/pktgen --remote_ip $REMOTE_IP --ping
+sudo GLOG_logtostderr=1 ./src/tools/pktgen/pktgen --remote_ip $REMOTE_IP --ping
 ```
 
 If you want RTT measurements printed every 1 second, add option `--v=1` to the previous invocation.
@@ -66,12 +66,12 @@ To save the samples in a log file add option: `--rtt_log path/to/file`.
 When running in this mode the application is only bouncing packets to the remote host. It does not generate any other packets.
 
 
-From `${REPOROOT}/build/src/apps/pktgen`:
+From `${REPOROOT}/build/src/tools/pktgen`:
 
 ```bash
 REMOTE_IP="10.0.0.254"
 # From ${REPOROOT}/build/
-sudo GLOG_logtostderr=1 ./src/apps/pktgen/pktgen
+sudo GLOG_logtostderr=1 ./src/tools/pktgen/pktgen
 ```
 
 The above command will run the `pktgen` application in **passive** mode on local machine. It will send all received packets to the originating remote server.
