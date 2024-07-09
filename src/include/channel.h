@@ -574,8 +574,6 @@ class ChannelManager {
     size_t shm_segment_size;
     int is_posix_shm;
 
-    // std::shared_ptr<shared_memory_object> shm_obj;
-    // std::shared_ptr<mapped_region> region;
     shared_memory_object shm_obj;
     mapped_region region;
 
@@ -596,8 +594,8 @@ class ChannelManager {
         std::make_pair(name, std::make_shared<T>(name, ctx, shm_segment_size,
                                                  is_posix_shm, channel_fd)));
 
-    channels_mapped_regions[name] = region;
-    channels_shm_objects[name] = shm_obj;
+    std::cout << "before returning from channel.h, region size: " << region.get_size() << std::endl;
+
     return true;
   }
 
@@ -649,8 +647,6 @@ class ChannelManager {
  private:
   std::mutex mtx_;
   std::unordered_map<std::string, std::shared_ptr<T>> channels_;
-  std::unordered_map<std::string, mapped_region&> channels_mapped_regions;
-  std::unordered_map<std::string, shared_memory_object&> channels_shm_objects;
 };
 
 }  // namespace shm

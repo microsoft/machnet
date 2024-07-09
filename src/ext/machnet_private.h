@@ -33,6 +33,7 @@ using namespace boost::interprocess;
 // Debugging
 #include <iostream>
 #include <typeinfo>
+#include <windows.h>
 
 #define MACHNET_CHANNEL_CTRL_SQ_SLOT_NR 2
 #define MACHNET_CHANNEL_CTRL_CQ_SLOT_NR (MACHNET_CHANNEL_CTRL_SQ_SLOT_NR)
@@ -46,6 +47,12 @@ using namespace boost::interprocess;
 #define IS_POW2(x) (((x) & ((x)-1)) == 0)
 // Macro to round up to next power of 2.
 #define ROUNDUP_U64_POW2(x) (1ULL << (64 - __builtin_clzll(((uint64_t)x) - 1)))
+
+static inline size_t get_win_pagesize() {
+  SYSTEM_INFO si;
+  GetSystemInfo(&si);
+  return (size_t)si.dwPageSize;
+}
 
 /**
  * Calculate the memory size needed for an Machnet Dataplane channel.
@@ -322,6 +329,11 @@ static inline int __machnet_channel_dataplane_init(
   // const size_t kPageSize = is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE;
   // ctx->data_ctx.buf_pool_ofs =
   //     ALIGN_TO_BOUNDARY(tmp_buffer_index_table_end_ofs, kPageSize);
+
+  const size_t kPageSize = get_win_pagesize(); // hardcoding 4KB - need to confirm
+  ctx->data_ctx.buf_pool_ofs =
+      ALIGN_TO_BOUNDARY(tmp_buffer_index_table_end_ofs, kPageSize);
+
   ctx->data_ctx.buf_pool_mask = buf_ring->capacity;
   ctx->data_ctx.buf_size = kTotalBufSize;
   ctx->data_ctx.buf_mss = buffer_size;

@@ -402,6 +402,11 @@ class MachnetEngine {
 
     std::cout << "before making tuple and moving shm::Channel channel" << std::endl;
 
+    std::cout << "channel name in engine: " << channel->GetName() << std::endl;
+
+    if(channel->ctx() == NULL) std::cout << "channel ctx in engine is NULL" << std::endl;
+    else std::cout << "channel ctx in engine is not NULL" << std::endl;
+
     auto channel_info =
         std::make_tuple(std::move(CHECK_NOTNULL(channel)), std::move(status));
 
