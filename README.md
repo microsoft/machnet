@@ -41,14 +41,7 @@ The `examples` directory contains detailed scripts/instructions to launch VMs fo
 
 ## 2. Get the Docker image 
 
-
-## 2.1. Option 1: With a pre-built Machnet
-
-The pre-built images include support for common NIC models (e.g., public cloud
-vNICs, ConnectX, Intel 10/100 GbE).
-
-To use a pre-built image, pull it from Github container registry. 
-Pulling from GHCR requires an auth token:
+Pulling our prebuilt Machnet docker image from GHCR requires an auth token:
 
  1. Generate a Github personal access token for yourself (https://github.com/settings/tokens) with the read:packages scope. and store it in the `GITHUB_PAT` environment variable.
  2. At `https://github.com/settings/tokens`, follow the steps to "Configure SSO" for this token.
@@ -65,27 +58,6 @@ sudo usermod -aG docker $USER && sudo reboot
 echo ${GITHUB_PAT} | docker login ghcr.io -u <github_username> --password-stdin
 docker pull ghcr.io/microsoft/machnet/machnet:latest
 ```
-
-## 2.2. Option 2: Build the container yourself
-
-## 2.2.1. Using the bake file
-
-The top-level makefile allows building x86 and arm64 docker images across a 
-variety of microarchitecture capability levels (x86) or SOC targets (arm64). 
-Invoking "make" will create them for the architecture of the host. 
-
-To build a Machnet image for a specific architecture, e.g, x86-64-v4
-
-```bash
-$ docker buildx bake -f docker-bake x86-64-v4
-```
-
-## 2.2.2. Using docker directly
-
-Using docker directly, you can override the defaults given by the bake file.
-Please go over the inputs given to a target by the bakefile and use those as a
-starting point; the dockerfiles also contain additional comments on
-customization. 
 
 ## 3. Start the Machnet process on both VMs
 
