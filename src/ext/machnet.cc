@@ -40,6 +40,7 @@
 #if defined(ASIO_HAS_LOCAL_SOCKETS)
 using asio::local::stream_protocol;
 using uuid_t = boost::uuids::uuid;
+using namespace boost::interprocess;
 
 #define MIN(a, b)           \
   ({                        \
@@ -519,7 +520,8 @@ int machnet_init() {
   return -1;
 }
 
-MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size, const char *shm_object_name) {
+MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size, const char *shm_object_name,
+                                  shared_memory_object &shm_obj, mapped_region &region) {
 
 #ifdef __linux__
   MachnetChannelCtx_t *channel;
@@ -566,7 +568,6 @@ fail:
   if (shm_fd > 0) close(shm_fd);
   return NULL;
 #else // #ifdef __linux__
-  using namespace boost::interprocess;
   MachnetChannelCtx_t *channel;
 
   std::cout << "inside machnet_bind()" << std::endl;
@@ -575,7 +576,7 @@ fail:
 
   std::cout << "opening already created shared memory object" << std::endl;
   //Open already created shared memory object.
-  shared_memory_object shm_object(
+  shm_obj = shared_memory_object (
     open_only, 
     shm_object_name, 
     read_write
@@ -583,13 +584,16 @@ fail:
 
   std::cout << "Map the shared memory segment into the address space of the process." << std::endl;
   // Map the shared memory segment into the address space of the process.
-  mapped_region region(shm_object, read_write);
+  region = mapped_region(shm_obj, read_write);
   channel = (MachnetChannelCtx_t *) region.get_address();
 
   std::cout << "Get the size of the shared memory segment." << std::endl;
+  getchar();
+  
+
   // Get the size of the shared memory segment.
-  *channel_size = region.get_size();
-  std::cout << "shm segment size: " << *channel_size << std::endl;
+  // *channel_size = region.get_size();
+  // std::cout << "shm segment size: " << *channel_size << std::endl;
 
   // Success.
   return channel;
@@ -597,7 +601,7 @@ fail:
 #endif // #ifdef __linux__
 }
 
-void *machnet_attach() {
+void *machnet_attach(shared_memory_object &shm_obj, mapped_region &region) {
   std::cout << "inside machnet_attach" << std::endl;
 
   uuid_t uuid;        // UUID for the shared memory channel.
@@ -657,7 +661,7 @@ void *machnet_attach() {
   }
 
   std::cout << "before firing machnet_bind()" << std::endl;
-  return machnet_bind(channel_fd, NULL, uuid_str);
+  return machnet_bind(channel_fd, NULL, uuid_str, shm_obj, region);
   // return NULL;
 }
 

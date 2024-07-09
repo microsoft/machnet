@@ -34,10 +34,10 @@
   // #include <windows.h>
 #endif
 
-using namespace boost::interprocess;
-
 // Debugging
 #include <iostream>
+
+// using namespace boost::interprocess;
 
 namespace juggler {
 class MachnetEngine;  // forward declaration
@@ -53,6 +53,8 @@ class Flow;  // forward declaration
 
 namespace juggler {
 namespace shm {
+
+
 
 /**
  * @brief Class `ShmChannel' abstracts Machnet shared memory channels.
@@ -81,7 +83,8 @@ class ShmChannel {
   ShmChannel(const std::string channel_name,
              const MachnetChannelCtx_t *channel_ctx,
              const size_t channel_mem_size, const bool is_posix_shm,
-             int channel_fd);
+             int channel_fd, boost::interprocess::shared_memory_object shm_obj, 
+             boost::interprocess::mapped_region region);
   ~ShmChannel();
   ShmChannel &operator=(const ShmChannel &) = delete;
 
@@ -385,6 +388,8 @@ class ShmChannel {
   }
 
  private:
+  boost::interprocess::shared_memory_object shm_obj_;
+  boost::interprocess::mapped_region region_;
   const std::string name_;
   const MachnetChannelCtx_t *ctx_;
   const size_t mem_size_;
@@ -419,7 +424,7 @@ class Channel : public ShmChannel {
    */
   Channel(const std::string &name, const MachnetChannelCtx_t *ctx,
           const size_t channel_mem_size, const bool is_posix_shm,
-          int channel_fd);
+          int channel_fd, boost::interprocess::shared_memory_object shm_obj, boost::interprocess::mapped_region region);
   ~Channel();
   Channel &operator=(const Channel &) = delete;
 
@@ -574,8 +579,8 @@ class ChannelManager {
     size_t shm_segment_size;
     int is_posix_shm;
 
-    shared_memory_object shm_obj;
-    mapped_region region;
+    boost::interprocess::shared_memory_object shm_obj;
+    boost::interprocess::mapped_region region;
 
     auto *ctx = __machnet_channel_create(
         name, machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr,
@@ -591,8 +596,8 @@ class ChannelManager {
     }
 
     channels_.insert(
-        std::make_pair(name, std::make_shared<T>(name, ctx, shm_segment_size,
-                                                 is_posix_shm, channel_fd)));
+        std::make_pair(name, std::make_shared<T>(name, ctx, shm_segment_size, is_posix_shm, 
+                                                channel_fd, std::move(shm_obj), std::move(region))));
 
     std::cout << "before returning from channel.h, region size: " << region.get_size() << std::endl;
 

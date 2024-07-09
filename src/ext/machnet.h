@@ -8,6 +8,9 @@
 #ifndef SRC_EXT_MACHNET_H_
 #define SRC_EXT_MACHNET_H_
 
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+
 // #ifdef __cplusplus
 // extern "C" {
 // #endif
@@ -80,7 +83,10 @@ MACHNET_SHIM_EXPORT int machnet_init();
  * the size of the channel. This is optional and can be `NULL`.
  * @return A pointer to the mapped channel on success, `NULL` otherwise.
  */
-MACHNET_SHIM_EXPORT MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size);
+MACHNET_SHIM_EXPORT MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channel_size,
+                                                      const char *shm_object_name,
+                                                      boost::interprocess::shared_memory_object &shm_obj,
+                                                      boost::interprocess::mapped_region &region);
 
 /**
  * @brief Creates a new channel to the Machnet controller and binds to it. A
@@ -88,7 +94,8 @@ MACHNET_SHIM_EXPORT MachnetChannelCtx_t *machnet_bind(int shm_fd, size_t *channe
  *
  * @return A pointer to the channel context on success, NULL otherwise.
  */
-MACHNET_SHIM_EXPORT void *machnet_attach();
+MACHNET_SHIM_EXPORT void *machnet_attach(boost::interprocess::shared_memory_object &shm_obj, 
+                                        boost::interprocess::mapped_region &region);
 
 /**
  * @brief Listens for incoming messages on a specific IP and port.

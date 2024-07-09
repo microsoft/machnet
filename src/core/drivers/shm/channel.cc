@@ -3,9 +3,12 @@
  *
  * Implementation of `Channel' and `ChannelManager' methods.
  */
+
 #include <channel.h>
 #include <flow.h>
 #include <glog/logging.h>
+
+// using namespace boost::interprocess;
 
 namespace juggler {
 namespace shm {
@@ -13,12 +16,15 @@ namespace shm {
 ShmChannel::ShmChannel(const std::string channel_name,
                        const MachnetChannelCtx_t *channel_ctx,
                        const size_t channel_mem_size, const bool is_posix_shm,
-                       int channel_fd)
+                       int channel_fd, boost::interprocess::shared_memory_object shm_obj, 
+                       boost::interprocess::mapped_region region)
     : name_(channel_name),
       ctx_(CHECK_NOTNULL(channel_ctx)),
       mem_size_(channel_mem_size),
       is_posix_shm_(is_posix_shm),
       channel_fd_(channel_fd),
+      shm_obj_(std::move(shm_obj)),
+      region_(std::move(region)),
       cached_buf_indices(),
       cached_bufs(),
       cached_buf_count(0) {}
@@ -32,9 +38,10 @@ ShmChannel::~ShmChannel() {
 Channel::Channel(const std::string &channel_name,
                  const MachnetChannelCtx_t *channel_ctx,
                  const size_t channel_mem_size, const bool is_posix_shm,
-                 int channel_fd)
+                 int channel_fd, boost::interprocess::shared_memory_object shm_obj, 
+                 boost::interprocess::mapped_region region)
     : ShmChannel(channel_name, channel_ctx, channel_mem_size, is_posix_shm,
-                 channel_fd),
+                 channel_fd, std::move(shm_obj), std::move(region)),
       listeners_(),
       active_flows_() {}
 
@@ -43,7 +50,8 @@ Channel::~Channel() { UnregisterDMAMem(); }
 bool Channel::RegisterMemForDMA(rte_device *dev) {
   const auto *bufp_mem_start = GetBufPoolAddr();
   const auto *bufp_mem_end = GetBufPoolAddr() + GetBufPoolSize();
-  const size_t page_size = IsPosixShm() ? kPageSize : kHugePage2MSize;
+  // const size_t page_size = IsPosixShm() ? kPageSize : kHugePage2MSize;
+  const size_t page_size = get_win_pagesize();
 
   if (attached_dev_ != nullptr) {
     LOG(ERROR) << "Memory is already registered with DPDK";

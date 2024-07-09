@@ -16,7 +16,9 @@
 #include <chrono>
 
 #include <array>
-
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+using namespace boost::interprocess;
 
 
 DEFINE_string(local, "", "Local IP address");
@@ -43,7 +45,11 @@ int main(int argc, char *argv[]) {
   assert_with_msg(ret == 0, "machnet_init() failed");
 
   std::cout << "before calling machnet_attach()" << std::endl;
-  void *channel = machnet_attach();
+
+  shared_memory_object shm_obj;
+  mapped_region region;
+
+  void *channel = machnet_attach(shm_obj, region);
   std::cout << "after calling machnet_attach()" << std::endl;
   assert_with_msg(channel != nullptr, "machnet_attach() failed");
 

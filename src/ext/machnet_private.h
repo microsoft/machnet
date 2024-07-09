@@ -8,7 +8,7 @@
 #define SRC_EXT_MACHNET_PRIVATE_H_
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/mapped_region.hpp>
-using namespace boost::interprocess;
+
 
 // #ifdef __cplusplus
 // extern "C" {
@@ -34,6 +34,8 @@ using namespace boost::interprocess;
 #include <iostream>
 #include <typeinfo>
 #include <windows.h>
+
+using namespace boost::interprocess;
 
 #define MACHNET_CHANNEL_CTRL_SQ_SLOT_NR 2
 #define MACHNET_CHANNEL_CTRL_CQ_SLOT_NR (MACHNET_CHANNEL_CTRL_SQ_SLOT_NR)
