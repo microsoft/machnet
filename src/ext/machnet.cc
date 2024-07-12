@@ -587,9 +587,7 @@ fail:
   region = mapped_region(shm_obj, read_write);
   channel = (MachnetChannelCtx_t *) region.get_address();
 
-  std::cout << "Get the size of the shared memory segment." << std::endl;
-  getchar();
-  
+  std::cout << "Get the size of the shared memory segment." << std::endl;  
 
   // Get the size of the shared memory segment.
   // *channel_size = region.get_size();
@@ -686,16 +684,22 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
   req.flow_info.dst_ip = ntohl(inet_addr(dst_ip));
   req.flow_info.dst_port = dst_port;
 
+  std::cout << "before writing into the control submission queue: press any key" << std::endl;
+  // getchar();
+
   // Send the request to the Machnet control plane.
   if (__machnet_channel_ctrl_sq_enqueue(ctx, 1, &req) != 1) {
     fprintf(stderr, "ERROR: Failed to enqueue request to control queue.\n");
     return -1;
   }
 
+  std::cout << "after enqueue before dequeue" << std::endl;
+  getchar();
+
   MachnetCtrlQueueEntry_t resp;
   memset(&resp, 0, sizeof(resp));
   uint32_t ret = 0;
-  int max_tries = 10;
+  int max_tries = 10000;
   do {
     ret = __machnet_channel_ctrl_cq_dequeue(ctx, 1, &resp);
     if (ret != 0) break;

@@ -228,7 +228,7 @@ static_assert(MACHNET_MSGBUF_SPACE_RESERVED == CACHE_LINE_SIZE,
               "MachnetMsgBuf_t is not aligned");
 #define MACHNET_MSGBUF_HEADROOM_MAX (2 * CACHE_LINE_SIZE)
 
-static inline __attribute__((always_inline)) void __machnet_channel_buf_init(
+static inline void __machnet_channel_buf_init(
     MachnetMsgBuf_t *buf) {
   // Do not set the magic here. Should be set in initialization only.
   buf->flags = 0;
@@ -250,7 +250,7 @@ static inline __attribute__((always_inline)) void __machnet_channel_buf_init(
  * @param offset             Desired offset.
  * @return                   A `uchar_t' pointer to the requested offset.
  */
-static inline __attribute__((always_inline)) uchar_t *__machnet_channel_mem_ofs(
+static inline uchar_t *__machnet_channel_mem_ofs(
     const MachnetChannelCtx_t *ctx, size_t offset) {
   // We need to de-const here.
   return (__DECONST(uchar_t *, ctx) + offset);
@@ -262,7 +262,7 @@ static inline __attribute__((always_inline)) uchar_t *__machnet_channel_mem_ofs(
  * @param ctx                Channel's context.
  * @return                   A pointer to the control submission queue.
  */
-static inline __attribute__((always_inline)) jring_t *
+static inline jring_t *
 __machnet_channel_ctrl_sq_ring(const MachnetChannelCtx_t *ctx) {
   return (jring_t *)__machnet_channel_mem_ofs(ctx,
                                               ctx->data_ctx.ctrl_sq_ring_ofs);
@@ -274,7 +274,7 @@ __machnet_channel_ctrl_sq_ring(const MachnetChannelCtx_t *ctx) {
  * @param ctx                Channel's context.
  * @return                   A pointer to the control completion queue.
  */
-static inline __attribute__((always_inline)) jring_t *
+static inline jring_t *
 __machnet_channel_ctrl_cq_ring(const MachnetChannelCtx_t *ctx) {
   return (jring_t *)__machnet_channel_mem_ofs(ctx,
                                               ctx->data_ctx.ctrl_cq_ring_ofs);
@@ -286,7 +286,7 @@ __machnet_channel_ctrl_cq_ring(const MachnetChannelCtx_t *ctx) {
  * @param ctx                Channel's context.
  * @return                   A pointer to the Machnet Ring.
  */
-static inline __attribute__((always_inline)) jring_t *
+static inline jring_t *
 __machnet_channel_machnet_ring(const MachnetChannelCtx_t *ctx) {
   return (jring_t *)__machnet_channel_mem_ofs(ctx,
                                               ctx->data_ctx.machnet_ring_ofs);
@@ -298,7 +298,7 @@ __machnet_channel_machnet_ring(const MachnetChannelCtx_t *ctx) {
  * @param ctx                Channel's context.
  * @return                   A pointer to the Application Ring.
  */
-static inline __attribute__((always_inline)) jring_t *
+static inline jring_t *
 __machnet_channel_app_ring(const MachnetChannelCtx_t *ctx) {
   return (jring_t *)__machnet_channel_mem_ofs(ctx, ctx->data_ctx.app_ring_ofs);
 }
@@ -309,7 +309,7 @@ __machnet_channel_app_ring(const MachnetChannelCtx_t *ctx) {
  * @param ctx                Channel's context.
  * @return                   A pointer to the MsgBuf Ring.
  */
-static inline __attribute__((always_inline)) jring_t *
+static inline jring_t *
 __machnet_channel_buf_ring(const MachnetChannelCtx_t *ctx) {
   return (jring_t *)__machnet_channel_mem_ofs(ctx, ctx->data_ctx.buf_ring_ofs);
 }
@@ -319,7 +319,7 @@ __machnet_channel_buf_ring(const MachnetChannelCtx_t *ctx) {
  * @param ctx                Channel's context.
  * @return                   A pointer to the end of the Machnet channel.
  */
-static inline __attribute__((always_inline)) uchar_t *__machnet_channel_end(
+static inline uchar_t *__machnet_channel_end(
     const MachnetChannelCtx_t *ctx) {
   return __machnet_channel_mem_ofs(ctx, ctx->size);
 }
@@ -335,12 +335,12 @@ static inline MachnetRingSlot_t *__machnet_channel_buffer_index_table(
  * @param ctx                Channel's context.
  * @return                   A pointer to the beginning of the buffer pool.
  */
-static inline __attribute__((always_inline)) uchar_t *
+static inline uchar_t *
 __machnet_channel_buf_pool(const MachnetChannelCtx_t *ctx) {
   return (uchar_t *)__machnet_channel_mem_ofs(ctx, ctx->data_ctx.buf_pool_ofs);
 }
 
-static inline __attribute__((always_inline)) size_t
+static inline size_t
 __machnet_channel_buf_pool_size(const MachnetChannelCtx_t *ctx) {
   return ctx->data_ctx.buf_pool_mask * ctx->data_ctx.buf_size;
 }
@@ -352,7 +352,7 @@ __machnet_channel_buf_pool_size(const MachnetChannelCtx_t *ctx) {
  * @param index              Index of the buffer.
  * @return                   A pointer to the beginning of the MsgBuf.
  */
-static inline __attribute__((always_inline)) MachnetMsgBuf_t *
+static inline MachnetMsgBuf_t *
 __machnet_channel_buf(const MachnetChannelCtx_t *ctx, uint32_t index) {
   size_t buf_ofs =
       ctx->data_ctx.buf_pool_ofs + (size_t)index * ctx->data_ctx.buf_size;
@@ -367,7 +367,7 @@ __machnet_channel_buf(const MachnetChannelCtx_t *ctx, uint32_t index) {
  * @param buf                A pointer to the `MsgBuf' buffer
  * @return                   (MachnetRingSlot_t) Index of the buffer
  */
-static inline __attribute__((always_inline)) MachnetRingSlot_t
+static inline MachnetRingSlot_t
 __machnet_channel_buf_index(const MachnetChannelCtx_t *ctx,
                             const MachnetMsgBuf_t *buf) {
   assert(ctx != NULL);
@@ -389,7 +389,7 @@ __machnet_channel_buf_index(const MachnetChannelCtx_t *ctx,
  * @param buf                A pointer to the `MsgBuf' buffer.
  * @return                   A pointer to the begining of the data.
  */
-static inline __attribute__((always_inline)) uchar_t *
+static inline uchar_t *
 __machnet_channel_buf_base(const MachnetMsgBuf_t *buf) {
   return ((uchar_t *)buf + MACHNET_MSGBUF_SPACE_RESERVED);
 }
@@ -400,7 +400,7 @@ __machnet_channel_buf_base(const MachnetMsgBuf_t *buf) {
  * @param buf                A pointer to the `MsgBuf' buffer.
  * @return                   A pointer to the data of the MsgBuf.
  */
-static inline __attribute__((always_inline)) uchar_t *
+static inline uchar_t *
 __machnet_channel_buf_data(const MachnetMsgBuf_t *buf) {
   return __machnet_channel_buf_base(buf) + buf->data_ofs;
 }
@@ -411,7 +411,7 @@ __machnet_channel_buf_data(const MachnetMsgBuf_t *buf) {
  * @param buf                A pointer to the `MsgBuf' buffer.
  * @return                   A pointer at the requested offset of the data.
  */
-static inline __attribute__((always_inline)) uchar_t *
+static inline uchar_t *
 __machnet_channel_buf_data_ofs(const MachnetMsgBuf_t *buf, uint32_t ofs) {
   return __machnet_channel_buf_data(buf) + ofs;
 }
@@ -422,7 +422,7 @@ __machnet_channel_buf_data_ofs(const MachnetMsgBuf_t *buf, uint32_t ofs) {
  * @param buf                A pointer to the `MsgBuf' buffer.
  * @return                   Number of bytes available.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_buf_headroom(const MachnetMsgBuf_t *buf) {
   assert(buf != NULL);
   return (buf->data_ofs);
@@ -434,7 +434,7 @@ __machnet_channel_buf_headroom(const MachnetMsgBuf_t *buf) {
  * @param buf                A pointer to the `MsgBuf' buffer.
  * @return                   Number of bytes available.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_buf_tailroom(const MachnetMsgBuf_t *buf) {
   assert(buf != NULL);
   return (buf->size - buf->data_ofs - buf->data_len);
@@ -446,7 +446,7 @@ __machnet_channel_buf_tailroom(const MachnetMsgBuf_t *buf) {
  * @param buf                A pointer to the `MsgBuf' buffer.
  * @return                   Total size of the buffer.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_buf_data_len(const MachnetMsgBuf_t *buf) {
   assert(buf != NULL);
   return (buf->data_len);
@@ -457,7 +457,7 @@ __machnet_channel_buf_data_len(const MachnetMsgBuf_t *buf) {
  * @param buf                A pointer to the `MsgBuf' buffer.
  * @return                   Total size of the buffer.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_buf_size(const MachnetMsgBuf_t *buf) {
   assert(buf != NULL);
   return (buf->size);
@@ -472,7 +472,7 @@ __machnet_channel_buf_size(const MachnetMsgBuf_t *buf) {
  * @return                   A pointer to the appropriate data offset on
  *                           success, NULL on failure.
  */
-static inline __attribute__((always_inline)) uchar_t *
+static inline uchar_t *
 __machnet_channel_buf_prepend(MachnetMsgBuf_t *buf, uint32_t len) {
   if (unlikely(__machnet_channel_buf_headroom(buf) < len)) return NULL;
 
@@ -490,7 +490,7 @@ __machnet_channel_buf_prepend(MachnetMsgBuf_t *buf, uint32_t len) {
  * @return                   A pointer to the appropriate data offset on
  *                           success, NULL on failure.
  */
-static inline __attribute__((always_inline)) uchar_t *
+static inline uchar_t *
 __machnet_channel_buf_append(MachnetMsgBuf_t *buf, uint32_t len) {
   if (unlikely(__machnet_channel_buf_tailroom(buf) < len)) return NULL;
 
@@ -512,7 +512,7 @@ __machnet_channel_buf_append(MachnetMsgBuf_t *buf, uint32_t len) {
  * to store the allocated buffer pointers.
  * @return                   Number of buffers allocated, either 0 or `n'.
  */
-static inline __attribute__((always_inline)) unsigned int
+static inline unsigned int
 __machnet_channel_buf_alloc_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
                                  MachnetRingSlot_t *indices,
                                  MachnetMsgBuf_t **bufs) {
@@ -547,7 +547,7 @@ __machnet_channel_buf_alloc_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
  *                           NOTE: With correct use, this fuction must always
  *                           succeed (i.e, return `n').
  */
-static inline __attribute__((always_inline)) unsigned int
+static inline unsigned int
 __machnet_channel_buf_free_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
                                 const MachnetRingSlot_t *bufs) {
   assert(ctx != NULL);
@@ -571,7 +571,7 @@ __machnet_channel_buf_free_bulk(const MachnetChannelCtx_t *ctx, uint32_t n,
  * @param ctx                Channel's context.
  * @return                   Number of items free.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_buffers_avail(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
@@ -585,7 +585,7 @@ __machnet_channel_buffers_avail(const MachnetChannelCtx_t *ctx) {
  * @param ctx                Channel's context.
  * @return                   Number of items pending.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_machnet_ring_pending(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
@@ -599,7 +599,7 @@ __machnet_channel_machnet_ring_pending(const MachnetChannelCtx_t *ctx) {
  * @param ctx                Channel's context.
  * @return                   Number of items pending.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_app_ring_pending(const MachnetChannelCtx_t *ctx) {
   assert(ctx != NULL);
 
@@ -616,7 +616,7 @@ __machnet_channel_app_ring_pending(const MachnetChannelCtx_t *ctx) {
  * @param op                 Pointer to an array of `n' `MachnetQueueEntry_t'
  * @return                 Number of entries enqueued, either 0 or `n'.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_ctrl_sq_enqueue(const MachnetChannelCtx_t *ctx,
                                   unsigned int n,
                                   const MachnetCtrlQueueEntry_t *op) {
@@ -637,7 +637,7 @@ __machnet_channel_ctrl_sq_enqueue(const MachnetChannelCtx_t *ctx,
  * @param op                 Pointer to an array of `n' `MachnetQueueEntry_t'
  * @return                   Number of entries dequeued, from 0 or `n'.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_ctrl_sq_dequeue(const MachnetChannelCtx_t *ctx,
                                   unsigned int n, MachnetCtrlQueueEntry_t *op) {
   assert(ctx != NULL);
@@ -657,7 +657,7 @@ __machnet_channel_ctrl_sq_dequeue(const MachnetChannelCtx_t *ctx,
  * @param op                 Pointer to an array of `n' `MachnetQueueEntry_t'.
  * @return                   Number of entries enqueued, either 0 or `n'.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_ctrl_cq_enqueue(const MachnetChannelCtx_t *ctx,
                                   unsigned int n,
                                   const MachnetCtrlQueueEntry_t *op) {
@@ -677,7 +677,7 @@ __machnet_channel_ctrl_cq_enqueue(const MachnetChannelCtx_t *ctx,
  * @param n                  Number of entries to dequeue at most.
  * @param op                 Pointer to an array of `n' `MachnetQueueEntry_t'.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_ctrl_cq_dequeue(const MachnetChannelCtx_t *ctx,
                                   unsigned int n, MachnetCtrlQueueEntry_t *op) {
   assert(ctx != NULL);
@@ -701,7 +701,7 @@ __machnet_channel_ctrl_cq_dequeue(const MachnetChannelCtx_t *ctx,
  *                           be sent.
  * @return                   Number of buffers sent, either 0 or `n'.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_app_ring_enqueue(const MachnetChannelCtx_t *ctx,
                                    unsigned int n,
                                    const MachnetRingSlot_t *bufs) {
@@ -725,7 +725,7 @@ __machnet_channel_app_ring_enqueue(const MachnetChannelCtx_t *ctx,
  *                           indices of the received buffers.
  * @return                   Number of buffers received, ranging [0, n].
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_app_ring_dequeue(const MachnetChannelCtx_t *ctx,
                                    unsigned int n, MachnetRingSlot_t *bufs) {
   jring_t *app_ring = __machnet_channel_app_ring(ctx);
@@ -749,7 +749,7 @@ __machnet_channel_app_ring_dequeue(const MachnetChannelCtx_t *ctx,
  *                           be sent.
  * @return                   Number of buffers sent, either 0 or `n'.
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_machnet_ring_enqueue(const MachnetChannelCtx_t *ctx,
                                        unsigned int n,
                                        const MachnetRingSlot_t *bufs) {
@@ -773,7 +773,7 @@ __machnet_channel_machnet_ring_enqueue(const MachnetChannelCtx_t *ctx,
  *                           indices of the received buffers.
  * @return                   Number of buffers received, ranging [0, n].
  */
-static inline __attribute__((always_inline)) uint32_t
+static inline uint32_t
 __machnet_channel_machnet_ring_dequeue(const MachnetChannelCtx_t *ctx,
                                        unsigned int n,
                                        MachnetRingSlot_t *bufs) {

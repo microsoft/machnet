@@ -27,7 +27,7 @@ typedef struct {
   };
 } __attribute__((aligned(16))) j_int128_t;
 
-static inline __attribute__((always_inline)) void __jring_enqueue_elems_32(
+static inline void __jring_enqueue_elems_32(
     struct jring *r, const uint32_t size, uint32_t idx, const void *obj_table,
     uint32_t n) {
   unsigned int i;
@@ -67,7 +67,7 @@ static inline __attribute__((always_inline)) void __jring_enqueue_elems_32(
   }
 }
 
-static __attribute__((always_inline)) inline void __jring_enqueue_elems_64(
+static inline void __jring_enqueue_elems_64(
     struct jring *r, uint32_t prod_head, const void *obj_table, uint32_t n) {
   unsigned int i;
   const uint32_t size = r->size;
@@ -96,7 +96,7 @@ static __attribute__((always_inline)) inline void __jring_enqueue_elems_64(
   }
 }
 
-static inline __attribute__((always_inline)) void __jring_enqueue_elems_128(
+static inline void __jring_enqueue_elems_128(
     struct jring *r, uint32_t prod_head, const void *obj_table, uint32_t n) {
   unsigned int i;
   const uint32_t size = r->size;
@@ -123,7 +123,7 @@ static inline __attribute__((always_inline)) void __jring_enqueue_elems_128(
  * Placed here since identical code needed in both
  * single and multi producer enqueue functions.
  */
-static inline __attribute__((always_inline)) void __jring_enqueue_elems(
+static inline void __jring_enqueue_elems(
     struct jring *r, uint32_t prod_head, const void *obj_table, uint32_t esize,
     uint32_t num) {
   /* 8B and 16B copies implemented individually to retain
@@ -146,7 +146,7 @@ static inline __attribute__((always_inline)) void __jring_enqueue_elems(
   }
 }
 
-static inline __attribute__((always_inline)) void __jring_dequeue_elems_32(
+static inline void __jring_dequeue_elems_32(
     struct jring *r, const uint32_t size, uint32_t idx, void *obj_table,
     uint32_t n) {
   unsigned int i;
@@ -186,7 +186,7 @@ static inline __attribute__((always_inline)) void __jring_dequeue_elems_32(
   }
 }
 
-static inline __attribute__((always_inline)) void __jring_dequeue_elems_64(
+static inline void __jring_dequeue_elems_64(
     struct jring *r, uint32_t prod_head, void *obj_table, uint32_t n) {
   unsigned int i;
   const uint32_t size = r->size;
@@ -215,7 +215,7 @@ static inline __attribute__((always_inline)) void __jring_dequeue_elems_64(
   }
 }
 
-static inline __attribute__((always_inline)) void __jring_dequeue_elems_128(
+static inline void __jring_dequeue_elems_128(
     struct jring *r, uint32_t prod_head, void *obj_table, uint32_t n) {
   unsigned int i;
   const uint32_t size = r->size;
@@ -242,7 +242,7 @@ static inline __attribute__((always_inline)) void __jring_dequeue_elems_128(
  * Placed here since identical code needed in both
  * single and multi producer enqueue functions.
  */
-static inline __attribute__((always_inline)) void __jring_dequeue_elems(
+static inline void __jring_dequeue_elems(
     struct jring *r, uint32_t cons_head, void *obj_table, uint32_t esize,
     uint32_t num) {
   /* 8B and 16B copies implemented individually to retain
@@ -265,14 +265,14 @@ static inline __attribute__((always_inline)) void __jring_dequeue_elems(
   }
 }
 
-static inline __attribute__((always_inline)) void __jring_wait_until_equal_32(
+static inline void __jring_wait_until_equal_32(
     volatile uint32_t *addr, uint32_t expected, int memorder) {
   // assert(memorder == __ATOMIC_ACQUIRE || memorder == __ATOMIC_RELAXED);
 
   while (__atomic_load_n(addr, memorder) != expected) __asm__("pause;");
 }
 
-static inline __attribute__((always_inline)) void __jring_update_tail(
+static inline void __jring_update_tail(
     struct jring_headtail *ht, uint32_t old_val, uint32_t new_val,
     uint32_t single, __attribute__((unused)) uint32_t enqueue) {
   /*
@@ -308,7 +308,7 @@ static inline __attribute__((always_inline)) void __jring_update_tail(
  *   Actual number of objects enqueued.
  *   If behavior == JRING_QUEUE_FIXED, this will be 0 or n only.
  */
-static inline __attribute__((always_inline)) unsigned int
+static inline unsigned int
 __jring_move_prod_head(struct jring *r, unsigned int is_sp, unsigned int n,
                        enum jring_queue_behavior behavior, uint32_t *old_head,
                        uint32_t *new_head, uint32_t *free_entries) {
@@ -378,7 +378,7 @@ __jring_move_prod_head(struct jring *r, unsigned int is_sp, unsigned int n,
  *   - Actual number of objects dequeued.
  *     If behavior == JRING_QUEUE_FIXED, this will be 0 or n only.
  */
-static inline __attribute__((always_inline)) unsigned int
+static inline unsigned int
 __jring_move_cons_head(struct jring *r, int is_sc, unsigned int n,
                        enum jring_queue_behavior behavior, uint32_t *old_head,
                        uint32_t *new_head, uint32_t *entries) {
@@ -448,7 +448,7 @@ __jring_move_cons_head(struct jring *r, int is_sc, unsigned int n,
  *   Actual number of objects enqueued.
  *   If behavior == jRING_QUEUE_FIXED, this will be 0 or n only.
  */
-static inline __attribute__((always_inline)) unsigned int
+static inline unsigned int
 __jring_do_enqueue_elem(struct jring *r, const void *obj_table,
                         unsigned int esize, unsigned int n,
                         enum jring_queue_behavior behavior, unsigned int is_sp,
@@ -492,7 +492,7 @@ end:
  *   - Actual number of objects dequeued.
  *     If behavior == jRING_QUEUE_FIXED, this will be 0 or n only.
  */
-static inline __attribute__((always_inline)) unsigned int
+static inline unsigned int
 __jring_do_dequeue_elem(struct jring *r, void *obj_table, unsigned int esize,
                         unsigned int n, enum jring_queue_behavior behavior,
                         unsigned int is_sc, unsigned int *available) {

@@ -166,7 +166,10 @@ class ShmChannel {
    */
   uint32_t DequeueCtrlRequests(MachnetCtrlQueueEntry_t *ctrl_entries,
                                uint32_t nb_entries) {
-    return __machnet_channel_ctrl_sq_dequeue(ctx_, nb_entries, ctrl_entries);
+    std::cout << "Inside channel.h DequeueCtrlRequests, nb_entries: " << nb_entries << std::endl;                                
+    uint32_t result = __machnet_channel_ctrl_sq_dequeue(ctx_, nb_entries, ctrl_entries);
+    std::cout << "channel->DequeueCtrlRequests from controller's end has dequeued items: " << result << std::endl;
+    return result;
   }
 
   /**
@@ -179,7 +182,10 @@ class ShmChannel {
    */
   uint32_t EnqueueCtrlCompletions(MachnetCtrlQueueEntry_t *ctrl_entries,
                                   uint32_t nb_entries) {
-    return __machnet_channel_ctrl_cq_enqueue(ctx_, nb_entries, ctrl_entries);
+    std::cout << "Inside channel.h EnqueueCtrlCompletions" << std::endl;                        
+    uint32_t result = __machnet_channel_ctrl_cq_enqueue(ctx_, nb_entries, ctrl_entries);
+    std::cout << "channel->EnqueueCtrlCompletions from controller's end has enqueued items: " << result << std::endl;
+    return result;
   }
 
   /**
@@ -260,11 +266,15 @@ class ShmChannel {
    * @return uint32_t   The number of messages dequeued.
    */
   uint32_t DequeueMessages(MsgBufBatch *batch) {
+    // std::cout << "inside channel.h DequeueMessages, msg from channel to controller" << std::endl;
     (void)DCHECK_NOTNULL(batch);
     auto ret =
         DequeueMessages(&batch->buf_indices()[batch->GetSize()],
                         &batch->bufs()[batch->GetSize()], batch->GetRoom());
     batch->IncrCount(ret);
+
+    if(ret > 0)
+      std::cout << "msg dequeued from channel to controller: " << ret << std::endl;
     return ret;
   }
 

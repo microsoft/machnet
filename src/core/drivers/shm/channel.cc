@@ -143,7 +143,8 @@ void Channel::UnregisterDMAMem() {
     return;
   }
 
-  const size_t page_size = IsPosixShm() ? kPageSize : kHugePage2MSize;
+  // const size_t page_size = IsPosixShm() ? kPageSize : kHugePage2MSize;
+  const size_t page_size = get_win_pagesize();
   for (auto i = 0u; i < buffer_pages_va_.size(); ++i) {
     LOG(INFO) << utils::Format(
         "[-] DMA unmapping: VA [%p, %p) - IOVA [%p, %p)", buffer_pages_va_[i],

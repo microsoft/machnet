@@ -350,7 +350,7 @@ class MachnetEngine {
   using PmdPort = juggler::dpdk::PmdPort;
   // Slow timer (periodic processing) interval in microseconds.
   const size_t kSlowTimerIntervalUs = 1000000;  // 2ms
-  const size_t kPendingRequestTimeoutSlowTicks = 3;
+  const size_t kPendingRequestTimeoutSlowTicks = 300; // change back to 3 when debugging done.
   // Flow creation timeout in slow ticks (# of periodic executions since
   // flow creation request).
   const size_t kFlowCreationTimeoutSlowTicks = 3;
@@ -436,12 +436,16 @@ class MachnetEngine {
     const auto elapsed = time::cycles_to_us(now - last_periodic_timestamp_);
     if (elapsed >= kSlowTimerIntervalUs) {
       // Perform periodic processing.
+      std::cout << "invoking PeriodicProcess" << std::endl;
       PeriodicProcess(now);
       last_periodic_timestamp_ = now;
     }
 
     juggler::dpdk::PacketBatch rx_packet_batch;
     const uint16_t nb_pkt_rx = rxring_->RecvPackets(&rx_packet_batch);
+
+    if(nb_pkt_rx > 0)
+      std::cout << "Inside machnet_engine Run(), received packets in rx: " << nb_pkt_rx << std::endl;
     for (uint16_t i = 0; i < nb_pkt_rx; i++) {
       const auto *pkt = rx_packet_batch.pkts()[i];
       process_rx_pkt(pkt, now);
@@ -455,6 +459,8 @@ class MachnetEngine {
     for (auto &channel : channels_) {
       // TODO(ilias): Revisit the number of messages to dequeue.
       const auto nb_msg_dequeued = channel->DequeueMessages(&msg_buf_batch);
+      if(nb_msg_dequeued > 0)
+        std::cout << "msg dequeued from channels to process: " << nb_msg_dequeued << std::endl;
       for (uint32_t i = 0; i < nb_msg_dequeued; i++) {
         auto *msg = msg_buf_batch.bufs()[i];
         process_msg(channel.get(), msg, now);
@@ -623,11 +629,18 @@ class MachnetEngine {
    * It is called periodically.
    */
   void ProcessControlRequests() {
+    std::cout << "*********************************" << std::endl;
+    std::cout << "Inside ProcessControlRequests" << std::endl; 
     MachnetCtrlQueueEntry_t reqs[MACHNET_CHANNEL_CTRL_SQ_SLOT_NR];
+    
     for (const auto &channel : channels_) {
+      
       // Peek the control SQ.
       const auto nreqs =
           channel->DequeueCtrlRequests(reqs, MACHNET_CHANNEL_CTRL_SQ_SLOT_NR);
+
+      std::cout << "peeking the control SQ, got nreqs: " << nreqs << std::endl;  
+      
       for (auto i = 0u; i < nreqs; i++) {
         const auto &req = reqs[i];
         auto emit_completion = [&req, &channel](bool success) {
@@ -642,6 +655,7 @@ class MachnetEngine {
           case MACHNET_CTRL_OP_CREATE_FLOW:
             // clang-format off
             {
+              std::cout << "inside ProcessCtrlReq with MACHNET_CTRL_OP_CREATE_FLOW" << std::endl;
               const Ipv4::Address src_addr(req.flow_info.src_ip);
               if (!shared_state_->IsLocalIpv4Address(src_addr)) {
                 LOG(ERROR) << "Source IP " << src_addr.ToString()
@@ -654,6 +668,8 @@ class MachnetEngine {
               LOG(INFO) << "Request to create flow " << src_addr.ToString()
                         << " -> "
                         << dst_addr.ToString() << ":" << dst_port.port.value();
+
+              std::cout << "adding app's enqueued req to controller's pending reqs" << std::endl;
               pending_requests_.emplace_back(periodic_ticks_, req, channel);
             }
             break;
@@ -705,6 +721,7 @@ class MachnetEngine {
     for (auto it = pending_requests_.begin(); it != pending_requests_.end();) {
       const auto &[timestamp_, req, channel] = *it;
       if (periodic_ticks_ - timestamp_ > kPendingRequestTimeoutSlowTicks) {
+        std::cout << "Pending request timeout: removint it" << std::endl;
         LOG(ERROR) << utils::Format(
             "Pending request timeout: [ID: %lu, Opcode: %u]", req.id,
             req.opcode);
@@ -716,6 +733,8 @@ class MachnetEngine {
       const Ipv4::Address dst_addr(req.flow_info.dst_ip);
       const Udp::Port dst_port(req.flow_info.dst_port);
 
+
+      std::cout << "calling shared_state_->GetL2Addr" << std::endl;
       auto remote_l2_addr =
           shared_state_->GetL2Addr(txring_, src_addr, dst_addr);
       if (!remote_l2_addr.has_value()) {
@@ -794,18 +813,25 @@ class MachnetEngine {
       active_flows_map_.emplace((*flow_it)->key(), flow_it);
       it = pending_requests_.erase(it);
     }
+
+    std::cout << "Exiting ProcessControlRequests" << std::endl;
   }
 
   /**
    * @brief Iterate throught the list of flows, check and handle RTOs.
    */
   void HandleRTO() {
+    std::cout << "inside HandleRTO" << std::endl;
     for (auto it = active_flows_map_.begin(); it != active_flows_map_.end();) {
       const auto &flow_it = it->second;
       auto is_active_flow = (*flow_it)->PeriodicCheck();
       if (!is_active_flow) {
         LOG(INFO) << "Flow " << (*flow_it)->key().ToString()
                   << " is no longer active. Removing.";
+
+        std::cout << "Flow " << (*flow_it)->key().ToString()
+                  << " is no longer active. Removing ScrPortRelease and Flow" << std::endl;
+
         auto channel = (*flow_it)->channel();
         shared_state_->SrcPortRelease((*flow_it)->key().local_addr,
                                       (*flow_it)->key().local_port);
@@ -824,6 +850,8 @@ class MachnetEngine {
    * @param now TSC timestamp.
    */
   void process_rx_pkt(const juggler::dpdk::Packet *pkt, uint64_t now) {
+    std::cout << "Inside machnet_engine process_rx_pkt" << std::endl;
+
     // Sanity ethernet header check.
     if (pkt->length() < sizeof(Ethernet)) [[unlikely]]
       return;
@@ -999,6 +1027,9 @@ class MachnetEngine {
    */
   void process_msg(const shm::Channel *channel, shm::MsgBuf *msg,
                    uint64_t now) {
+    
+    std::cout << "inside machnet_engine -> process_msg" << std::endl;
+                    
     const auto *flow_info = msg->flow();
     const net::flow::Key msg_key(flow_info->src_ip, flow_info->src_port,
                                  flow_info->dst_ip, flow_info->dst_port);
@@ -1008,6 +1039,13 @@ class MachnetEngine {
                                   channel->GetName().c_str(),
                                   std::hash<net::flow::Key>{}(msg_key),
                                   msg_key.ToString().c_str());
+
+      std::cout << "Message received for a non-existing flow! "
+                 << utils::Format("(Channel: %s, 5-tuple hash: %lu, Flow: %s)",
+                                  channel->GetName().c_str(),
+                                  std::hash<net::flow::Key>{}(msg_key),
+                                  msg_key.ToString().c_str()) << std::endl;
+
       return;
     }
     const auto &flow_it = active_flows_map_[msg_key];

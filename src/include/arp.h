@@ -110,6 +110,11 @@ class ArpHandler {
    */
   void RequestL2Addr(const dpdk::TxRing *txring, const Ipv4::Address &local_ip,
                      const Ipv4::Address &target_ip) {
+    
+    std::cout << "Inside arp.h RequestL2Addr" << std::endl;
+    std::cout << "local_ip: " << local_ip.ToString() << std::endl;
+    std::cout << "target_ip: " << target_ip.ToString() << std::endl;
+
     DCHECK_NOTNULL(txring);
     DCHECK_NOTNULL(txring->GetPacketPool());
     auto *packet = txring->GetPacketPool()->PacketAlloc();
@@ -139,6 +144,7 @@ class ArpHandler {
 
     // Send the ARP request.
     auto nb_tx = txring->TrySendPackets(&packet, 1);
+    std::cout << "successful sent packets from arp.h RequestL2Addr: " << nb_tx << std::endl;
     LOG_IF(WARNING, nb_tx != 1) << "Failed to send ARP request";
   }
 
@@ -150,6 +156,10 @@ class ArpHandler {
    */
   void Reply(const dpdk::TxRing *txring, const Arp *rx_arph,
              const Ipv4::Address &local_ip) const {
+
+    std::cout << "inside arp.h Reply" << std::endl;
+    std::cout << "local_ip: " << local_ip.ToString() << std::endl;
+
     DCHECK_NOTNULL(txring);
     DCHECK_NOTNULL(txring->GetPacketPool());
     auto *packet = txring->GetPacketPool()->PacketAlloc();
@@ -177,6 +187,7 @@ class ArpHandler {
 
     // Send the ARP reply.
     auto nb_tx = txring->TrySendPackets(&packet, 1);
+    std::cout << "successful sent packets from arp.h Reply: " << nb_tx << std::endl;
     LOG_IF(WARNING, nb_tx != 1) << "Failed to send ARP reply";
   }
 
@@ -193,13 +204,20 @@ class ArpHandler {
   std::optional<Ethernet::Address> GetL2Addr(const dpdk::TxRing *txring,
                                              const Ipv4::Address &local_ip,
                                              const Ipv4::Address &target_ip) {
+
+    std::cout << "Inside arp.h GetL2Addr" << std::endl;                                            
+
     if (arp_table_.find(target_ip) != arp_table_.end()) {
       return arp_table_[target_ip];
     }
 
+    std::cout << "target_ip not in arp_table_, invoking RequestL2Addr" << std::endl;
+
     // Destination L2 Adress not found in the cache; issue an ARP who-has
     // request for the given target IP address.
     RequestL2Addr(txring, local_ip, target_ip);
+
+    std::cout << "returning NULL from arp.h GetL2Addr" << std::endl;
     return std::nullopt;
   }
 
@@ -211,10 +229,14 @@ class ArpHandler {
   void ProcessArpPacket(dpdk::TxRing *txring, const Arp *arph) {
     DCHECK(arph != nullptr);
 
+    std::cout << "Inside arp.h ProcessArpPacket" << std::endl;
+
     // We do not need to do any L2 processing; already took place.
     // Sanity checks.
     if (arph->htype.value() != Arp::ArpHwType::kEthernet)  // NOLINT
         [[unlikely]] {                                     // NOLINT
+      
+      std::cout << "Returning | Received ARP packet with invalid hardware type: " << arph->htype.value() << std::endl;
       LOG(WARNING) << "Received ARP packet with invalid hardware type: "
                    << arph->htype.value();
       return;
@@ -222,6 +244,7 @@ class ArpHandler {
 
     if (arph->ptype.value() != Ethernet::EthType::kIpv4)  // NOLINT
         [[unlikely]] {                                    // NOLINT
+      std::cout << "Returning | Received a non-ipv4 ARP packet." << std::endl;
       LOG(WARNING) << "Received a non-ipv4 ARP packet.";
       return;
     }
@@ -231,6 +254,7 @@ class ArpHandler {
         [[unlikely]] {                               // NOLINT
       LOG(WARNING) << "Received ARP packet with invalid hardware or protocol "
                    << "address length.";
+      std::cout << "Received ARP packet with invalid hardware or protocol address length." << std::endl;
       return;
     }
 
@@ -240,16 +264,28 @@ class ArpHandler {
     switch (arph->op.value()) {
       case Arp::ArpOp::kRequest:
         // Check if this request is for us.
-        if (local_ip_addrs_.find(target_ip) == local_ip_addrs_.end()) break;
+        std::cout << "Arp packet op: kRequest" << std::endl;
+
+        if (local_ip_addrs_.find(target_ip) == local_ip_addrs_.end()) {
+          std::cout << "target_ip not found in local_ip_addrs_, not invoking Reply()" << std::endl;
+          break;
+        }
         Reply(txring, arph, target_ip);
         break;
       case Arp::ArpOp::kReply:
         // Check if the ARP reply is for us.
-        if (local_ip_addrs_.find(target_ip) == local_ip_addrs_.end()) break;
+        std::cout << "Arp packet op: kReply" << std::endl;
+
+        if (local_ip_addrs_.find(target_ip) == local_ip_addrs_.end()) {
+          std::cout << "target_ip not found in local_ip_addrs_, not invoking Reply()" << std::endl;
+          break;
+        }
         // Update the cache.
         arp_table_[arph->ipv4_data.spa] = arph->ipv4_data.sha;
+        std::cout << "updated arp_table_ with (ip, MAC)" << std::endl;
         break;
       default:
+        std::cout << "Received ARP packet with unsupported operation." << std::endl;
         LOG(WARNING) << "Received ARP packet with unsupported operation.";
         return;
     }

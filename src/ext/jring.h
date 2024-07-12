@@ -230,7 +230,7 @@ static __attribute__((always_inline)) inline unsigned int jring_mp_enqueue_bulk(
  * @return
  *   The number of objects enqueued, either 0 or n
  */
-static __attribute((always_inline)) inline unsigned int jring_enqueue_bulk(
+static inline unsigned int jring_enqueue_bulk(
     struct jring *r, const void *obj_table, unsigned int n,
     unsigned int *free_space) {
   return (r->prod.sync == JRING_SYNC_ST)
@@ -324,7 +324,7 @@ static __attribute__((always_inline)) inline unsigned int jring_enqueue_burst(
  * @return
  *   The number of objects dequeued, either 0 or n
  */
-static __attribute((always_inline)) inline unsigned int jring_sc_dequeue_bulk(
+static inline unsigned int jring_sc_dequeue_bulk(
     struct jring *r, void *obj_table, unsigned int n, unsigned int *available) {
   return __jring_do_dequeue_elem(r, obj_table, r->esize, n, JRING_QUEUE_FIXED,
                                  JRING_SYNC_ST, available);
@@ -346,7 +346,7 @@ static __attribute((always_inline)) inline unsigned int jring_sc_dequeue_bulk(
  * @return
  *   The number of objects dequeued, either 0 or n
  */
-static __attribute((always_inline)) inline unsigned int jring_mc_dequeue_bulk(
+static inline unsigned int jring_mc_dequeue_bulk(
     struct jring *r, void *obj_table, unsigned int n, unsigned int *available) {
   return __jring_do_dequeue_elem(r, obj_table, r->esize, n, JRING_QUEUE_FIXED,
                                  JRING_SYNC_MT, available);
@@ -368,7 +368,7 @@ static __attribute((always_inline)) inline unsigned int jring_mc_dequeue_bulk(
  * @return
  *   The number of objects dequeued, either 0 or n.
  */
-static __attribute((always_inline)) inline unsigned int jring_dequeue_bulk(
+static inline unsigned int jring_dequeue_bulk(
     struct jring *r, void *obj_table, unsigned int n, unsigned int *available) {
   return (r->cons.sync == JRING_SYNC_ST)
              ? jring_sc_dequeue_bulk(r, obj_table, n, available)
@@ -392,7 +392,7 @@ static __attribute((always_inline)) inline unsigned int jring_dequeue_bulk(
  * @return
  *   The number of objects dequeued, in the range [0, n]
  */
-static __attribute((always_inline)) inline unsigned int jring_sc_dequeue_burst(
+static inline unsigned int jring_sc_dequeue_burst(
     struct jring *r, void *obj_table, unsigned int n, unsigned int *available) {
   return __jring_do_dequeue_elem(r, obj_table, r->esize, n,
                                  JRING_QUEUE_VARIABLE, JRING_SYNC_ST,
@@ -416,7 +416,7 @@ static __attribute((always_inline)) inline unsigned int jring_sc_dequeue_burst(
  * @return
  *   The number of objects dequeued, in the range [0, n]
  */
-static __attribute((always_inline)) inline unsigned int jring_mc_dequeue_burst(
+static inline unsigned int jring_mc_dequeue_burst(
     struct jring *r, void *obj_table, unsigned int n, unsigned int *available) {
   return __jring_do_dequeue_elem(r, obj_table, r->esize, n,
                                  JRING_QUEUE_VARIABLE, JRING_SYNC_MT,
@@ -439,7 +439,7 @@ static __attribute((always_inline)) inline unsigned int jring_mc_dequeue_burst(
  * @return
  *   The number of objects dequeued, ranging in [0,n].
  */
-static __attribute((always_inline)) inline unsigned int jring_dequeue_burst(
+static inline unsigned int jring_dequeue_burst(
     struct jring *r, void *obj_table, unsigned int n, unsigned int *available) {
   return (r->cons.sync == JRING_SYNC_ST)
              ? jring_sc_dequeue_burst(r, obj_table, n, available)
