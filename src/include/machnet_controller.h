@@ -7,6 +7,7 @@
 #define SRC_INCLUDE_MACHNET_CONTROLLER_H_
 
 #ifdef _WIN32
+#define _GNU_SOURCE
 #include "windows_uuid.h"
 #else
 #include <uuid/uuid.h>

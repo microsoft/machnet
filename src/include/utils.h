@@ -30,16 +30,22 @@
 #include <type_traits>
 #include <vector>
 #include "ttime.h"
+#include <cstdio>
 
 #define XXH_STATIC_LINKING_ONLY
 #define XXH_INLINE_ALL
 #include "xxhash.h"
 
 #ifdef _WIN32
+
 #include "utils_helper.h"
+#include "asprintf.h"
 
 #include <array>
 #include <algorithm>
+
+#undef min
+#undef max
 #endif
 
 namespace juggler {
@@ -265,11 +271,11 @@ namespace utils {
     std::size_t mask) {
   cpu_set_t m;
   CPU_ZERO(&m);
-  // const auto mask_bitsize =
-  //     std::min(sizeof(mask) * 8, static_cast<size_t>(CPU_SETSIZE));
-  // for (std::size_t i = 0; i < mask_bitsize; i++) {
-  //   if (mask & (1ULL << i)) CPU_SET(i, &m);
-  // }
+  const auto mask_bitsize =
+      std::min(sizeof(mask) * 8, static_cast<size_t>(CPU_SETSIZE));
+  for (std::size_t i = 0; i < mask_bitsize; i++) {
+    if (mask & (1ULL << i)) CPU_SET(i, &m);
+  }
   return m;
 }
 
@@ -379,14 +385,14 @@ class CmdLineOpts {
 };
 
 static inline std::string FormatVarg(const char *fmt, va_list ap) {
-  // char *ptr = nullptr;
-  // int len = vasprintf(&ptr, fmt, ap);
-  // if (len < 0) return "<FormatVarg() error>";
+  char *ptr = nullptr;
+  int len = vasprintf(&ptr, fmt, ap);
+  if (len < 0) return "<FormatVarg() error>";
 
-  // std::string ret(ptr, len);
-  // free(ptr);
-  // return ret;
-  return "";
+  std::string ret(ptr, len);
+  free(ptr);
+  return ret;
+  // return "";
 }
 
 [[maybe_unused]] static inline std::string Format(const char *fmt, ...) {

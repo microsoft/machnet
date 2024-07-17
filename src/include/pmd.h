@@ -463,16 +463,31 @@ class PmdPort {
         GetPortRxPkts(), GetPortRxBytes(), GetPortRxDrops(),
         GetPortRxNoMbufErr());
 
+    std::cout << juggler::utils::Format(
+        "[STATS - Port: %u] [TX] Pkts: %lu, Bytes: %lu, Drops: %lu [RX] Pkts: "
+        "%lu, Bytes: %lu, Drops: %lu, NoRXMbufs: %lu",
+        port_id_, GetPortTxPkts(), GetPortTxBytes(), GetPortTxDrops(),
+        GetPortRxPkts(), GetPortRxBytes(), GetPortRxDrops(),
+        GetPortRxNoMbufErr()) << std::endl;
+
     for (uint16_t i = 0; i < tx_rings_nr_; i++) {
       LOG(INFO) << juggler::utils::Format(
           "[STATS - Port: %u, Queue: %u] [TX] Pkts: %lu, Bytes: %lu", port_id_,
           i, GetPortQueueTxPkts(i), GetPortQueueTxBytes(i));
+
+      std::cout << juggler::utils::Format(
+          "[STATS - Port: %u, Queue: %u] [TX] Pkts: %lu, Bytes: %lu", port_id_,
+          i, GetPortQueueTxPkts(i), GetPortQueueTxBytes(i)) << std::endl;
     }
 
     for (uint16_t i = 0; i < rx_rings_nr_; i++) {
       LOG(INFO) << juggler::utils::Format(
           "[STATS - Port: %u, Queue: %u] [RX] Pkts: %lu, Bytes: %lu", port_id_,
           i, GetPortQueueRxPkts(i), GetPortQueueRxBytes(i));
+
+      std::cout << juggler::utils::Format(
+          "[STATS - Port: %u, Queue: %u] [RX] Pkts: %lu, Bytes: %lu", port_id_,
+          i, GetPortQueueRxPkts(i), GetPortQueueRxBytes(i)) << std::endl;
     }
   }
 

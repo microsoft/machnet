@@ -669,6 +669,10 @@ class MachnetEngine {
                         << " -> "
                         << dst_addr.ToString() << ":" << dst_port.port.value();
 
+              std::cout << "Request to create flow " << src_addr.ToString()
+                        << " -> "
+                        << dst_addr.ToString() << ":" << dst_port.port.value() << std::endl;
+
               std::cout << "adding app's enqueued req to controller's pending reqs" << std::endl;
               pending_requests_.emplace_back(periodic_ticks_, req, channel);
             }
@@ -851,6 +855,13 @@ class MachnetEngine {
    */
   void process_rx_pkt(const juggler::dpdk::Packet *pkt, uint64_t now) {
     std::cout << "Inside machnet_engine process_rx_pkt" << std::endl;
+    auto *test_eh = pkt->head_data<Ethernet *>();
+    auto *test_arph = pkt->head_data<Arp *>(sizeof(*test_eh));
+
+    std::cout << "sent from IP: " << test_arph->ipv4_data.spa.ToString() << std:: endl;
+    std::cout << "sent from MAC: " << test_arph->ipv4_data.sha.ToString() << std:: endl;
+    std::cout << "received at IP: " << test_arph->ipv4_data.tpa.ToString() << std:: endl;
+    std::cout << "received at MAC: " << test_arph->ipv4_data.tha.ToString() << std:: endl;
 
     // Sanity ethernet header check.
     if (pkt->length() < sizeof(Ethernet)) [[unlikely]]
@@ -861,6 +872,7 @@ class MachnetEngine {
       // clang-format off
       case Ethernet::kArp:
         {
+          std::cout << "calling ProcessArpPacket with kArp" << std::endl;
           auto *arph = pkt->head_data<Arp *>(sizeof(*eh));
           shared_state_->ProcessArpPacket(txring_, arph);
         }
@@ -868,7 +880,10 @@ class MachnetEngine {
       break;
         // clang-format off
       [[likely]] case Ethernet::kIpv4:
+        {
+          std::cout << "calling process_ex_ipv4 with kIpv4" << std::endl;
           process_rx_ipv4(pkt, now);
+        }
         break;
       // clang-format on
       case Ethernet::kIpv6:

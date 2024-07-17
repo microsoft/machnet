@@ -143,6 +143,12 @@ class ArpHandler {
     arph->ipv4_data.tpa = target_ip;
 
     // Send the ARP request.
+    std::cout << "before invoking TrySendPackets" << std::endl;
+    std::cout << "Sender IP: " << arph->ipv4_data.spa.ToString() << std:: endl;
+    std::cout << "Sender MAC: " << arph->ipv4_data.sha.ToString() << std:: endl;
+    std::cout << "Target IP: " << arph->ipv4_data.tpa.ToString() << std:: endl;
+    std::cout << "Target MAC: " << arph->ipv4_data.tha.ToString() << std:: endl;
+
     auto nb_tx = txring->TrySendPackets(&packet, 1);
     std::cout << "successful sent packets from arp.h RequestL2Addr: " << nb_tx << std::endl;
     LOG_IF(WARNING, nb_tx != 1) << "Failed to send ARP request";
@@ -264,7 +270,7 @@ class ArpHandler {
     switch (arph->op.value()) {
       case Arp::ArpOp::kRequest:
         // Check if this request is for us.
-        std::cout << "Arp packet op: kRequest" << std::endl;
+        std::cout << "Arp packet op: kRequest, with target_ip: " << target_ip.ToString() << std::endl;
 
         if (local_ip_addrs_.find(target_ip) == local_ip_addrs_.end()) {
           std::cout << "target_ip not found in local_ip_addrs_, not invoking Reply()" << std::endl;
