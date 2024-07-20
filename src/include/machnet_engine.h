@@ -103,6 +103,7 @@ class MachnetEngineSharedState {
       return std::nullopt;
     }
 
+    std::cout << "Inside SrcPortAlloc" << std::endl;
     // Helper lambda to find a free port.
     // Given a 64-bit wide slot in a bitmap (vector of uint64_t), find the first
     // available port that satisfies the lambda condition.
@@ -747,11 +748,14 @@ class MachnetEngine {
         continue;
       }
 
+      std::cout << "L2 resolved" << std::endl;
       // L2 address has been resolved. Allocate a source port.
       auto rss_lambda = [src_addr, dst_addr, dst_port,
                          rss_key = pmd_port_->GetRSSKey(), pmd_port = pmd_port_,
                          rx_queue_id =
                              rxring_->GetRingId()](uint16_t port) -> bool {
+
+        std::cout << std::endl;
         rte_thash_tuple ipv4_l3_l4_tuple;
         ipv4_l3_l4_tuple.v4.src_addr = src_addr.address.value();
         ipv4_l3_l4_tuple.v4.dst_addr = dst_addr.address.value();
@@ -788,7 +792,11 @@ class MachnetEngine {
         return true;
       };
 
+      std::cout << "Calling SrcPortAlloc with src_addr" << std::endl;
+
       auto src_port = shared_state_->SrcPortAlloc(src_addr, rss_lambda);
+
+      std::cout << "after srcprtalloc call" << std::endl;
       if (!src_port.has_value()) {
         LOG(ERROR) << "Cannot allocate source port for " << src_addr.ToString();
         it = pending_requests_.erase(it);

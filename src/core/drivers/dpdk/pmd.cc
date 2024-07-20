@@ -57,7 +57,7 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
     rss_hf &= devinfo->flow_type_rss_offloads;
   }
 
-  #ifdef __linux__ 
+  // #ifdef __linux__ 
     port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
     port_conf.lpbk_mode = 1;
     port_conf.rx_adv_conf.rss_conf = {
@@ -65,9 +65,9 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
       .rss_key_len = devinfo->hash_key_size,
       .rss_hf = rss_hf,
     };
-  #else
-    port_conf.rxmode.mq_mode = ETH_MQ_RX_NONE;
-  #endif
+  // #else
+    // port_conf.rxmode.mq_mode = ETH_MQ_RX_NONE;
+  // #endif
 
   port_conf.rxmode.mtu = PmdRing::kDefaultFrameSize;
   port_conf.rxmode.max_lro_pkt_size = PmdRing::kDefaultFrameSize;
@@ -198,86 +198,86 @@ void PmdPort::InitDriver(uint16_t mtu) {
 
     std::cout << "getting RSS config from the device: " << std::endl;
     // Try to get the RSS configuration from the device.
-    // rss_hash_key_.resize(devinfo_.hash_key_size, 0);
-    // struct rte_eth_rss_conf rss_conf;
-    // rss_conf.rss_key = rss_hash_key_.data();
-    // rss_conf.rss_key_len = devinfo_.hash_key_size;
-    // ret = rte_eth_dev_rss_hash_conf_get(port_id_, &rss_conf);
-    // if (ret != 0) {
-    //   LOG(WARNING) << "Failed to get RSS configuration for port "
-    //                << static_cast<int>(port_id_) << ". Error "
-    //                << rte_strerror(ret);
-    // }
+    rss_hash_key_.resize(devinfo_.hash_key_size, 0);
+    struct rte_eth_rss_conf rss_conf;
+    rss_conf.rss_key = rss_hash_key_.data();
+    rss_conf.rss_key_len = devinfo_.hash_key_size;
+    ret = rte_eth_dev_rss_hash_conf_get(port_id_, &rss_conf);
+    if (ret != 0) {
+      LOG(WARNING) << "Failed to get RSS configuration for port "
+                   << static_cast<int>(port_id_) << ". Error "
+                   << rte_strerror(ret);
+    }
 
-    // std::cout << "Ret for rte_eth_dev_rss_hash_conf_get: " << ret << std::endl;
+    std::cout << "Ret for rte_eth_dev_rss_hash_conf_get: " << ret << std::endl;
 
-    // rss_reta_conf_.resize(devinfo_.reta_size / RTE_ETH_RETA_GROUP_SIZE,
-    //                       {-1ull, {0}});
+    rss_reta_conf_.resize(devinfo_.reta_size / RTE_ETH_RETA_GROUP_SIZE,
+                          {-1ull, {0}});
 
-    // std::cout << "initializing RETA table: " << std::endl;
-    // for (auto i = 0u; i < devinfo_.reta_size; i++) {
-    //   // Initialize the RETA table in a round-robin fashion.
-    //   auto index = i / RTE_ETH_RETA_GROUP_SIZE;
-    //   auto shift = i % RTE_ETH_RETA_GROUP_SIZE;
-    //   rss_reta_conf_[index].reta[shift] = i % rx_rings_nr_;
-    //   rss_reta_conf_[index].mask |= (1 << shift);
-    // }
+    std::cout << "initializing RETA table: " << std::endl;
+    for (auto i = 0u; i < devinfo_.reta_size; i++) {
+      // Initialize the RETA table in a round-robin fashion.
+      auto index = i / RTE_ETH_RETA_GROUP_SIZE;
+      auto shift = i % RTE_ETH_RETA_GROUP_SIZE;
+      rss_reta_conf_[index].reta[shift] = i % rx_rings_nr_;
+      rss_reta_conf_[index].mask |= (1 << shift);
+    }
 
-    // ret = rte_eth_dev_rss_reta_update(port_id_, rss_reta_conf_.data(),
-    //                                   devinfo_.reta_size);
-    // std::cout << "Ret for rte_eth_dev_rss_reta_update: " << ret << std::endl;
+    ret = rte_eth_dev_rss_reta_update(port_id_, rss_reta_conf_.data(),
+                                      devinfo_.reta_size);
+    std::cout << "Ret for rte_eth_dev_rss_reta_update: " << ret << std::endl;
 
-    // if (ret != 0) {
-    //   // By default the RSS RETA table is configured and it works when the
-    //   // number of RX queues is a power of two. In case of non-power-of-two it
-    //   // seems that RSS is not behaving as expected, although it should be
-    //   // supported by 'mlx5' drivers according to the documentation.
-    //   //
-    //   // Explicitly updating the RSS RETA table with the default configuration
-    //   // seems to fix the issue.
-    //   LOG(WARNING) << "Failed to update RSS RETA configuration for port "
-    //                << static_cast<int>(port_id_) << ". Error "
-    //                << rte_strerror(ret);
-    //   std::cout << "Failed to update RSS RETA configuration for port "
-    //                << static_cast<int>(port_id_) << ". Error "
-    //                << rte_strerror(ret) << std::endl;
-    // }
+    if (ret != 0) {
+      // By default the RSS RETA table is configured and it works when the
+      // number of RX queues is a power of two. In case of non-power-of-two it
+      // seems that RSS is not behaving as expected, although it should be
+      // supported by 'mlx5' drivers according to the documentation.
+      //
+      // Explicitly updating the RSS RETA table with the default configuration
+      // seems to fix the issue.
+      LOG(WARNING) << "Failed to update RSS RETA configuration for port "
+                   << static_cast<int>(port_id_) << ". Error "
+                   << rte_strerror(ret);
+      std::cout << "Failed to update RSS RETA configuration for port "
+                   << static_cast<int>(port_id_) << ". Error "
+                   << rte_strerror(ret) << std::endl;
+    }
 
-    // ret = rte_eth_dev_rss_reta_query(port_id_, rss_reta_conf_.data(),
-    //                                  devinfo_.reta_size);
-    // std::cout << "Ret for rte_eth_dev_rss_reta_query: " << ret << std::endl;
+    ret = rte_eth_dev_rss_reta_query(port_id_, rss_reta_conf_.data(),
+                                     devinfo_.reta_size);
+    std::cout << "Ret for rte_eth_dev_rss_reta_query: " << ret << std::endl;
 
-    // if (ret != 0) {
-    //   LOG(WARNING) << "Failed to get RSS RETA configuration for port "
-    //                << static_cast<int>(port_id_) << ". Error "
-    //                << rte_strerror(ret);
-    // }
+    if (ret != 0) {
+      LOG(WARNING) << "Failed to get RSS RETA configuration for port "
+                   << static_cast<int>(port_id_) << ". Error "
+                   << rte_strerror(ret);
+    }
 
-    // LOG(INFO) << utils::Format("RSS indirection table (size %d):\n",
-    //                            devinfo_.reta_size);
-    // for (auto i = 0u; i < devinfo_.reta_size; i++) {
-    //   const auto kColumns = 8;
-    //   auto index = i / RTE_ETH_RETA_GROUP_SIZE;
-    //   auto shift = i % RTE_ETH_RETA_GROUP_SIZE;
-    //   if (!(rss_reta_conf_[index].mask & (1 << shift))) {
-    //     LOG(WARNING) << "Rss reta conf mask is not set for index " << index
-    //                  << " and shift " << shift;
-    //     continue;
-    //   }
+    LOG(INFO) << utils::Format("RSS indirection table (size %d):\n",
+                               devinfo_.reta_size);
+    for (auto i = 0u; i < devinfo_.reta_size; i++) {
+      const auto kColumns = 8;
+      auto index = i / RTE_ETH_RETA_GROUP_SIZE;
+      auto shift = i % RTE_ETH_RETA_GROUP_SIZE;
+      if (!(rss_reta_conf_[index].mask & (1 << shift))) {
+        LOG(WARNING) << "Rss reta conf mask is not set for index " << index
+                     << " and shift " << shift;
+        continue;
+      }
 
-    //   std::string reta_table;
-    //   if (i % kColumns == 0) {
-    //     reta_table += std::to_string(i) + ":\t" +
-    //                   std::to_string(rss_reta_conf_[index].reta[shift]);
-    //   } else if (i % kColumns == kColumns - 1) {
-    //     reta_table +=
-    //         "\t" + std::to_string(rss_reta_conf_[index].reta[shift]) + "\n";
-    //   } else {
-    //     reta_table += "\t" + std::to_string(rss_reta_conf_[index].reta[shift]);
-    //   }
+      std::string reta_table;
+      if (i % kColumns == 0) {
+        reta_table += std::to_string(i) + ":\t" +
+                      std::to_string(rss_reta_conf_[index].reta[shift]);
+      } else if (i % kColumns == kColumns - 1) {
+        reta_table +=
+            "\t" + std::to_string(rss_reta_conf_[index].reta[shift]) + "\n";
+      } else {
+        reta_table += "\t" + std::to_string(rss_reta_conf_[index].reta[shift]);
+      }
 
-    //   std::cout << reta_table;
-    // }
+      std::cout << reta_table;
+    }
 
     ret = rte_eth_dev_adjust_nb_rx_tx_desc(port_id_, &rx_ring_desc_nr_,
                                            &tx_ring_desc_nr_);

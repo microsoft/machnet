@@ -221,10 +221,98 @@ class ArpHandler {
 
     // Destination L2 Adress not found in the cache; issue an ARP who-has
     // request for the given target IP address.
-    RequestL2Addr(txring, local_ip, target_ip);
+
+    #ifdef __linux__ 
+      RequestL2Addr(txring, local_ip, target_ip);
+    #else 
+      std::string remote_l2addr = GetL2AddrWin(target_ip);
+      if(remote_l2addr.size()) { 
+        std::cout << "got " << remote_l2addr << std::endl;
+        Ethernet::Address remote_addr(remote_l2addr);
+        arp_table_[target_ip] = remote_addr;
+        return arp_table_[target_ip];
+      }
+    #endif
 
     std::cout << "returning NULL from arp.h GetL2Addr" << std::endl;
     return std::nullopt;
+  }
+
+
+  /**
+   * @brief ARP broadcast request in windows seems to be handled
+   * differently than in Linux. Following is a hacky way to retrieve 
+   * remote MAC address
+   * @param arph target_ip address.
+   */
+  std::string GetL2AddrWin(const Ipv4::Address &target_ipv4) {
+  
+    std::string target_ip = target_ipv4.ToString();
+    std::string target_mac = FetchArpCache(target_ip);
+    std::cout << "Inside GetL2AddrWin" << std::endl;
+    if(target_mac.size()) return target_mac;
+    
+    std::cout << "sending out ping" << std::endl;
+    // send a ping to the IP address
+    auto send_ping = [](const std::string& target_ip) -> bool {
+        std::string command = "ping -n 4 " + target_ip;
+        int ping_output = std::system(command.c_str());
+        return (ping_output == 0);
+    };
+
+    if(!send_ping(target_ip)) {
+      std::cerr << "failed to retrieve remote L2 address" << std::endl;
+      return "";
+    }
+
+    target_mac = FetchArpCache(target_ip);
+    std::cout << "target_mac: " << target_mac << std::endl;
+
+    return target_mac.size() ? target_mac : "";
+  }
+
+  std::string FetchArpCache(const std::string &target_ip) {
+    std::string arp_cache;
+    char buffer[512];
+    std::string command = "arp -a";
+    FILE* pipe;
+
+    try {
+        pipe = _popen(command.c_str(), "r");
+        if (!pipe) throw std::runtime_error("popen() failed!");
+        
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            arp_cache += buffer;
+        }
+    } catch (const std:: runtime_error &e) {
+        _pclose(pipe);
+        std::cerr << "arp fetch failed" << std::endl;
+        return "";
+    }
+    _pclose(pipe);
+    return ParseMacAddress(arp_cache, target_ip);
+  }
+
+  std::string ParseMacAddress(const std::string &arp_cache, const std::string &target_ip) {
+    std::istringstream iss(arp_cache);
+    std::string line;
+
+    while(std::getline(iss, line)) {
+      if(line.find("Internet Address") != std::string::npos) continue;
+      if(line.find("Interface:") != std::string::npos) continue;
+
+      std::istringstream line_stream(line);
+      std::string ip, mac, type;
+
+      line_stream >> ip >> mac >> type;
+
+      if (ip == target_ip) {
+        std::replace(mac.begin(), mac.end(), '-', ':');
+        return mac;
+      }
+    }
+
+    return "";
   }
 
   /**
