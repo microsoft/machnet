@@ -928,10 +928,10 @@ class MachnetEngine {
       [[likely]] case Ipv4::kUdp:
           // clang-format on
           if (active_flows_map_.find(pkt_key) != active_flows_map_.end()) {
-        const auto &flow_it = active_flows_map_[pkt_key];
-        (*flow_it)->InputPacket(pkt);
-        return;
-      }
+            const auto &flow_it = active_flows_map_[pkt_key];
+            (*flow_it)->InputPacket(pkt);
+            return;
+          }
 
       {
         // If we reach here, it means that the packet does not belong to any

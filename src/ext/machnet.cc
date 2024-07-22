@@ -694,7 +694,7 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
   }
 
   std::cout << "after enqueue before dequeue" << std::endl;
-  getchar();
+  // getchar();
 
   MachnetCtrlQueueEntry_t resp;
   memset(&resp, 0, sizeof(resp));
@@ -708,6 +708,7 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
     #else
       std::this_thread::sleep_for(std::chrono::seconds(1));
     #endif
+    std::cout << "trial: " << max_tries << ", cq dequeu ret: " << ret << std::endl;
   } while (max_tries-- > 0);
   if (ret == 0) {
     fprintf(stderr, "ERROR: Failed to dequeue response from control queue.\n");
