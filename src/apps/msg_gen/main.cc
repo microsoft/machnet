@@ -18,6 +18,10 @@
 #include <sstream>
 #include <thread>
 
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+
+using namespace boost::interprocess;
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 using std::chrono::time_point;
@@ -333,7 +337,11 @@ int main(int argc, char *argv[]) {
   }
 
   CHECK_EQ(machnet_init(), 0) << "Failed to initialize Machnet library.";
-  void *channel_ctx = machnet_attach();
+
+  shared_memory_object shm_obj;
+  mapped_region region;
+
+  void *channel_ctx = machnet_attach(shm_obj, region);
   CHECK_NOTNULL(channel_ctx);
 
   MachnetFlow_t flow;
@@ -369,6 +377,7 @@ int main(int argc, char *argv[]) {
       sleep(5);
     #else
       // a cross-platform sleep function for both .c and .cc files
+      std::this_thread::sleep_for(std::chrono::seconds(10));
     #endif
   }
   datapath_thread.join();

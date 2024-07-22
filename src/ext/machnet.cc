@@ -603,7 +603,7 @@ void *machnet_attach(shared_memory_object &shm_obj, mapped_region &region) {
   std::cout << "inside machnet_attach" << std::endl;
 
   uuid_t uuid;        // UUID for the shared memory channel.
-  char uuid_str[37];  // 36 chars + null terminator for UUID string.
+  char uuid_str[37] = {};  // 36 chars + null terminator for UUID string.
 
   std::cout << "before generating uuid for shm channel in machnet_attach" << std::endl;
   uuid_generate(uuid);
