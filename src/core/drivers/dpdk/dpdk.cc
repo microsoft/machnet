@@ -15,23 +15,17 @@ void Dpdk::InitDpdk(juggler::utils::CmdLineOpts rte_args) {
   }
 
   LOG(INFO) << "Initializing DPDK with args: " << rte_args.ToString();
-  std::cout << "Initializing DPDK with args: " << rte_args.ToString() << std::endl;
   int ret = rte_eal_init(rte_args.GetArgc(), rte_args.GetArgv());
   if (ret < 0) {
     LOG(FATAL) << "rte_eal_init() failed: ret = " << ret
                << " rte_errno = " << rte_errno << " ("
                << rte_strerror(rte_errno) << ")";
-    std::cout << "rte_eal_init() failed: ret = " << ret
-               << " rte_errno = " << rte_errno << " ("
-               << rte_strerror(rte_errno) << ")" << std::endl;
   }
 
   // Check if DPDK runs in PA or VA mode.
   if (rte_eal_iova_mode() == RTE_IOVA_VA) {
     LOG(INFO) << "DPDK runs in VA mode.";
-    std::cout << "DPDK runs in VA mode." << std::endl;
   } else {
-    std::cout << "DPDK runs in PA mode." << std::endl;
     LOG(INFO) << "DPDK runs in PA mode.";
   }
 
@@ -69,7 +63,6 @@ std::optional<uint16_t> Dpdk::GetPmdPortIdByMac(
 
     int ret = rte_eth_macaddr_get(
         port_id, reinterpret_cast<rte_ether_addr *>(lladdr.bytes));
-    std::cout << "ret value inside GetPmdPortIdByMac > RTE_ETF:FOREACH_DEV: " << ret << std::endl;
     if (ret != 0) {
       LOG(WARNING)
           << "rte_eth_macaddr_get() failed. Cannot retrieve eth device "
@@ -83,10 +76,6 @@ std::optional<uint16_t> Dpdk::GetPmdPortIdByMac(
     if (lladdr == l2_addr) {
       p_id = port_id;
     }
-
-    std::cout << "lladdr: " << lladdr.ToString() << std::endl;
-    std::cout << "l2_addr: " << l2_addr.ToString() << std::endl;
-    std::cout << "port id: " << port_id << std::endl;
   }
 
   return p_id;

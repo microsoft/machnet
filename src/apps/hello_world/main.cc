@@ -7,9 +7,6 @@
  *    ./hello_world --local=<local IP> --remote=<server IP> --is_client=1
  */
 
-// debugging
-#include <iostream>
-
 #include <gflags/gflags.h>
 #include <machnet.h>
 #include <thread>
@@ -35,27 +32,17 @@ void assert_with_msg(bool cond, const char *msg) {
 }
 
 int main(int argc, char *argv[]) {
-  std::cout << "inside hello_world main" << std::endl;
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  std::cout << "local ip: " << FLAGS_local << std::endl;
-
-  std::cout << "before calling machnet_init()" << std::endl;
   int ret = machnet_init();
-  std::cout << "after calling machnet_init()" << std::endl;
   assert_with_msg(ret == 0, "machnet_init() failed");
-
-  std::cout << "before calling machnet_attach()" << std::endl;
 
   shared_memory_object shm_obj;
   mapped_region region;
 
   void *channel = machnet_attach(shm_obj, region);
-  std::cout << "after calling machnet_attach()" << std::endl;
   assert_with_msg(channel != nullptr, "machnet_attach() failed");
 
-  std::cout << "before calling machnet_listen()" << std::endl;
   ret = machnet_listen(channel, FLAGS_local.c_str(), kPort);
-  std::cout << "after calling machnet_listen()" << std::endl;
   assert_with_msg(ret == 0, "machnet_listen() failed");
 
   printf("Listening on %s:%d\n", FLAGS_local.c_str(), kPort);

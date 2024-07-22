@@ -12,9 +12,6 @@
 #include "winclock.h"
 #endif
 
-// debugging
-#include <iostream>
-
 namespace juggler {
 namespace time {
 
@@ -29,50 +26,30 @@ static inline uint64_t rdtsc() {
 }
 
 [[maybe_unused]] static inline uint64_t estimate_tsc_hz() {
-  std::cout << "inside estimate_tsc_hz in ttime.h" << std::endl;
-
   timespec start, end;
   uint64_t start_tsc, end_tsc;
-
-  std::cout << "defining precise_tsc in ttime.h" << std::endl;
 
   auto precise_tsc = []() {
     _mm_mfence();
     return rdtsc();
   };
 
-  std::cout << "calling timespec_get for start time" << std::endl;
   #ifdef _WIN32
-    // int clock_monotonic = 1;
     timespec_get(&start, TIME_UTC);
   #else
     clock_gettime(CLOCK_MONOTONIC_RAW, &start);
   #endif // _WIN32
 
-  std::cout << "timespec start sec: " << start.tv_sec << std::endl;
-  std::cout << "timespec start nanosec: " << start.tv_nsec << std::endl;
-  std::cout << "calling precise_tsc()" << std::endl;
-
   start_tsc = precise_tsc();
-
-  std::cout << "start_tsc: " << start_tsc << std::endl;
-  
 
   for (auto i = 0; i <= 1E6; i++) precise_tsc();
   end_tsc = precise_tsc();
 
-  std::cout << "end_tsc: " << end_tsc << std::endl;
-  
-  std::cout << "calling timespec_get for end time" << std::endl;
   #ifdef _WIN32
     timespec_get(&end, TIME_UTC);
   #else
     clock_gettime(CLOCK_MONOTONIC_RAW, &end);
   #endif // _WIN32
-
-  std::cout << "timespec end sec: " << end.tv_sec << std::endl;
-  std::cout << "timespec end nanosec: " << end.tv_nsec << std::endl;
-  
 
   auto ns_diff = [](timespec s, timespec e) {
     uint64_t ns = 0;
@@ -83,16 +60,8 @@ static inline uint64_t rdtsc() {
     return ns;
   };
 
-  
-
   uint64_t cycles = end_tsc - start_tsc;
   uint64_t time_in_ns = ns_diff(start, end);
-
-  std::cout << "nanosecond difference: " << time_in_ns << std::endl;
-
-  //debugging
-  uint64_t tmp_ = cycles * 1E9 / time_in_ns;;
-  std::cout << "return value in hz from estimate_tsc_hz: " << tmp_ << std::endl; 
 
   // Return Hz.
   return cycles * 1E9 / time_in_ns;

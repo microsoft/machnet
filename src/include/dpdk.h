@@ -13,9 +13,6 @@
 #include <optional>
 #include <vector>
 
-// Debugging
-#include <iostream>
-
 namespace juggler {
 namespace dpdk {
 
@@ -23,9 +20,7 @@ namespace dpdk {
     uint8_t port_id, struct rte_eth_dev_info *devinfo,
     juggler::net::Ethernet::Address *lladdr, std::string *pci_string) {
 
-  std::cout << "Inside FetchDpdkPortInfo" << std::endl;
   if (!rte_eth_dev_is_valid_port(port_id)) {
-    std::cout << "Port id " << static_cast<int>(port_id) << " is not valid." << std::endl;
     LOG(INFO) << "Port id " << static_cast<int>(port_id) << " is not valid.";
     return;
   }
@@ -35,9 +30,6 @@ namespace dpdk {
     LOG(WARNING) << "rte_eth_dev_info() failed. Cannot retrieve eth device "
                     "contextual info for port "
                  << static_cast<int>(port_id);
-    std::cout << "rte_eth_dev_info() failed. Cannot retrieve eth device "
-                    "contextual info for port "
-                 << static_cast<int>(port_id) << std::endl;
     return;
   }
   CHECK_NOTNULL(devinfo->device);
@@ -48,13 +40,7 @@ namespace dpdk {
   struct rte_bus *bus = rte_bus_find_by_device(devinfo->device);
 
   if (bus && !strcmp(bus->name, "pci")) {
-    std::cout << "inside pci info fetching block" << std::endl;
     const struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(devinfo->device);
-
-    std::cout << "After calling RTE_DEV_TO_PCI" << std::endl;
-    if(pci_dev) std::cout << "pci_dev exists" << std::endl;
-    else std::cout << "pci_dev is NULL" << std::endl;
-
     *pci_string = juggler::utils::Format(
         "%08x:%02hhx:%02hhx.%02hhx %04hx:%04hx", pci_dev->addr.domain,
         pci_dev->addr.bus, pci_dev->addr.devid, pci_dev->addr.function,
@@ -67,13 +53,6 @@ namespace dpdk {
             << ", TXQ: " << devinfo->max_tx_queues
             << ", l2addr: " << lladdr->ToString()
             << ", pci_info: " << *pci_string << "]";
-
-  std::cout << "[PMDPORT] [port_id: " << static_cast<uint32_t>(port_id)
-            << ", driver: " << devinfo->driver_name
-            << ", RXQ: " << devinfo->max_rx_queues
-            << ", TXQ: " << devinfo->max_tx_queues
-            << ", l2addr: " << lladdr->ToString()
-            << ", pci_info: " << *pci_string << "]" << std::endl;
 }
 
 [[maybe_unused]] static std::optional<uint16_t> FindSlaveVfPortId(
@@ -115,15 +94,12 @@ namespace dpdk {
   // VMs. Without this, the application is going to bind on top of the mlx5
   // driver. Worse TX is going to work, but nothing will appear on the RX side.
 
-  std::cout << "Inside dpdk.h -> ScanDpdkPorts" << std::endl;
-
   uint16_t port_id;
   RTE_ETH_FOREACH_DEV(port_id) {
     struct rte_eth_dev_info devinfo;
     std::string pci_info;
     juggler::net::Ethernet::Address lladdr;
 
-    std::cout << "calling FetchDpdkPortInfo with port_id: " << static_cast<int>(port_id) << std::endl;
     FetchDpdkPortInfo(port_id, &devinfo, &lladdr, &pci_info);
   }
 }

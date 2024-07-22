@@ -34,11 +34,6 @@
   // #include <windows.h>
 #endif
 
-// Debugging
-#include <iostream>
-
-// using namespace boost::interprocess;
-
 namespace juggler {
 class MachnetEngine;  // forward declaration
 }
@@ -166,9 +161,7 @@ class ShmChannel {
    */
   uint32_t DequeueCtrlRequests(MachnetCtrlQueueEntry_t *ctrl_entries,
                                uint32_t nb_entries) {
-    std::cout << "Inside channel.h DequeueCtrlRequests, nb_entries: " << nb_entries << std::endl;                                
     uint32_t result = __machnet_channel_ctrl_sq_dequeue(ctx_, nb_entries, ctrl_entries);
-    std::cout << "channel->DequeueCtrlRequests from controller's end has dequeued items: " << result << std::endl;
     return result;
   }
 
@@ -182,9 +175,7 @@ class ShmChannel {
    */
   uint32_t EnqueueCtrlCompletions(MachnetCtrlQueueEntry_t *ctrl_entries,
                                   uint32_t nb_entries) {
-    std::cout << "Inside channel.h EnqueueCtrlCompletions" << std::endl;                        
     uint32_t result = __machnet_channel_ctrl_cq_enqueue(ctx_, nb_entries, ctrl_entries);
-    std::cout << "channel->EnqueueCtrlCompletions from controller's end has enqueued items: " << result << std::endl;
     return result;
   }
 
@@ -266,15 +257,11 @@ class ShmChannel {
    * @return uint32_t   The number of messages dequeued.
    */
   uint32_t DequeueMessages(MsgBufBatch *batch) {
-    // std::cout << "inside channel.h DequeueMessages, msg from channel to controller" << std::endl;
     (void)DCHECK_NOTNULL(batch);
     auto ret =
         DequeueMessages(&batch->buf_indices()[batch->GetSize()],
                         &batch->bufs()[batch->GetSize()], batch->GetRoom());
     batch->IncrCount(ret);
-
-    if(ret > 0)
-      std::cout << "msg dequeued from channel to controller: " << ret << std::endl;
     return ret;
   }
 
@@ -568,22 +555,16 @@ class ChannelManager {
                   size_t app_ring_slot_nr, size_t buf_ring_slot_nr,
                   size_t buffer_size) {
     
-    std::cout << "Inside ChannelManager::AddChannel() | channel name: " << name << std::endl;
-
     const std::lock_guard<std::mutex> lock(mtx_);
     if (channels_.size() >= kMaxChannelNr) {
-      std::cout << "Too many channels." << std::endl;
       LOG(WARNING) << "Too many channels.";
       return false;
     }
 
     if (channels_.find(name) != channels_.end()) {
-      std::cout << "Channel " << name << " already exists." << std::endl;
       LOG(WARNING) << "Channel " << name << " already exists.";
       return false;
     }
-
-    std::cout << "Before __machnet_channel_create from ChannelManager::AddChannel()" << std::endl;
 
     int channel_fd;
     size_t shm_segment_size;
@@ -596,10 +577,7 @@ class ChannelManager {
         name, machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr,
         buffer_size, &shm_segment_size, &is_posix_shm, &channel_fd, shm_obj, region);
 
-    std::cout << "After __machnet_channel_create from ChannelManager::AddChannel()" << std::endl;
-    
     if (ctx == nullptr) {
-      std::cout << "Failed to create channel " << name << " with requested size " << shm_segment_size << ". RETURNING" << std::endl;
       LOG(WARNING) << "Failed to create channel " << name
                    << " with requested size " << shm_segment_size << ".";
       return false;
@@ -608,8 +586,6 @@ class ChannelManager {
     channels_.insert(
         std::make_pair(name, std::make_shared<T>(name, ctx, shm_segment_size, is_posix_shm, 
                                                 channel_fd, std::move(shm_obj), std::move(region))));
-
-    std::cout << "before returning from channel.h, region size: " << region.get_size() << std::endl;
 
     return true;
   }

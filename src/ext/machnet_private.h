@@ -30,11 +30,6 @@
 
 #include "machnet_common.h"
 
-// Debugging
-#include <iostream>
-#include <typeinfo>
-#include <windows.h>
-
 using namespace boost::interprocess;
 
 #define MACHNET_CHANNEL_CTRL_SQ_SLOT_NR 2
@@ -84,21 +79,14 @@ static inline size_t __machnet_channel_dataplane_calculate_size(
     size_t machnet_ring_slot_nr, size_t app_ring_slot_nr,
     size_t buf_ring_slot_nr, size_t buffer_size, int is_posix_shm) {
   
-  std::cout << "inside __machnet_channel_dataplane_calculate_size" << std::endl;
-  
-  std::cout << "before checking if params are power of 2" << std::endl;
   // Check that all parameters are power of 2.
   if (!IS_POW2(machnet_ring_slot_nr) || !IS_POW2(app_ring_slot_nr) ||
       !IS_POW2(buf_ring_slot_nr))
     return -1;
-  std::cout << "after checking if params are power of 2" << std::endl;
 
   const size_t total_buffer_size =
       ROUNDUP_U64_POW2(buffer_size + MACHNET_MSGBUF_SPACE_RESERVED +
                        MACHNET_MSGBUF_HEADROOM_MAX);
-
-  std::cout << "total_buffer_size: " << total_buffer_size << std::endl;
-  std::cout << "Given buffer_size: " << buffer_size << std::endl;
 
   // const size_t kPageSize = (is_posix_shm ? getpagesize() : HUGE_PAGE_2M_SIZE);
   // if (buffer_size > kPageSize) return -1;
@@ -143,7 +131,6 @@ static inline size_t __machnet_channel_dataplane_calculate_size(
   // Align to page boundary.
   // total_size = ALIGN_TO_BOUNDARY(total_size, kPageSize);
 
-  std::cout << "before returning total_size: " << total_size << std::endl;
   return total_size;
 }
 
@@ -174,15 +161,9 @@ static inline int __machnet_channel_dataplane_init(
     size_t buf_ring_slot_nr, size_t buffer_size, int is_multithread,
     shared_memory_object &shm_obj, mapped_region &region) {
 
-  std::cout << "inside __machnet_channel_dataplane_init" << std::endl;
-  std::cout << "type of shm pointer: " << typeid(shm).name() << std::endl;
-
   size_t total_size = __machnet_channel_dataplane_calculate_size(
       machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
       is_posix_shm);
-
-  std::cout << "new calc size: " << total_size << std::endl;
-  std::cout << "given size: " << shm_size << std::endl;
 
   // Guard against mismatches.
   if (total_size > shm_size || total_size == (size_t)-1) return -1;
@@ -190,48 +171,24 @@ static inline int __machnet_channel_dataplane_init(
   // TODO(ilias): Check that we can always accomodate an MACHNET_MSG_MAX_LEN
   // sized mesage with the number of buffers and buffer_size provided here.
 
-  std::cout << "before creating memory layout __machnet_channel_dataplane_init" << std::endl;
-
   // Check the memory layout in "machnet_common.h".
   // Initialize the channel context.
 
-  if(shm == NULL) std::cout << "uchar_t* shm is NULL" << std::endl;
-  else std::cout << "uchar_t* shm is okay" << std::endl;
-
   MachnetChannelCtx_t *ctx = reinterpret_cast<MachnetChannelCtx_t *> (shm);
-  // MachnetChannelCtx_t *ctx = shm;
-  
-  std::cout << "type of ctx pointer: " << typeid(ctx).name() << std::endl;
-  if(ctx == NULL) std::cout << "MachnetChannelCtx_t *ctx is NULL" << std::endl;
-  else std::cout << "MachnetChannelCtx_t *ctx is okay" << std::endl;
-  std::cout << "shm pointer is copied into MachnetChannelCtx_t *" << std::endl;
-  std::cout << "size of MachnetChannelCtx_t *ctx" << sizeof(*ctx) << std::endl;
-
-
-  std::cout << "inside dataplane_init, region size: " << region.get_size() << std::endl;
-  std::cout << "before setting ctx->version: " << MACHNET_CHANNEL_VERSION << std::endl;
 
   ctx->version = MACHNET_CHANNEL_VERSION;
-  std::cout << "ctx->version is set: " << MACHNET_CHANNEL_VERSION << std::endl;
 
   ctx->size = total_size;
-  std::cout << "ctx->size is set: " << total_size << std::endl;
 
   strncpy(ctx->name, name, sizeof(ctx->name));
-  std::cout << "ctx->name got the name copied: " << name << std::endl;
 
   ctx->name[sizeof(ctx->name) - 1] = '\0';
-  std::cout << "ctx->name is appended with 0: " << name << std::endl;
-
-  std::cout << "initialized channel context" << std::endl;
 
   // Initiliaze the ctrl context.
   ctx->ctrl_ctx.req_id = 0;
 
   // Initialize buffer cache
   ctx->app_buffer_cache.count = 0;
-
-  std::cout << "Before __machnet_channel_mem_ofs" << std::endl;
 
   // Clear out statatistics.
   ctx->data_ctx.stats_ofs = sizeof(*ctx);
@@ -240,19 +197,13 @@ static inline int __machnet_channel_dataplane_init(
           ctx, ctx->data_ctx.stats_ofs);
   memset(stats, 0, sizeof(*stats));
   
-  std::cout << "After __machnet_channel_mem_ofs" << std::endl;
-
   const int kMultiThread = 1;  // Assume the application always multithreaded.
-
-  std::cout << "before jring_init" << std::endl;
 
   // Ring0 (ctrl - SQ) follows immediately after the statistics.
   ctx->data_ctx.ctrl_sq_ring_ofs = ctx->data_ctx.stats_ofs + sizeof(*stats);
   int ret = jring_init(__machnet_channel_ctrl_sq_ring(ctx),
                        MACHNET_CHANNEL_CTRL_SQ_SLOT_NR,
                        sizeof(MachnetCtrlQueueEntry_t), is_multithread, 0);
-
-  std::cout << "after Ring0 ret: " << ret << std::endl;
 
   if (ret != 0) return ret;
 
@@ -264,8 +215,6 @@ static inline int __machnet_channel_dataplane_init(
   ret = jring_init(__machnet_channel_ctrl_cq_ring(ctx),
                    MACHNET_CHANNEL_CTRL_CQ_SLOT_NR,
                    sizeof(MachnetCtrlQueueEntry_t), 0, is_multithread);
-
-  std::cout << "after Ring1 ret: " << ret << std::endl;
 
   if (ret != 0) return ret;
 
@@ -279,8 +228,6 @@ static inline int __machnet_channel_dataplane_init(
   ret = jring_init(machnet_ring, machnet_ring_slot_nr,
                    sizeof(MachnetRingSlot_t), is_multithread, kMultiThread);
 
-  std::cout << "after Machnet -> Application ring, ret: " << ret << std::endl;
-
   if (ret != 0) return ret;
 
   // App->Machnet ring follows immediately after the Machnet->App ring.
@@ -291,8 +238,6 @@ static inline int __machnet_channel_dataplane_init(
   ret = jring_init(app_ring, app_ring_slot_nr, sizeof(MachnetRingSlot_t),
                    kMultiThread, is_multithread);
 
-  std::cout << "after App -> Machnet ring, ret: " << ret << std::endl;
-                  
   if (ret != 0) return ret;
 
   // jring_get_buf_ring_size() cannot fail here.
@@ -304,8 +249,6 @@ static inline int __machnet_channel_dataplane_init(
   jring_t *buf_ring = __machnet_channel_buf_ring(ctx);
   ret = jring_init(buf_ring, buf_ring_slot_nr, sizeof(MachnetRingSlot_t),
                    kMultiThread, kMultiThread);
-
-  std::cout << "after initializing the buffer ring, ret: " << ret << std::endl;
 
   if (ret != 0) return ret;
 
@@ -340,8 +283,6 @@ static inline int __machnet_channel_dataplane_init(
   ctx->data_ctx.buf_size = kTotalBufSize;
   ctx->data_ctx.buf_mss = buffer_size;
 
-  std::cout << "before initializing the message header of each buffer: " << std::endl;
-
   // Initialize the message header of each buffer.
   for (uint32_t i = 0; i < buf_ring->capacity; i++) {
     MachnetMsgBuf_t *buf = __machnet_channel_buf(ctx, i);
@@ -353,16 +294,11 @@ static inline int __machnet_channel_dataplane_init(
         buffer_size + MACHNET_MSGBUF_HEADROOM_MAX;
   }
 
-  std::cout << "before initializing the message header of each buffer: " << std::endl;
-
   // Initialize the buffer index table, and make all these buffers available.
   MachnetRingSlot_t *buf_index_table = (MachnetRingSlot_t *)malloc(
       buf_ring->capacity * sizeof(MachnetRingSlot_t));
 
-  std::cout << "After initializing buffer index table" << std::endl;
-
   if (buf_index_table == NULL) {
-    std::cout << "buf_index_table is NULL, returning" << std::endl;
     return -1;
   }
 
@@ -374,7 +310,6 @@ static inline int __machnet_channel_dataplane_init(
   free(buf_index_table);
 
   if (((size_t)enqueued != buf_ring->capacity) || (free_space != 0)) {
-    std::cout << "Enqueue has failed, returning" << std::endl;
     return -1;  // Enqueue has failed.
   }
     
@@ -402,7 +337,6 @@ static inline int __machnet_channel_dataplane_init(
  */
 static inline MachnetChannelCtx_t *__machnet_channel_posix_create(
     const char *channel_name, size_t channel_size, int *shm_fd) {
-  std::cout << "__machnet_channel_posix_create fired" << std::endl;
   assert(channel_name != NULL);
   assert(shm_fd != NULL);
   MachnetChannelCtx_t *channel = NULL;
@@ -467,9 +401,6 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
     const char *channel_name, size_t channel_size, int *shm_fd, 
     shared_memory_object &shm_obj, mapped_region &region) {
 
-  std::cout << "__machnet_channel_hugetlbfs_create fired" << std::endl;
-  std::cout << "checking channel_name and shm_fd assertions" << std::endl;
-
   assert(channel_name != NULL);
   assert(shm_fd != NULL);
   MachnetChannelCtx_t *channel = NULL;
@@ -527,32 +458,16 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
     return NULL;
   #else // #ifdef __linux__
 
-    std::cout << "inside windows block in __machnet_channel_hugetlbfs_create" << std::endl;
     // Check if channel size is huge page aligned. [RR: skipping for now]
-
-    std::cout << "before creating the shared_memory_objet shm_obj" << std::endl;
-
-    // Create the shared memory segment.
-    // shared_memory_object shm_obj(
-    //   create_only,
-    //   channel_name,
-    //   read_write
-    // );
-
     shm_obj = shared_memory_object (
       create_only,
       channel_name,
       read_write
     );
 
-    std::cout << "after creating the shared_memory_objet shm_obj" << std::endl;
-    std::cout << "before setting size of the shared_memory_objet shm_obj" << std::endl;
-
     // Set the size of the shared memory segment.
     shm_obj.truncate(static_cast<offset_t>(channel_size));    
     
-    std::cout << "before mapping shm segment into address space of process" << std::endl;
-
     // Map the shared memory segment into the address space of the process.
     // mapped_region region(shm_obj, read_write);
     
@@ -563,23 +478,8 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
 
     channel = reinterpret_cast<MachnetChannelCtx_t *> (region.get_address());
 
-    std::cout << "shared memory segment channel type: " << typeid(channel).name() << std::endl;
-
-    std::cout << "After getting the mapped_region address into MachnetChannelCtx_t *channel" << std::endl;
-    if(channel == NULL) std::cout << "channel is NULL from mapped_region get_address()" << std::endl;
-    else std::cout << "channel is not NULL from mapped_region get_address()" << std::endl;
-
     // Lock the memory segment in RAM. [RR: skipping for now]
 
-    // test
-    std::cout << "before test init of channel->version" << std::endl;
-    channel->version = 1;
-    std::cout << "after test init of channel->version" << std::endl;
-    std::cout << "channel version: " << channel->version << std::endl;
-
-    std::cout << "mapped region size: " << region.get_size() << std::endl;
-
-    // setting a placeholder fd [RR: update to have no fd]
     *shm_fd = 99;
     return channel;
   #endif // #ifdef __linux__
@@ -643,39 +543,24 @@ static inline MachnetChannelCtx_t *__machnet_channel_create(
     size_t *channel_mem_size, int *is_posix_shm, int *shm_fd, 
     shared_memory_object &shm_obj, mapped_region &region) {
 
-  std::cout << "inside __machnet_channel_create, checking assertions" << std::endl;
-  if(channel_name == NULL) std::cout << "channel_name is NULL" << std::endl;
-  if(shm_fd == NULL) std::cout << "shm_fd is NULL" << std::endl;
-  if(channel_mem_size == NULL) std::cout << "channel_mem_size is NULL" << std::endl;
-  if(is_posix_shm == NULL) std::cout << "is_posix_shm is NULL" << std::endl;
-
   assert(channel_name != NULL);
   assert(shm_fd != NULL);
   assert(channel_mem_size != NULL);
   assert(is_posix_shm != NULL);
   assert(shm_fd != NULL);
 
-  std::cout << "after asstertions, nothing is NULL" << std::endl;
-
   MachnetChannelCtx_t *channel;
-
-  std::cout << "Before calling __machnet_channel_dataplane_calculate_size" << std::endl;
 
   *is_posix_shm = 0;
   *channel_mem_size = __machnet_channel_dataplane_calculate_size(
       machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size,
       *is_posix_shm);
 
-  std::cout << "After __machnet_channel_dataplane_calculate_size, channel_mem_size: " << channel_mem_size << std::endl;
-  
-  std::cout << "Before calling __machnet_channel_hugetlbfs_create" << std::endl;
   // Try creating and mapping a hugetlbfs backed shared memory segment.
   channel = __machnet_channel_hugetlbfs_create(channel_name, *channel_mem_size,
                                                shm_fd, shm_obj, region);
 
-  std::cout << "After __machnet_channel_hugetlbfs_create, size: " << region.get_size() << std::endl;                                             
   if (channel != NULL) {
-    std::cout << "MachnetChannelCtx_t *channel is not NULL, going to out" << std::endl;
     goto out;
   }
 
@@ -697,21 +582,11 @@ static inline MachnetChannelCtx_t *__machnet_channel_create(
   return NULL;
 
 out:
-  std::cout << "inside out block in __machnet_channel_create" << std::endl;
-  std::cout << "before __machnet_channel_dataplane_init" << std::endl;
-
-  // The shared memory segment is created and mapped. Initialize it.
-  // int ret = __machnet_channel_dataplane_init(
-  //     (uchar_t *)channel, *channel_mem_size, *is_posix_shm, channel_name,
-  //     machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size, 0);
-  
   int ret = __machnet_channel_dataplane_init(
     (uchar_t*)channel, *channel_mem_size, *is_posix_shm, channel_name,
     machnet_ring_slot_nr, app_ring_slot_nr, buf_ring_slot_nr, buffer_size, 0,
     shm_obj, region);
 
-  std::cout << "after __machnet_channel_dataplane_init, ret: " << ret << std::endl;
-  
   if (ret != 0) {
     __machnet_channel_destroy((void *)channel, *channel_mem_size, shm_fd,
                               *is_posix_shm, channel_name);

@@ -24,9 +24,6 @@
   // #include <windows.h>
 #endif
 
-// debugging
-#include <iostream>
-
 namespace juggler {
 namespace dpdk {
 
@@ -122,15 +119,12 @@ class TxRing : public PmdRing {
    * @return Number of packets successfully sent.
    */
   uint16_t TrySendPackets(Packet **pkts, uint16_t nb_pkts) const {
-    std::cout << "inside pmd.h TrySendPacekts, nb_pkts: " << nb_pkts << std::endl;
     const uint16_t nb_success =
         rte_eth_tx_burst(this->GetPortId(), this->GetRingId(),
                          reinterpret_cast<struct rte_mbuf **>(pkts), nb_pkts);
 
     // Free not-sent packets. TODO (ilias): This drops packets!
     for (auto i = nb_success; i < nb_pkts; ++i) Packet::Free(pkts[i]);
-
-    std::cout << "number of successful sent packets: " << nb_success << std::endl;
     return nb_success;
   }
 
@@ -463,31 +457,16 @@ class PmdPort {
         GetPortRxPkts(), GetPortRxBytes(), GetPortRxDrops(),
         GetPortRxNoMbufErr());
 
-    std::cout << juggler::utils::Format(
-        "[STATS - Port: %u] [TX] Pkts: %lu, Bytes: %lu, Drops: %lu [RX] Pkts: "
-        "%lu, Bytes: %lu, Drops: %lu, NoRXMbufs: %lu",
-        port_id_, GetPortTxPkts(), GetPortTxBytes(), GetPortTxDrops(),
-        GetPortRxPkts(), GetPortRxBytes(), GetPortRxDrops(),
-        GetPortRxNoMbufErr()) << std::endl;
-
     for (uint16_t i = 0; i < tx_rings_nr_; i++) {
       LOG(INFO) << juggler::utils::Format(
           "[STATS - Port: %u, Queue: %u] [TX] Pkts: %lu, Bytes: %lu", port_id_,
           i, GetPortQueueTxPkts(i), GetPortQueueTxBytes(i));
-
-      std::cout << juggler::utils::Format(
-          "[STATS - Port: %u, Queue: %u] [TX] Pkts: %lu, Bytes: %lu", port_id_,
-          i, GetPortQueueTxPkts(i), GetPortQueueTxBytes(i)) << std::endl;
     }
 
     for (uint16_t i = 0; i < rx_rings_nr_; i++) {
       LOG(INFO) << juggler::utils::Format(
           "[STATS - Port: %u, Queue: %u] [RX] Pkts: %lu, Bytes: %lu", port_id_,
           i, GetPortQueueRxPkts(i), GetPortQueueRxBytes(i));
-
-      std::cout << juggler::utils::Format(
-          "[STATS - Port: %u, Queue: %u] [RX] Pkts: %lu, Bytes: %lu", port_id_,
-          i, GetPortQueueRxPkts(i), GetPortQueueRxBytes(i)) << std::endl;
     }
   }
 

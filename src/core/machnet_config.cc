@@ -78,7 +78,6 @@ MachnetConfigProcessor::MachnetConfigProcessor(
 }
 
 void MachnetConfigProcessor::AssertJsonValidMachnetConfig() {
-  std::cout << "inside MachnetConfigProcessor::AssertJsonValidMachnetConfig" << std::endl;
   if (json_.find(kMachnetConfigJsonKey) == json_.end()) {
     LOG(FATAL) << "No entry for Machnet config (key " << kMachnetConfigJsonKey
                << ") in " << config_json_filename_;
@@ -100,9 +99,7 @@ void MachnetConfigProcessor::AssertJsonValidMachnetConfig() {
 }
 
 void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
-  std::cout << "inside MachnetConfigProcessor::DiscoverInterfaceConfiguration:::: " << json_.size() << std::endl;
   for (const auto &[key, json_val] : json_.at(kMachnetConfigJsonKey).items()) {
-    std::cout << "______ key: " << key << " | val: " << json_val << std::endl;
     const net::Ethernet::Address l2_addr(key);
 
     size_t engine_threads = 1;
@@ -149,12 +146,6 @@ void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
 
     interfaces_config_.emplace(pci_addr, l2_addr, ip_addr, engine_threads,
                                cpu_mask);
-    
-    std::cout << "pci_addr: " << pci_addr << std::endl;
-    std::cout << "l2_addr: " << l2_addr.ToString() << std::endl;
-    std::cout << "ip_addr: " << ip_addr.ToString() << std::endl;
-    std::cout << "engine_threads: " << engine_threads << std::endl;
-    // std::cout << "cpu_mask: " << cpu_mask.ToString() << std::endl;
   }
   for (const auto &interface : interfaces_config_) {
     interface.Dump();

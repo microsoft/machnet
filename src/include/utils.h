@@ -215,7 +215,6 @@ namespace utils {
       const uuid_t uuid) {
     char uuid_str[37] = {};
     uuid_unparse(uuid, uuid_str);
-    printf("utils uuidtostring op: %s\n", uuid_str);
     return std::string(uuid_str);
   }
 

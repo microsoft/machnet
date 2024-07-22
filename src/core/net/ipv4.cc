@@ -17,7 +17,7 @@ bool Ipv4::Address::IsValid(const std::string &addr) {
     asio::error_code ec;
     asio::ip::address::from_string(addr, ec);
     if(ec) {
-      std::cerr << ec.message() << std::endl;
+      std::cerr << ec.message() << "\n";
       return false;
     }
 
@@ -33,7 +33,6 @@ std::optional<Ipv4::Address> Ipv4::Address::MakeAddress(
 }
 
 bool Ipv4::Address::FromString(std::string str) {
-  std::cout << "Ipv4 Fromstring enters" << std::endl;
   if (!Ipv4::Address::IsValid(str)) return false;
   unsigned char bytes[4];
   uint8_t len = sscanf(str.c_str(), "%hhu.%hhu.%hhu.%hhu", &bytes[0], &bytes[1],
@@ -41,7 +40,6 @@ bool Ipv4::Address::FromString(std::string str) {
   if (len != Ipv4::Address::kSize) return false;
   address = be32_t((uint32_t)(bytes[0]) << 24 | (uint32_t)(bytes[1]) << 16 |
                    (uint32_t)(bytes[2]) << 8 | (uint32_t)(bytes[3]));
-  std::cout << "Ipv4 Fromstring returns" << std::endl;
   return true;
 }
 
