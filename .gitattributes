@@ -1,0 +1,33 @@
+# Set the default behavior, in case people don't have core.autocrlf set.
+* text=auto
+
+# Explicitly declare text files to be normalized and converted to native line endings on checkout.
+*.c text
+*.h text
+*.cpp text
+*.hpp text
+*.cc text
+*.hh text
+*.cxx text
+*.hxx text
+*.md text
+*.yml text
+*.sh text
+*.cmake text
+*.cfg text
+
+# Declare files that will always have CRLF line endings on checkout.
+*.sln text eol=crlf
+
+# Denote all files that are truly binary and should not be modified.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.so binary
+*.dll binary
+*.exe binary
+*.bin binary
+
+# Denote Dockerfiles and ignore line ending changes
+*.dockerfile text eol=lf
+
