@@ -236,17 +236,18 @@
     #define RTE_MAX_LCORE 128
     ```
 - Without this the machnet build will fail.
+
 ## Machnet
 
 1. **Clone the repository**:
- - `git clone https://github.com/microsoft/machnet.git && cd machnet && git checkout t-rrayan/communcation_port`.
- - `git submodule update --init --recursive`.
+ - `git clone https://github.com/microsoft/machnet.git && cd machnet && git checkout t-rrayan/communcation_port`
+ - `git submodule update --init --recursive`
 
 2. **Download `asio-1.30.2.zip` and unzip in `machnet/third_party/`**.
 3. **Change the folder name into `asio`**.
 4. **Download `boost_1_82_0.tar.bz2` from [here](https://www.boost.org/users/download/)**.
-5. **Copy to `machnet/third_party` and unzip**.
-6. **Build**:
+5. **Copy to `machnet/third_party/` and unzip**.
+6. **Build from `machnet/`**:
  - ```
    rm -rf build && mkdir build && cd build && cmake.exe .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja.exe && cd ..
    ```
@@ -285,12 +286,16 @@
 ## TODOs
 
 - Add asio as a submodule.
-- Get rid of asio and use boost.asio.
+- Or, get rid of asio and use boost.asio.
 - Add boost as a submodule.
 - In `src/include/arp.h`, `GetL2AddrWin`:
     - now uses ping to remote and windows arp cache to resolve remote physical address.
     - `mlx5` driver on Windows may have issue in handling ARP requests.
     - may use a better solution.
+- Only `apps/machnet`, `hello_world` and `msg_gen` are ported to Windows.
+- No tests/benchmarks/bindings have been updated.
+- `src/ext/machnet.c` is now `src/ext/machnet.cc`: may impact `bindings`.
+- Linux execution of this src has not been tested, may need minor changes.
 
 ## Possible Errors
 
