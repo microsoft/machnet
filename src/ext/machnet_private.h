@@ -469,16 +469,12 @@ static inline MachnetChannelCtx_t *__machnet_channel_hugetlbfs_create(
     shm_obj.truncate(static_cast<offset_t>(channel_size));    
     
     // Map the shared memory segment into the address space of the process.
-    // mapped_region region(shm_obj, read_write);
-    
     region = mapped_region(
       shm_obj,
       read_write
     );
-
+    
     channel = reinterpret_cast<MachnetChannelCtx_t *> (region.get_address());
-
-    // Lock the memory segment in RAM. [RR: skipping for now]
 
     *shm_fd = 99;
     return channel;

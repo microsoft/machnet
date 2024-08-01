@@ -328,7 +328,6 @@ class ArpHandler {
       case Arp::ArpOp::kRequest:
         // Check if this request is for us.
         if (local_ip_addrs_.find(target_ip) == local_ip_addrs_.end()) {
-          std::cout << "target_ip not found in local_ip_addrs_, not invoking Reply()" << std::endl;
           break;
         }
         Reply(txring, arph, target_ip);
@@ -336,7 +335,6 @@ class ArpHandler {
       case Arp::ArpOp::kReply:
         // Check if the ARP reply is for us.
         if (local_ip_addrs_.find(target_ip) == local_ip_addrs_.end()) {
-          std::cout << "target_ip not found in local_ip_addrs_, not invoking Reply()" << std::endl;
           break;
         }
         // Update the cache.
