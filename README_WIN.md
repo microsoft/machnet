@@ -108,9 +108,9 @@
 
 ## Step 5: Add accelerated NIC to the VM
 
-1. **Create a new NIC with Accelerated Networking Enabled**
-2. **Stop the VM**
-3. **ADD NIC to VM**:
+1. Create a new NIC with Accelerated Networking Enabled
+2. Stop the VM
+3. ADD NIC to VM:
    - Go to VM on Portal
    - Network
    - Network Settings
@@ -231,37 +231,36 @@
 
 ## Important Hack
 
-- In `dpdk/lib/eal/windows/include/sched.h`, add:
-    - ```
-    #define RTE_MAX_LCORE 128
-    ```
-- Without this the machnet build will fail.
+    - In `dpdk/lib/eal/windows/include/sched.h`, add: `#define RTE_MAX_LCORE 128`
+    - Without this the machnet build may fail.
 
 ## Machnet
 
-1. **Clone the repository**:
- - `git clone https://github.com/microsoft/machnet.git && cd machnet && git checkout t-rrayan/communcation_port`
- - `git submodule update --init --recursive`
+1. Clone the repository:
+    ```
+    git clone https://github.com/microsoft/machnet.git && cd machnet && git checkout t-rrayan/communcation_port
+    git submodule update --init --recursive
+    ```
 
-2. **Download `asio-1.30.2.zip` and unzip in `machnet/third_party/`**.
-3. **Change the folder name into `asio`**.
-4. **Download `boost_1_82_0.tar.bz2` from [here](https://www.boost.org/users/download/)**.
-5. **Copy to `machnet/third_party/` and unzip**.
-6. **Build from `machnet/`**:
- - ```
-   rm -rf build && mkdir build && cd build && cmake.exe .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja.exe && cd ..
-   ```
+2. Download `asio-1.30.2.zip` and unzip in `machnet/third_party/`.
+3. Change the folder name into `asio`.
+4. Download `boost_1_82_0.tar.bz2` from [here](https://www.boost.org/users/download/).
+5. Copy to `machnet/third_party/` and unzip.
+6. Build from `machnet/`:
+    ```
+    rm -rf build && mkdir build && cd build && cmake.exe .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja.exe && cd ..
+    ```
 
 ## Execution Instructions
 
 1. **Look up the VM’s accelerated NIC’s IP and MAC from NIC’s Resource JSON**:
- - Go to Network Interfaces on Azure Portal.
- - Go to the accelerated NIC.
- - On the NIC’s page on the portal, towards top right, click on JSON View.
- - Get the MAC and Private IP from the JSON data.
+    - Go to Network Interfaces on Azure Portal.
+    - Go to the accelerated NIC.
+    - On the NIC’s page on the portal, towards top right, click on JSON View.
+    - Get the MAC and Private IP from the JSON data.
 
 2. **For now, we hardcode these values in `machnet/src/apps/machnet/config.json`**.
- - see `src/apps/machnet/config.json`.
+    - see `src/apps/machnet/config.json`.
 
 3. **Set executable permission to `machnet_win.sh`**.
 
