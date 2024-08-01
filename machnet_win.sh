@@ -6,8 +6,8 @@
 #  - debug: if set, run a debug build from the Machnet Docker container
 #  - bare_metal: if set, will use local binary instead of Docker image
 
-LOCAL_MAC="60-45-BD-83-26-DD"
-LOCAL_IP="10.2.0.17"
+LOCAL_MAC="00:00:00:00:00:00"
+LOCAL_IP="0.0.0.0"
 BARE_METAL=1
 DEBUG=0
 while [[ $# -gt 0 ]]; do
