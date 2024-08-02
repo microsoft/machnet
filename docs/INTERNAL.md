@@ -64,7 +64,7 @@ cd dpdk-23.11
 meson build --prefix=${PWD}/build/install/usr/local
 ninja -C build
 ninja -C build install
-export PKG_CONFIG_PATH="${PWD}/build/install/usr/local/lib/x86_64-linux-gnu/pkgconfig" or export PKG_CONFIG_PATH="${PWD}/build/install/usr/local/lib/pkgconfig"
+export PKG_CONFIG_PATH="${PWD}/build/install/usr/local/lib/x86_64-linux-gnu/pkgconfig:${PWD}/build/install/usr/local/lib/pkgconfig"
 ```
 
 Note: You can find the PKG_CONFIG_PATH by the following command: find *path_to_dpdk* -name "*.pc".
