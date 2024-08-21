@@ -88,7 +88,7 @@ namespace dpdk {
 
 // Default EAL init arguments.
 static auto kDefaultEalOpts =
-    juggler::utils::CmdLineOpts({"--log-level=eal,8", "--proc-type=auto"});
+    juggler::utils::CmdLineOpts({"", "--log-level=eal,8", "--proc-type=auto"});
 
 class Dpdk {
  public:
