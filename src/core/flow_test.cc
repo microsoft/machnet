@@ -512,10 +512,9 @@ int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   FLAGS_logtostderr = 1;
 
-  // CmdLineOpts are eventually parsed by DPDK using getopt. getopt ignores argv[0].
-  // So, we need to pass an empty string as the first argument.
+  // Initialize DPDK
   auto kEalOpts = juggler::utils::CmdLineOpts(
-      {"", "-c", "0x1", "-n", "6", "--proc-type=auto", "-m", "1024", "--log-level",
+      {"", "-c", "0x0", "-n", "6", "--proc-type=auto", "-m", "1024", "--log-level",
        "8", "--vdev=net_null0,copy=1", "--no-pci"});
   auto d = juggler::dpdk::Dpdk();
   d.InitDpdk(kEalOpts); /* Using default DPDK configurations */

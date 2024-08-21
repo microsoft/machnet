@@ -87,8 +87,6 @@ namespace dpdk {
 }
 
 // Default EAL init arguments.
-// CmdLineOpts are eventually parsed by DPDK using getopt. getopt ignores argv[0].
-// So, we need to pass an empty string as the first argument.
 static auto kDefaultEalOpts =
     juggler::utils::CmdLineOpts({"", "--log-level=eal,8", "--proc-type=auto"});
 
