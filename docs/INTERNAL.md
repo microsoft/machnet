@@ -26,7 +26,7 @@ $ docker buildx bake -f docker-bake x86-64-v4
 
 Install required packages
 ```bash
-$ sudo apt -y install cmake pkg-config nlohmann-json3-dev ninja-build gcc g++ doxygen graphviz python3-pip meson libhugetlbfs-dev libnl-3-dev libnl-route-3-dev
+$ sudo apt -y install cmake pkg-config nlohmann-json3-dev ninja-build gcc g++ doxygen graphviz python3-pip meson libhugetlbfs-dev libnl-3-dev libnl-route-3-dev uuid-dev
 $ pip3 install pyelftools
 ```
 
