@@ -11,9 +11,9 @@ docker build --no-cache -f dockerfiles/ubuntu-22.04.dockerfile --target machnet 
 
 ### Building custom images
 
-The top-level makefile allows building x86 and arm64 docker images across a 
-variety of microarchitecture capability levels (x86) or SOC targets (arm64). 
-Invoking "make" will create them for the architecture of the host. 
+The top-level makefile allows building x86 and arm64 docker images across a
+variety of microarchitecture capability levels (x86) or SOC targets (arm64).
+Invoking "make" will create them for the architecture of the host.
 
 To build a Machnet image for a specific architecture, e.g, x86-64-v4
 
@@ -64,7 +64,9 @@ cd dpdk-23.11
 meson build --prefix=${PWD}/build/install/usr/local
 ninja -C build
 ninja -C build install
-export PKG_CONFIG_PATH="${PWD}/build/install/usr/local/lib/x86_64-linux-gnu/pkgconfig:${PWD}/build/install/usr/local/lib/pkgconfig"
+export PKG_CONFIG_PATH="${PWD}/build/install/usr/local/lib/x86_64-linux-gnu/pkgconfig"
+echo "${PWD}/build/install/usr/local/lib/x86_64-linux-gnu" | sudo tee -a /etc/ld.so.conf.d/x86_64-linux-gnu.conf > /dev/null
+sudo ldconfig
 ```
 
 Note: You can find the PKG_CONFIG_PATH by the following command: find *path_to_dpdk* -name "*.pc".
