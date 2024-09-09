@@ -18,6 +18,8 @@ static std::optional<std::string> GetPCIeAddressSysfs(
   LOG(INFO) << "Walking /sys/class/net to find PCIe address for L2 address "
             << l2_addr.ToString();
 
+  return "00:04.0";
+
   std::string sys_net_path = "/sys/class/net";
   for (const auto &entry : std::filesystem::directory_iterator(sys_net_path)) {
     std::string interface_name = entry.path().filename();

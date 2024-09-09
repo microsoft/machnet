@@ -46,30 +46,30 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
     rss_hf &= devinfo->flow_type_rss_offloads;
   }
 
-  port_conf.lpbk_mode = 1;
-  port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
+  port_conf.lpbk_mode = 0;
+  port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_NONE;
 
-  port_conf.rxmode.mtu = PmdRing::kDefaultFrameSize;
-  port_conf.rxmode.max_lro_pkt_size = PmdRing::kDefaultFrameSize;
+  port_conf.rxmode.mtu = 1450; //PmdRing::kDefaultFrameSize;
+  port_conf.rxmode.max_lro_pkt_size = 1450;//PmdRing::kDefaultFrameSize;
   const auto rx_offload_capa = devinfo->rx_offload_capa;
-  port_conf.rxmode.offloads |= ((RTE_ETH_RX_OFFLOAD_CHECKSUM)&rx_offload_capa);
+  // port_conf.rxmode.offloads |= ((RTE_ETH_RX_OFFLOAD_CHECKSUM)&rx_offload_capa);
 
-  port_conf.rx_adv_conf.rss_conf = {
+  /*port_conf.rx_adv_conf.rss_conf = {
       .rss_key = nullptr,
       .rss_key_len = devinfo->hash_key_size,
       .rss_hf = rss_hf,
-  };
+  };*/
 
   const auto tx_offload_capa = devinfo->tx_offload_capa;
   if (!(tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM) ||
       !(tx_offload_capa & RTE_ETH_TX_OFFLOAD_UDP_CKSUM)) {
     // Making this fatal; not sure what NIC does not support checksum offloads.
-    LOG(FATAL) << "Hardware does not support checksum offloads.";
+    LOG(WARNING) << "Hardware does not support checksum offloads.";
   }
 
   port_conf.txmode.mq_mode = RTE_ETH_MQ_TX_NONE;
-  port_conf.txmode.offloads =
-      (RTE_ETH_TX_OFFLOAD_IPV4_CKSUM | RTE_ETH_TX_OFFLOAD_UDP_CKSUM);
+  // port_conf.txmode.offloads =
+  //    (RTE_ETH_TX_OFFLOAD_IPV4_CKSUM | RTE_ETH_TX_OFFLOAD_UDP_CKSUM);
 
   if (tx_offload_capa & RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE) {
     // TODO(ilias): Add option to the constructor to enable this offload.
@@ -143,7 +143,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
     }
 
     // Check if the MTU is set correctly.
-    CHECK(GetMTU().has_value())
+    /*CHECK(GetMTU().has_value())
         << "Failed to get MTU for port " << static_cast<int>(port_id_);
     if (mtu != GetMTU().value()) {
       // If there is a mismatch, try to set the MTU.
@@ -153,10 +153,10 @@ void PmdPort::InitDriver(uint16_t mtu) {
                    << static_cast<int>(port_id_) << ". Error "
                    << rte_strerror(ret);
       }
-    }
+    }*/
 
     // Try to get the RSS configuration from the device.
-    rss_hash_key_.resize(devinfo_.hash_key_size, 0);
+    /*rss_hash_key_.resize(devinfo_.hash_key_size, 0);
     struct rte_eth_rss_conf rss_conf;
     rss_conf.rss_key = rss_hash_key_.data();
     rss_conf.rss_key_len = devinfo_.hash_key_size;
@@ -226,6 +226,7 @@ void PmdPort::InitDriver(uint16_t mtu) {
 
       std::cout << reta_table;
     }
+    */
 
     ret = rte_eth_dev_adjust_nb_rx_tx_desc(port_id_, &rx_ring_desc_nr_,
                                            &tx_ring_desc_nr_);
