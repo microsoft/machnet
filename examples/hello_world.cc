@@ -26,7 +26,7 @@ void assert_with_msg(bool cond, const char *msg) {
 }
 
 int main(int argc, char *argv[]) {
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   int ret = machnet_init();
   assert_with_msg(ret == 0, "machnet_init() failed");
