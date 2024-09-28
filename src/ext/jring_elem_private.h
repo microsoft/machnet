@@ -15,8 +15,9 @@ extern "C" {
 #endif
 
 #include <memory.h>
-#include <pause.h>
 #include <stdint.h>
+
+#include "pause.h"
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)

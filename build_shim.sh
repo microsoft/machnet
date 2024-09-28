@@ -18,6 +18,9 @@ fi
 BASE_DIR="$(dirname "$(readlink -f "$0")")"
 SRC_DIR="${BASE_DIR}/src/ext"
 
+blue "Downloding dependency ..."
+sudo apt install libgflags-dev
+
 blue "Building Machnet shim library..."
 
 cd "${SRC_DIR}" || exit 1

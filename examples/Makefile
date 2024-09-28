@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -I../src/ext -L../ -lmachnet_shim -lrt -lgflags -Wl,-rpath,..
+CFLAGS = -I../src/include -I../src/ext -L../ -lmachnet_shim -lrt -lgflags -Wl,-rpath,..
 
 all: hello_world
 
