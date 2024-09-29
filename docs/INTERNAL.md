@@ -61,11 +61,11 @@ Download and extract DPDK 23.11, then:
 
 ```bash
 cd dpdk-23.11
-meson build --prefix=${PWD}/build/install/usr/local
+meson build --prefix=${PWD}/build/install
 ninja -C build
 ninja -C build install
-export PKG_CONFIG_PATH="${PWD}/build/install/usr/local/lib/x86_64-linux-gnu/pkgconfig"
-echo "${PWD}/build/install/usr/local/lib/x86_64-linux-gnu" | sudo tee -a /etc/ld.so.conf.d/x86_64-linux-gnu.conf > /dev/null
+export PKG_CONFIG_PATH="${PWD}/build/install/lib/x86_64-linux-gnu/pkgconfig"
+echo "${PWD}/build/install/lib/x86_64-linux-gnu" | sudo tee -a /etc/ld.so.conf.d/x86_64-linux-gnu.conf > /dev/null
 sudo ldconfig
 ```
 
