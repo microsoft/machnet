@@ -771,3 +771,122 @@ fail:
 }
 
 void machnet_detach(const MachnetChannelCtx_t *ctx) {}
+
+// ────────────────── TCP API Implementations ──────────────────
+
+int machnet_tcp_connect(void *channel_ctx, const char *local_ip,
+                        const char *remote_ip, uint16_t remote_port,
+                        MachnetFlow_t *flow) {
+  assert(flow != NULL);
+  MachnetChannelCtx_t *ctx = channel_ctx;
+
+  if (inet_addr(local_ip) == INADDR_NONE ||
+      inet_addr(remote_ip) == INADDR_ANY) {
+    fprintf(stderr,
+            "machnet_tcp_connect: Invalid source (%s) or destination (%s) "
+            "IP address.\n",
+            local_ip, remote_ip);
+    return -1;
+  }
+
+  MachnetCtrlQueueEntry_t req;
+  memset(&req, 0, sizeof(req));
+  req.id = ctx->ctrl_ctx.req_id++;
+  req.opcode = MACHNET_CTRL_OP_TCP_CREATE_FLOW;
+  req.flow_info.src_ip = ntohl(inet_addr(local_ip));
+  req.flow_info.dst_ip = ntohl(inet_addr(remote_ip));
+  req.flow_info.dst_port = remote_port;
+
+  if (__machnet_channel_ctrl_sq_enqueue(ctx, 1, &req) != 1) {
+    fprintf(stderr,
+            "ERROR: Failed to enqueue TCP request to control queue.\n");
+    return -1;
+  }
+
+  MachnetCtrlQueueEntry_t resp;
+  memset(&resp, 0, sizeof(resp));
+  uint32_t ret = 0;
+  int max_tries = 10;
+  do {
+    ret = __machnet_channel_ctrl_cq_dequeue(ctx, 1, &resp);
+    if (ret != 0) break;
+    sleep(1);
+  } while (max_tries-- > 0);
+  if (ret == 0) {
+    fprintf(stderr, "ERROR: Failed to dequeue TCP response.\n");
+    return -1;
+  }
+  if (resp.id != req.id) {
+    fprintf(stderr, "ERROR: Got invalid TCP response from control plane.\n");
+    return -1;
+  }
+  if (resp.status != MACHNET_CTRL_STATUS_OK) {
+    fprintf(stderr, "ERROR: TCP connect failed in control plane.\n");
+    return -1;
+  }
+
+  *flow = resp.flow_info;
+  return 0;
+}
+
+int machnet_tcp_listen(void *channel_ctx, const char *local_ip,
+                       uint16_t local_port) {
+  assert(channel_ctx != NULL);
+  MachnetChannelCtx_t *ctx = channel_ctx;
+
+  if (inet_addr(local_ip) == INADDR_NONE) {
+    fprintf(stderr, "machnet_tcp_listen: Invalid IP address: %s\n", local_ip);
+    return -1;
+  }
+
+  MachnetCtrlQueueEntry_t req;
+  memset(&req, 0, sizeof(req));
+  req.id = ctx->ctrl_ctx.req_id++;
+  req.opcode = MACHNET_CTRL_OP_TCP_LISTEN;
+  req.listener_info.ip = ntohl(inet_addr(local_ip));
+  req.listener_info.port = local_port;
+
+  if (__machnet_channel_ctrl_sq_enqueue(ctx, 1, &req) != 1) {
+    fprintf(stderr,
+            "ERROR: Failed to enqueue TCP listen request to control queue.\n");
+    return -1;
+  }
+
+  MachnetCtrlQueueEntry_t resp;
+  memset(&resp, 0, sizeof(resp));
+  uint32_t ret = 0;
+  int max_tries = 10;
+  do {
+    ret = __machnet_channel_ctrl_cq_dequeue(ctx, 1, &resp);
+    if (ret != 0) break;
+    sleep(1);
+  } while (max_tries-- > 0);
+  if (ret == 0) {
+    fprintf(stderr, "ERROR: Failed to dequeue TCP listen response.\n");
+    return -1;
+  }
+  if (resp.id != req.id) {
+    fprintf(stderr, "ERROR: Got invalid TCP listen response.\n");
+    return -1;
+  }
+  if (resp.status != MACHNET_CTRL_STATUS_OK) {
+    fprintf(stderr, "ERROR: TCP listen failed in control plane.\n");
+    return -1;
+  }
+
+  return 0;
+}
+
+int machnet_tcp_send(const void *channel_ctx, MachnetFlow_t flow,
+                     const void *buf, size_t len) {
+  // TCP send reuses the same shared-memory message path as UDP send.
+  // The engine's process_msg() will route to the TCP flow if one exists.
+  return machnet_send(channel_ctx, flow, buf, len);
+}
+
+ssize_t machnet_tcp_recv(const void *channel_ctx, void *buf, size_t len,
+                         MachnetFlow_t *flow) {
+  // TCP recv reuses the same shared-memory message path as UDP recv.
+  // The TcpFlow delivers reassembled messages through the same channel rings.
+  return machnet_recv(channel_ctx, buf, len, flow);
+}

@@ -14,6 +14,8 @@
 #include <ipv4.h>
 #include <pmd.h>
 #include <rte_thash.h>
+#include <tcp.h>
+#include <tcp_flow.h>
 #include <udp.h>
 
 #include <concepts>
@@ -342,8 +344,10 @@ class MachnetEngine {
   using Arp = net::Arp;
   using Ipv4 = net::Ipv4;
   using Udp = net::Udp;
+  using Tcp = net::Tcp;
   using Icmp = net::Icmp;
   using Flow = net::flow::Flow;
+  using TcpFlow = net::flow::TcpFlow;
   using PmdPort = juggler::dpdk::PmdPort;
   // Slow timer (periodic processing) interval in microseconds.
   const size_t kSlowTimerIntervalUs = 1000000;  // 2ms
@@ -382,6 +386,9 @@ class MachnetEngine {
       listeners_.emplace(
           ipv4_addr,
           std::unordered_map<Udp::Port, std::shared_ptr<shm::Channel>>());
+      tcp_listeners_.emplace(
+          ipv4_addr,
+          std::unordered_map<Tcp::Port, std::shared_ptr<shm::Channel>>());
     }
   }
 
@@ -497,7 +504,7 @@ class MachnetEngine {
     for (const auto &entry : shared_state_->GetArpTableEntries()) {
       s += "\t\t" + std::get<0>(entry) + " -> " + std::get<1>(entry) + "\n";
     }
-    s += "\tListeners:\n";
+    s += "\tListeners (UDP):\n";
     for (const auto &listeners_for_ip : listeners_) {
       const auto ip = listeners_for_ip.first.ToString();
       for (const auto &listener : listeners_for_ip.second) {
@@ -505,8 +512,23 @@ class MachnetEngine {
              " <-> [" + listener.second->GetName() + "]" + "\n";
       }
     }
-    s += "\tActive flows:\n";
+    s += "\tListeners (TCP):\n";
+    for (const auto &listeners_for_ip : tcp_listeners_) {
+      const auto ip = listeners_for_ip.first.ToString();
+      for (const auto &listener : listeners_for_ip.second) {
+        s += "\t\tTCP " + ip + ":" +
+             std::to_string(listener.first.port.value()) + " <-> [" +
+             listener.second->GetName() + "]" + "\n";
+      }
+    }
+    s += "\tActive flows (UDP):\n";
     for (const auto &[key, flow_it] : active_flows_map_) {
+      s += "\t\t";
+      s += (*flow_it)->ToString();
+      s += "\n";
+    }
+    s += "\tActive flows (TCP):\n";
+    for (const auto &[key, flow_it] : active_tcp_flows_map_) {
       s += "\t\t";
       s += (*flow_it)->ToString();
       s += "\n";
@@ -560,25 +582,34 @@ class MachnetEngine {
         const auto &local_ip = ch_listener.addr;
         const auto &local_port = ch_listener.port;
 
-        if (listeners_.find(local_ip) == listeners_.end()) {
-          LOG(ERROR) << "No listeners for IP " << local_ip.ToString();
-          continue;
+        // Try removing from UDP listeners.
+        if (listeners_.find(local_ip) != listeners_.end()) {
+          auto &listeners_for_ip = listeners_[local_ip];
+          if (listeners_for_ip.find(local_port) != listeners_for_ip.end()) {
+            shared_state_->UnregisterListener(local_ip, local_port);
+            listeners_for_ip.erase(local_port);
+            continue;
+          }
         }
 
-        auto &listeners_for_ip = listeners_[local_ip];
-        if (listeners_for_ip.find(local_port) == listeners_for_ip.end()) {
-          LOG(ERROR) << utils::Format("Listener not found %s:%hu",
-                                      local_ip.ToString().c_str(),
-                                      local_port.port.value());
-          continue;
+        // Try removing from TCP listeners.
+        if (tcp_listeners_.find(local_ip) != tcp_listeners_.end()) {
+          auto &tcp_listeners_for_ip = tcp_listeners_[local_ip];
+          if (tcp_listeners_for_ip.find(local_port) !=
+              tcp_listeners_for_ip.end()) {
+            shared_state_->UnregisterListener(local_ip, local_port);
+            tcp_listeners_for_ip.erase(local_port);
+            continue;
+          }
         }
 
-        shared_state_->UnregisterListener(local_ip, local_port);
-        listeners_for_ip.erase(local_port);
+        LOG(ERROR) << utils::Format("Listener not found %s:%hu",
+                                    local_ip.ToString().c_str(),
+                                    local_port.port.value());
       }
 
       const auto &channel_flows = channel->GetActiveFlows();
-      // Remove from the engine's map all the flows associated with this
+      // Remove from the engine's map all the UDP flows associated with this
       // channel.
       for (const auto &flow : channel_flows) {
         if (active_flows_map_.find(flow->key()) != active_flows_map_.end()) {
@@ -590,6 +621,22 @@ class MachnetEngine {
         } else {
           LOG(WARNING) << "Flow " << flow->key().ToString()
                        << " is not in the list of active flows";
+        }
+      }
+
+      // Remove all TCP flows associated with this channel.
+      const auto &channel_tcp_flows = channel->GetActiveTcpFlows();
+      for (const auto &tcp_flow : channel_tcp_flows) {
+        if (active_tcp_flows_map_.find(tcp_flow->key()) !=
+            active_tcp_flows_map_.end()) {
+          shared_state_->SrcPortRelease(tcp_flow->key().local_addr,
+                                        tcp_flow->key().local_port);
+          LOG(INFO) << "Removing TCP flow " << tcp_flow->key().ToString();
+          tcp_flow->ShutDown();
+          active_tcp_flows_map_.erase(tcp_flow->key());
+        } else {
+          LOG(WARNING) << "TCP Flow " << tcp_flow->key().ToString()
+                       << " is not in the list of active TCP flows";
         }
       }
 
@@ -677,6 +724,59 @@ class MachnetEngine {
               emit_completion(true);
             }
             // clang-format on
+            break;
+          case MACHNET_CTRL_OP_TCP_CREATE_FLOW:
+            {
+              const Ipv4::Address src_addr(req.flow_info.src_ip);
+              if (!shared_state_->IsLocalIpv4Address(src_addr)) {
+                LOG(ERROR) << "Source IP " << src_addr.ToString()
+                           << " is not local. Cannot create TCP flow.";
+                emit_completion(false);
+                break;
+              }
+              const Ipv4::Address dst_addr(req.flow_info.dst_ip);
+              const Tcp::Port dst_port(req.flow_info.dst_port);
+              LOG(INFO) << "Request to create TCP flow "
+                        << src_addr.ToString() << " -> "
+                        << dst_addr.ToString() << ":"
+                        << dst_port.port.value();
+              pending_tcp_requests_.emplace_back(periodic_ticks_, req, channel);
+            }
+            break;
+          case MACHNET_CTRL_OP_TCP_DESTROY_FLOW:
+            break;
+          case MACHNET_CTRL_OP_TCP_LISTEN:
+            {
+              const Ipv4::Address local_ip(req.listener_info.ip);
+              const Tcp::Port local_port(req.listener_info.port);
+              if (!shared_state_->IsLocalIpv4Address(local_ip) ||
+                  tcp_listeners_.find(local_ip) == tcp_listeners_.end()) {
+                emit_completion(false);
+                break;
+              }
+
+              auto &listeners_on_ip = tcp_listeners_[local_ip];
+              if (listeners_on_ip.find(local_port) != listeners_on_ip.end()) {
+                LOG(ERROR) << "Cannot register TCP listener for IP "
+                           << local_ip.ToString() << " and port "
+                           << local_port.port.value();
+                emit_completion(false);
+                break;
+              }
+
+              if (!shared_state_->RegisterListener(local_ip, local_port,
+                                                   rxring_->GetRingId())) {
+                LOG(ERROR) << "Cannot register TCP listener for IP "
+                           << local_ip.ToString() << " and port "
+                           << local_port.port.value();
+                emit_completion(false);
+                break;
+              }
+
+              listeners_on_ip.emplace(local_port, channel);
+              channel->AddListener(local_ip, local_port);
+              emit_completion(true);
+            }
             break;
           default:
             LOG(ERROR) << "Unknown control plane request opcode: "
@@ -777,6 +877,89 @@ class MachnetEngine {
       active_flows_map_.emplace((*flow_it)->key(), flow_it);
       it = pending_requests_.erase(it);
     }
+
+    // Process pending TCP flow creation requests.
+    for (auto it = pending_tcp_requests_.begin();
+         it != pending_tcp_requests_.end();) {
+      const auto &[timestamp_, req, channel] = *it;
+      if (periodic_ticks_ - timestamp_ > kPendingRequestTimeoutSlowTicks) {
+        LOG(ERROR) << utils::Format(
+            "TCP pending request timeout: [ID: %lu, Opcode: %u]", req.id,
+            req.opcode);
+        it = pending_tcp_requests_.erase(it);
+        continue;
+      }
+
+      const Ipv4::Address src_addr(req.flow_info.src_ip);
+      const Ipv4::Address dst_addr(req.flow_info.dst_ip);
+      const Tcp::Port dst_port(req.flow_info.dst_port);
+
+      auto remote_l2_addr =
+          shared_state_->GetL2Addr(txring_, src_addr, dst_addr);
+      if (!remote_l2_addr.has_value()) {
+        it++;
+        continue;
+      }
+
+      // L2 address resolved. Allocate a source port (TCP uses the same port
+      // space — RSS hashing works the same way for TCP 4-tuples).
+      auto rss_lambda = [src_addr, dst_addr, dst_port,
+                         rss_key = pmd_port_->GetRSSKey(), pmd_port = pmd_port_,
+                         rx_queue_id =
+                             rxring_->GetRingId()](uint16_t port) -> bool {
+        rte_thash_tuple ipv4_l3_l4_tuple;
+        ipv4_l3_l4_tuple.v4.src_addr = src_addr.address.value();
+        ipv4_l3_l4_tuple.v4.dst_addr = dst_addr.address.value();
+        ipv4_l3_l4_tuple.v4.sport = port;
+        ipv4_l3_l4_tuple.v4.dport = dst_port.port.value();
+
+        rte_thash_tuple reversed_ipv4_l3_l4_tuple;
+        reversed_ipv4_l3_l4_tuple.v4.src_addr = dst_addr.address.value();
+        reversed_ipv4_l3_l4_tuple.v4.dst_addr = src_addr.address.value();
+        reversed_ipv4_l3_l4_tuple.v4.sport = dst_port.port.value();
+        reversed_ipv4_l3_l4_tuple.v4.dport = port;
+
+        auto reversed_rss_hash = rte_softrss(
+            reinterpret_cast<uint32_t *>(&reversed_ipv4_l3_l4_tuple),
+            RTE_THASH_V4_L4_LEN, rss_key.data());
+        if (pmd_port->GetRSSRxQueue(reversed_rss_hash) != rx_queue_id)
+          return false;
+        if (pmd_port->GetRSSRxQueue(__builtin_bswap32(reversed_rss_hash)) !=
+            rx_queue_id)
+          return false;
+        return true;
+      };
+
+      auto src_port = shared_state_->SrcPortAlloc(src_addr, rss_lambda);
+      if (!src_port.has_value()) {
+        LOG(ERROR) << "Cannot allocate source port for TCP flow "
+                   << src_addr.ToString();
+        it = pending_tcp_requests_.erase(it);
+        continue;
+      }
+
+      auto application_callback =
+          [req_id = req.id](shm::Channel *channel, bool success,
+                            const juggler::net::flow::Key &flow_key) {
+            MachnetCtrlQueueEntry_t resp;
+            resp.id = req_id;
+            resp.opcode = MACHNET_CTRL_OP_STATUS;
+            resp.status =
+                success ? MACHNET_CTRL_STATUS_OK : MACHNET_CTRL_STATUS_ERROR;
+            resp.flow_info.src_ip = flow_key.local_addr.address.value();
+            resp.flow_info.src_port = flow_key.local_port.port.value();
+            resp.flow_info.dst_ip = flow_key.remote_addr.address.value();
+            resp.flow_info.dst_port = flow_key.remote_port.port.value();
+            channel->EnqueueCtrlCompletions(&resp, 1);
+          };
+      const auto &flow_it = channel->CreateTcpFlow(
+          src_addr, src_port.value(), dst_addr, dst_port,
+          pmd_port_->GetL2Addr(), remote_l2_addr.value(), txring_,
+          application_callback);
+      (*flow_it)->InitiateHandshake();
+      active_tcp_flows_map_.emplace((*flow_it)->key(), flow_it);
+      it = pending_tcp_requests_.erase(it);
+    }
   }
 
   /**
@@ -794,6 +977,24 @@ class MachnetEngine {
                                       (*flow_it)->key().local_port);
         channel->RemoveFlow(flow_it);
         it = active_flows_map_.erase(it);
+        continue;
+      }
+      ++it;
+    }
+
+    // Handle TCP flow retransmissions.
+    for (auto it = active_tcp_flows_map_.begin();
+         it != active_tcp_flows_map_.end();) {
+      const auto &flow_it = it->second;
+      auto is_active = (*flow_it)->PeriodicCheck();
+      if (!is_active) {
+        LOG(INFO) << "TCP Flow " << (*flow_it)->key().ToString()
+                  << " is no longer active. Removing.";
+        auto channel = (*flow_it)->channel();
+        shared_state_->SrcPortRelease((*flow_it)->key().local_addr,
+                                      (*flow_it)->key().local_port);
+        channel->RemoveTcpFlow(flow_it);
+        it = active_tcp_flows_map_.erase(it);
         continue;
       }
       ++it;
@@ -841,10 +1042,7 @@ class MachnetEngine {
 
     const auto *eh = pkt->head_data<Ethernet *>();
     const auto *ipv4h = pkt->head_data<Ipv4 *>(sizeof(Ethernet));
-    const auto *udph = pkt->head_data<Udp *>(sizeof(Ethernet) + sizeof(Ipv4));
 
-    const net::flow::Key pkt_key(ipv4h->dst_addr, udph->dst_port,
-                                 ipv4h->src_addr, udph->src_port);
     // Check ivp4 header length.
     // clang-format off
     if (pkt->length() != sizeof(Ethernet) + ipv4h->total_length.value()) [[unlikely]] { // NOLINT
@@ -858,7 +1056,12 @@ class MachnetEngine {
     switch (ipv4h->next_proto_id) {
       // clang-format off
       [[likely]] case Ipv4::kUdp:
+      {
           // clang-format on
+          const auto *udph = pkt->head_data<Udp *>(sizeof(Ethernet) + sizeof(Ipv4));
+          const net::flow::Key pkt_key(ipv4h->dst_addr, udph->dst_port,
+                                       ipv4h->src_addr, udph->src_port);
+
           if (active_flows_map_.find(pkt_key) != active_flows_map_.end()) {
         const auto &flow_it = active_flows_map_[pkt_key];
         (*flow_it)->InputPacket(pkt);
@@ -909,6 +1112,64 @@ class MachnetEngine {
         }
       }
 
+      }
+      break;
+
+      case Ipv4::kTcp:
+      {
+        if (pkt->length() < sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Tcp))
+          [[unlikely]] return;
+
+        const auto *tcph =
+            pkt->head_data<Tcp *>(sizeof(Ethernet) + sizeof(Ipv4));
+        const net::flow::Key pkt_key(ipv4h->dst_addr, tcph->dst_port,
+                                     ipv4h->src_addr, tcph->src_port);
+
+        // Check active TCP flows.
+        if (active_tcp_flows_map_.find(pkt_key) !=
+            active_tcp_flows_map_.end()) {
+          const auto &flow_it = active_tcp_flows_map_[pkt_key];
+          (*flow_it)->InputPacket(pkt);
+          return;
+        }
+
+        // Check TCP listeners for incoming SYN.
+        const auto &local_ipv4_addr = ipv4h->dst_addr;
+        const auto &local_tcp_port = tcph->dst_port;
+        if (tcp_listeners_.find(local_ipv4_addr) != tcp_listeners_.end()) {
+          const auto &listeners_on_ip = tcp_listeners_[local_ipv4_addr];
+          if (listeners_on_ip.find(local_tcp_port) == listeners_on_ip.end()) {
+            LOG(INFO) << "TCP: No listener on port "
+                      << local_tcp_port.port.value();
+            return;
+          }
+
+          // Only accept SYN packets on listening ports.
+          if (!(tcph->flags & Tcp::kSyn) || (tcph->flags & Tcp::kAck)) {
+            LOG(WARNING)
+                << "TCP: Received non-SYN packet on a listening port";
+            return;
+          }
+
+          const auto &channel = listeners_on_ip.at(local_tcp_port);
+          const auto &remote_ipv4_addr = ipv4h->src_addr;
+          const auto &remote_tcp_port = tcph->src_port;
+
+          auto empty_callback = [](shm::Channel *, bool,
+                                   const net::flow::Key &) {};
+          const auto &flow_it = channel->CreateTcpFlow(
+              local_ipv4_addr, local_tcp_port, remote_ipv4_addr,
+              remote_tcp_port, pmd_port_->GetL2Addr(), eh->src_addr, txring_,
+              empty_callback);
+          active_tcp_flows_map_.insert({pkt_key, flow_it});
+
+          // Set the flow to LISTEN state so the SYN is handled correctly.
+          (*flow_it)->StartPassiveOpen();
+
+          // Process the SYN packet on the new flow.
+          (*flow_it)->InputPacket(pkt);
+        }
+      }
       break;
       // clang-format off
       case Ipv4::kIcmp:
@@ -985,16 +1246,26 @@ class MachnetEngine {
     const auto *flow_info = msg->flow();
     const net::flow::Key msg_key(flow_info->src_ip, flow_info->src_port,
                                  flow_info->dst_ip, flow_info->dst_port);
-    if (active_flows_map_.find(msg_key) == active_flows_map_.end()) {
-      LOG(ERROR) << "Message received for a non-existing flow! "
-                 << utils::Format("(Channel: %s, 5-tuple hash: %lu, Flow: %s)",
-                                  channel->GetName().c_str(),
-                                  std::hash<net::flow::Key>{}(msg_key),
-                                  msg_key.ToString().c_str());
+
+    // Check UDP flows first (most common path).
+    if (active_flows_map_.find(msg_key) != active_flows_map_.end()) {
+      const auto &flow_it = active_flows_map_[msg_key];
+      (*flow_it)->OutputMessage(msg);
       return;
     }
-    const auto &flow_it = active_flows_map_[msg_key];
-    (*flow_it)->OutputMessage(msg);
+
+    // Check TCP flows.
+    if (active_tcp_flows_map_.find(msg_key) != active_tcp_flows_map_.end()) {
+      const auto &flow_it = active_tcp_flows_map_[msg_key];
+      (*flow_it)->OutputMessage(msg);
+      return;
+    }
+
+    LOG(ERROR) << "Message received for a non-existing flow! "
+               << utils::Format("(Channel: %s, 5-tuple hash: %lu, Flow: %s)",
+                                channel->GetName().c_str(),
+                                std::hash<net::flow::Key>{}(msg_key),
+                                msg_key.ToString().c_str());
   }
 
  private:
@@ -1032,15 +1303,25 @@ class MachnetEngine {
   uint64_t last_periodic_timestamp_{0};
   // Clock ticks for the slow timer.
   uint64_t periodic_ticks_{0};
-  // Listeners for incoming packets.
+  // Listeners for incoming packets (UDP).
   std::unordered_map<
       Ipv4::Address,
       std::unordered_map<Udp::Port, std::shared_ptr<shm::Channel>>>
       listeners_{};
+  // Listeners for incoming TCP connections.
+  std::unordered_map<
+      Ipv4::Address,
+      std::unordered_map<Tcp::Port, std::shared_ptr<shm::Channel>>>
+      tcp_listeners_{};
   // Unordered map of active flows.
   std::unordered_map<net::flow::Key,
                      const std::list<std::unique_ptr<Flow>>::const_iterator>
       active_flows_map_{};
+  // Unordered map of active TCP flows.
+  std::unordered_map<
+      net::flow::Key,
+      const std::list<std::unique_ptr<TcpFlow>>::const_iterator>
+      active_tcp_flows_map_{};
   // Vector of channels to be added to the list of active channels.
   std::vector<channel_info> channels_to_enqueue_{};
   // Vector of channels to be removed from the list of active channels.
@@ -1049,6 +1330,10 @@ class MachnetEngine {
   std::list<std::tuple<uint64_t, MachnetCtrlQueueEntry_t,
                        const std::shared_ptr<shm::Channel>>>
       pending_requests_{};
+  // List of pending TCP control plane requests.
+  std::list<std::tuple<uint64_t, MachnetCtrlQueueEntry_t,
+                       const std::shared_ptr<shm::Channel>>>
+      pending_tcp_requests_{};
 };
 
 }  // namespace juggler
