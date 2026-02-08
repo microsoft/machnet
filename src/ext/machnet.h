@@ -87,27 +87,30 @@ void *machnet_attach();
 
 /**
  * @brief Listens for incoming messages on a specific IP and port.
- * @param[in] channel The channel associated to the listener.
- * @param[in] ip The local IP address to listen on.
+ * @param[in] channel_ctx The channel associated to the listener.
+ * @param[in] local_ip The local IP address to listen on.
  * @param[in] port The local port to listen on.
+ * @param[in] protocol MACHNET_PROTO_UDP (default) or MACHNET_PROTO_TCP.
  * @return 0 on success, -1 on failure.
  */
-int machnet_listen(void *channel_ctx, const char *local_ip, uint16_t port);
+int machnet_listen(void *channel_ctx, const char *local_ip, uint16_t port,
+                   int protocol);
 
 /**
  * @brief Creates a new connection to a remote peer.
- * @param[in] channel     The channel associated with the connection.
+ * @param[in] channel_ctx The channel associated with the connection.
  * @param[in] local_ip    The local IP address.
  * @param[in] remote_ip   The remote IP address.
  * @param[in] remote_port The remote port.
  * @param[out] flow       A pointer to a `MachnetFlow_t` structure that will be
  *                        filled by the function upon success.
+ * @param[in] protocol    MACHNET_PROTO_UDP (default) or MACHNET_PROTO_TCP.
  * @return  0 on success, -1 on failure. `flow` is filled with the flow
  * information on success.
  */
 int machnet_connect(void *channel_ctx, const char *local_ip,
                     const char *remote_ip, uint16_t remote_port,
-                    MachnetFlow_t *flow);
+                    MachnetFlow_t *flow, int protocol);
 
 /**
  * Enqueue one message for transmission to a remote peer over the network.
@@ -183,70 +186,6 @@ ssize_t machnet_recv(const void *channel_ctx, void *buf, size_t len,
  *                               received, -1 on failure
  */
 int machnet_recvmsg(const void *channel_ctx, MachnetMsgHdr_t *msghdr);
-
-// ────────────────── TCP API ──────────────────
-
-/**
- * @brief Creates a new TCP connection to a remote peer.
- *
- * This is the TCP counterpart of machnet_connect(). It establishes a standard
- * TCP 3-way handshake with the remote host, allowing Machnet to communicate
- * with any TCP-speaking application (e.g., memcached, Redis).
- *
- * @param[in]  channel_ctx  The channel associated with the connection.
- * @param[in]  local_ip     The local IP address.
- * @param[in]  remote_ip    The remote IP address.
- * @param[in]  remote_port  The remote TCP port.
- * @param[out] flow         Filled with flow info on success.
- * @return 0 on success, -1 on failure.
- */
-int machnet_tcp_connect(void *channel_ctx, const char *local_ip,
-                        const char *remote_ip, uint16_t remote_port,
-                        MachnetFlow_t *flow);
-
-/**
- * @brief Listens for incoming TCP connections on a specific IP and port.
- *
- * This is the TCP counterpart of machnet_listen(). Incoming TCP SYN packets
- * on the specified address/port will cause new TCP flows to be created.
- *
- * @param[in] channel_ctx  The channel associated with the listener.
- * @param[in] local_ip     The local IP address to listen on.
- * @param[in] local_port   The local TCP port to listen on.
- * @return 0 on success, -1 on failure.
- */
-int machnet_tcp_listen(void *channel_ctx, const char *local_ip,
-                       uint16_t local_port);
-
-/**
- * @brief Send a message over a TCP flow.
- *
- * The message is framed with a 4-byte length prefix so that the receiver can
- * reconstruct message boundaries from the TCP byte stream. For communication
- * with standard TCP applications that don't use this framing, see the raw
- * send/recv variants.
- *
- * @param[in] channel_ctx  The Machnet channel context.
- * @param[in] flow         The pre-created TCP flow.
- * @param[in] buf          The data buffer to send.
- * @param[in] len          The length of the data buffer in bytes.
- * @return 0 on success, -1 on failure.
- */
-int machnet_tcp_send(const void *channel_ctx, MachnetFlow_t flow,
-                     const void *buf, size_t len);
-
-/**
- * @brief Receive a pending message from a TCP flow.
- *
- * @param[in]  channel_ctx  The Machnet channel context.
- * @param[out] buf          Buffer to receive the message.
- * @param[in]  len          Length of buf in bytes.
- * @param[out] flow         The flow information of the sender.
- * @return 0 if no message is available, -1 on failure, otherwise the number
- * of bytes received.
- */
-ssize_t machnet_tcp_recv(const void *channel_ctx, void *buf, size_t len,
-                         MachnetFlow_t *flow);
 
 #ifdef __cplusplus
 }

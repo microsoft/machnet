@@ -74,10 +74,14 @@ typedef uint32_t MachnetRingSlot_t;
 static_assert(sizeof(MachnetRingSlot_t) % 4 == 0,
               "MachnetRingSlot_t must be 32-bit aligned");
 
+// Protocol selector for machnet_connect() and machnet_listen().
+#define MACHNET_PROTO_UDP 0
+#define MACHNET_PROTO_TCP 1
+
 // This is the abstraction of a network flow for the applications. It is
-// equivalent to the 5-tuple, with just the protocol missing (UDP is always
-// assumed). This structure is used to indicate the sender or receiver of a
-// message (depending on the direction). Equivalent to `struct sockaddr_in'.
+// equivalent to the 5-tuple. This structure is used to indicate the sender or
+// receiver of a message (depending on the direction). Equivalent to
+// `struct sockaddr_in'.
 struct MachnetFlow {
   uint32_t src_ip;
   uint32_t dst_ip;

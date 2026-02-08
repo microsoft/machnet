@@ -907,12 +907,6 @@ class MachnetEngine {
                          rss_key = pmd_port_->GetRSSKey(), pmd_port = pmd_port_,
                          rx_queue_id =
                              rxring_->GetRingId()](uint16_t port) -> bool {
-        rte_thash_tuple ipv4_l3_l4_tuple;
-        ipv4_l3_l4_tuple.v4.src_addr = src_addr.address.value();
-        ipv4_l3_l4_tuple.v4.dst_addr = dst_addr.address.value();
-        ipv4_l3_l4_tuple.v4.sport = port;
-        ipv4_l3_l4_tuple.v4.dport = dst_port.port.value();
-
         rte_thash_tuple reversed_ipv4_l3_l4_tuple;
         reversed_ipv4_l3_l4_tuple.v4.src_addr = dst_addr.address.value();
         reversed_ipv4_l3_l4_tuple.v4.dst_addr = src_addr.address.value();
@@ -1044,12 +1038,15 @@ class MachnetEngine {
     const auto *ipv4h = pkt->head_data<Ipv4 *>(sizeof(Ethernet));
 
     // Check ivp4 header length.
+    // The packet may be padded to the Ethernet minimum frame size (60 bytes),
+    // so we allow pkt->length() >= the expected IP total length.
+    const size_t expected_len = sizeof(Ethernet) + ipv4h->total_length.value();
     // clang-format off
-    if (pkt->length() != sizeof(Ethernet) + ipv4h->total_length.value()) [[unlikely]] { // NOLINT
+    if (pkt->length() < expected_len) [[unlikely]] { // NOLINT
       // clang-format on
-      LOG(WARNING) << "IPv4 packet length mismatch (expected: "
+      LOG(WARNING) << "IPv4 packet too short (expected: "
                    << ipv4h->total_length.value()
-                   << ", actual: " << pkt->length() << ")";
+                   << ", actual: " << pkt->length() - sizeof(Ethernet) << ")";
       return;
     }
 
@@ -1247,6 +1244,11 @@ class MachnetEngine {
     const net::flow::Key msg_key(flow_info->src_ip, flow_info->src_port,
                                  flow_info->dst_ip, flow_info->dst_port);
 
+    VLOG(1) << "process_msg: key=" << msg_key.ToString()
+            << " msg_len=" << msg->msg_length()
+            << " udp_flows=" << active_flows_map_.size()
+            << " tcp_flows=" << active_tcp_flows_map_.size();
+
     // Check UDP flows first (most common path).
     if (active_flows_map_.find(msg_key) != active_flows_map_.end()) {
       const auto &flow_it = active_flows_map_[msg_key];
@@ -1257,6 +1259,8 @@ class MachnetEngine {
     // Check TCP flows.
     if (active_tcp_flows_map_.find(msg_key) != active_tcp_flows_map_.end()) {
       const auto &flow_it = active_tcp_flows_map_[msg_key];
+      VLOG(1) << "process_msg: routing to TCP flow "
+              << (*flow_it)->key().ToString();
       (*flow_it)->OutputMessage(msg);
       return;
     }

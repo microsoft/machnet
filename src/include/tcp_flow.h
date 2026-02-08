@@ -112,6 +112,9 @@ class TcpFlow {
   /// Maximum TCP segment payload (MSS). Conservative default.
   static constexpr size_t kDefaultMSS = 1400;
 
+  /// Size of the TCP MSS option (Kind=2, Length=4, Value=2 bytes).
+  static constexpr size_t kMSSOptionLen = 4;
+
   /// Initial TCP window size (in bytes).
   static constexpr uint16_t kInitialWindowSize = 65535;
 
@@ -120,6 +123,9 @@ class TcpFlow {
 
   /// Initial RTO value in slow ticks (same units as PeriodicCheck calls).
   static constexpr uint32_t kInitialRTO = 3;
+
+  /// TIME_WAIT duration in slow ticks.
+  static constexpr uint32_t kTimeWaitTicks = 5;
 
   // ──────────────────────── Construction ────────────────────────
 
@@ -227,15 +233,33 @@ class TcpFlow {
    * @brief Process an incoming TCP packet.
    */
   void InputPacket(const dpdk::Packet* packet) {
+    const auto* ipv4h = packet->head_data<Ipv4*>(sizeof(Ethernet));
     const auto* tcph =
         packet->head_data<Tcp*>(sizeof(Ethernet) + sizeof(Ipv4));
     const uint8_t tcp_hdr_len = tcph->header_length();
+
+    // Validate TCP header length (min 20, max 60 bytes).
+    if (tcp_hdr_len < sizeof(Tcp) || tcp_hdr_len > 60) [[unlikely]] {
+      LOG(WARNING) << "TCP: invalid header length "
+                   << static_cast<int>(tcp_hdr_len);
+      return;
+    }
+
     const size_t net_hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + tcp_hdr_len;
     const uint32_t seg_seq = tcph->seq_num.value();
     const uint32_t seg_ack = tcph->ack_num.value();
     const uint8_t flags = tcph->flags;
+    // Use IP total_length rather than packet->length() to compute the TCP
+    // payload size.  Ethernet frames may be padded to the 60-byte minimum,
+    // so packet->length() can overcount by up to 6 bytes, corrupting the
+    // TCP reassembly / deframing state machine.
+    const size_t ip_total_len = ipv4h->total_length.value();
+    if (ip_total_len < sizeof(Ipv4) + tcp_hdr_len) [[unlikely]] {
+      LOG(WARNING) << "TCP: IP total_length too small for TCP header";
+      return;
+    }
     const size_t payload_len =
-        (packet->length() > net_hdr_len) ? packet->length() - net_hdr_len : 0;
+        ip_total_len - sizeof(Ipv4) - tcp_hdr_len;
 
     // ── RST handling (any state) ──
     if (flags & Tcp::kRst) {
@@ -247,7 +271,9 @@ class TcpFlow {
     switch (state_) {
       case State::kListen:
         // Passive open: incoming SYN on a newly created flow.
+        // Parse TCP options from the kernel's SYN (MSS, etc.).
         if (flags & Tcp::kSyn) {
+          ParseTcpOptions(tcph, tcp_hdr_len);
           rcv_nxt_ = seg_seq + 1;  // SYN consumes one seq.
           SendSynAck();
           state_ = State::kSynReceived;
@@ -314,6 +340,10 @@ class TcpFlow {
       return;
     }
 
+    VLOG(1) << "TCP OutputMessage: " << key_.ToString()
+            << " msg_len=" << msg->msg_length()
+            << " snd_nxt=" << snd_nxt_ << " snd_una=" << snd_una_;
+
     // Gather the full message payload from the MsgBuf train.
     // We copy the payload into a contiguous buffer to simplify TCP
     // segmentation. For a zero-copy path this could be optimized later.
@@ -345,12 +375,12 @@ class TcpFlow {
       dpdk::Packet::Reset(packet);
 
       const size_t hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Tcp);
-      size_t payload_room = kDefaultMSS;
+      size_t payload_room = peer_mss_;
       size_t pkt_payload_len = 0;
 
       // Allocate space for headers + max payload.
       size_t max_pkt_len =
-          hdr_len + std::min(payload_room, total_len - bytes_sent);
+          hdr_len + std::min<size_t>(payload_room, total_len - bytes_sent);
       CHECK_NOTNULL(packet->append(static_cast<uint16_t>(max_pkt_len)));
 
       uint8_t* payload_dst =
@@ -435,7 +465,10 @@ class TcpFlow {
   bool PeriodicCheck() {
     if (state_ == State::kClosed) return false;
     if (state_ == State::kTimeWait) {
-      // Simple TIME_WAIT: just close after one tick.
+      if (time_wait_remaining_ > 0) {
+        time_wait_remaining_--;
+        return true;
+      }
       state_ = State::kClosed;
       return false;
     }
@@ -493,7 +526,7 @@ class TcpFlow {
     ipv4h->version_ihl = 0x45;
     ipv4h->type_of_service = 0;
     ipv4h->packet_id = be16_t(0x1513);
-    ipv4h->fragment_offset = be16_t(0);
+    ipv4h->fragment_offset = be16_t(0x4000);  // Don't Fragment.
     ipv4h->time_to_live = 64;
     ipv4h->next_proto_id = Ipv4::Proto::kTcp;
     ipv4h->total_length = be16_t(packet->length() - sizeof(Ethernet));
@@ -534,13 +567,45 @@ class TcpFlow {
     txring_->SendPackets(&packet, 1);
   }
 
+  /// Send a control packet with the MSS option appended (for SYN/SYN-ACK).
+  /// Linux kernel expects an MSS option; without it, it defaults to 536 bytes.
+  void SendControlPacketWithMSS(uint32_t seq, uint32_t ack, uint8_t flags,
+                                 uint16_t mss) {
+    auto* packet = CHECK_NOTNULL(txring_->GetPacketPool()->PacketAlloc());
+    dpdk::Packet::Reset(packet);
+
+    const size_t tcp_hdr_with_opts = sizeof(Tcp) + kMSSOptionLen;
+    const size_t pkt_len = sizeof(Ethernet) + sizeof(Ipv4) + tcp_hdr_with_opts;
+    CHECK_NOTNULL(packet->append(static_cast<uint16_t>(pkt_len)));
+
+    PrepareL2Header(packet);
+    PrepareL3Header(packet);
+    PrepareL4Header(packet, seq, ack, flags);
+
+    // Override TCP header length to include the MSS option.
+    auto* tcph = packet->head_data<Tcp*>(sizeof(Ethernet) + sizeof(Ipv4));
+    tcph->set_header_length(static_cast<uint8_t>(tcp_hdr_with_opts));
+
+    // Write MSS option: Kind=2, Length=4, Value=MSS (big-endian).
+    uint8_t* opts = reinterpret_cast<uint8_t*>(tcph) + sizeof(Tcp);
+    opts[0] = 2;   // Kind: Maximum Segment Size
+    opts[1] = 4;   // Length
+    uint16_t mss_net = htobe16(mss);
+    std::memcpy(&opts[2], &mss_net, sizeof(mss_net));
+
+    packet->offload_tcpv4_csum();
+    txring_->SendPackets(&packet, 1);
+  }
+
   void SendSyn() {
-    SendControlPacket(snd_nxt_, 0, Tcp::kSyn);
+    SendControlPacketWithMSS(snd_nxt_, 0, Tcp::kSyn,
+                              static_cast<uint16_t>(kDefaultMSS));
     snd_nxt_++;  // SYN consumes one sequence number.
   }
 
   void SendSynAck() {
-    SendControlPacket(snd_isn_, rcv_nxt_, Tcp::kSyn | Tcp::kAck);
+    SendControlPacketWithMSS(snd_isn_, rcv_nxt_, Tcp::kSyn | Tcp::kAck,
+                              static_cast<uint16_t>(kDefaultMSS));
     snd_nxt_ = snd_isn_ + 1;  // SYN-ACK consumes one sequence number.
   }
 
@@ -553,12 +618,85 @@ class TcpFlow {
 
   void SendRst() { SendControlPacket(snd_nxt_, 0, Tcp::kRst); }
 
+  // ──────────────── Helpers: TCP Option Parsing ──────────────────
+
+  /// Parse TCP options from a received header. Currently extracts MSS.
+  /// Linux kernel SYN/SYN-ACK includes MSS, Window Scale, SACK-Permitted,
+  /// and Timestamps. We parse MSS and ignore the rest (since we don't
+  /// negotiate window scaling, the kernel won't apply it).
+  void ParseTcpOptions(const Tcp* tcph, uint8_t hdr_len) {
+    if (hdr_len <= sizeof(Tcp)) return;  // No options.
+    const uint8_t* opts =
+        reinterpret_cast<const uint8_t*>(tcph) + sizeof(Tcp);
+    const size_t opts_len = hdr_len - sizeof(Tcp);
+    size_t i = 0;
+    while (i < opts_len) {
+      uint8_t kind = opts[i];
+      if (kind == 0) break;             // End of Option List.
+      if (kind == 1) { i++; continue; } // NOP padding.
+      if (i + 1 >= opts_len) break;
+      uint8_t opt_len = opts[i + 1];
+      if (opt_len < 2 || i + opt_len > opts_len) break;  // Malformed.
+      if (kind == 2 && opt_len == 4) {
+        // MSS option.
+        uint16_t mss_net;
+        std::memcpy(&mss_net, opts + i + 2, sizeof(mss_net));
+        peer_mss_ = be16toh(mss_net);
+        if (peer_mss_ == 0) peer_mss_ = static_cast<uint16_t>(kDefaultMSS);
+        VLOG(1) << "TCP: parsed peer MSS=" << peer_mss_;
+      }
+      // Window Scale (kind=3), SACK-Permitted (kind=4), Timestamps (kind=8):
+      // intentionally ignored — we don't negotiate these options.
+      i += opt_len;
+    }
+  }
+
+  // ──────────────── Helpers: In-order Payload with Overlap ──────────────────
+
+  /**
+   * @brief Process incoming payload, handling partial retransmission overlaps.
+   *
+   * The Linux kernel retransmits aggressively, and a retransmitted segment
+   * may partially overlap data we already received.  This helper skips the
+   * already-received prefix and delivers only new bytes to ConsumePayload.
+   *
+   * @return true if new data was consumed (caller should ACK).
+   */
+  bool ProcessInOrderPayload(const dpdk::Packet* packet, uint32_t seg_seq,
+                              size_t payload_len, size_t net_hdr_len) {
+    if (payload_len == 0) return false;
+
+    const uint8_t* base_payload =
+        packet->head_data<const uint8_t*>(
+            static_cast<uint16_t>(net_hdr_len));
+
+    if (seg_seq == rcv_nxt_) {
+      // Perfect in-order delivery.
+      ConsumePayload(base_payload, payload_len);
+      rcv_nxt_ += static_cast<uint32_t>(payload_len);
+      return true;
+    }
+
+    // Check for retransmission that partially overlaps new data.
+    uint32_t seg_end = seg_seq + static_cast<uint32_t>(payload_len);
+    if (SeqLeq(seg_seq, rcv_nxt_) && SeqGt(seg_end, rcv_nxt_)) {
+      uint32_t overlap = rcv_nxt_ - seg_seq;  // Works with wrapping.
+      size_t new_len = payload_len - overlap;
+      ConsumePayload(base_payload + overlap, new_len);
+      rcv_nxt_ += static_cast<uint32_t>(new_len);
+      return true;
+    }
+
+    // Pure duplicate (seg_end <= rcv_nxt_) or out-of-order gap.
+    return false;
+  }
+
   // ──────────────── State Machine Handlers ────────────────
 
   void HandleSynSent(const Tcp* tcph, uint32_t seg_seq, uint32_t seg_ack,
                      uint8_t flags) {
     if ((flags & Tcp::kSyn) && (flags & Tcp::kAck)) {
-      // SYN-ACK received.
+      // SYN-ACK received from Linux kernel.
       if (seg_ack != snd_nxt_) {
         LOG(ERROR) << "TCP SYN-ACK with wrong ack: " << seg_ack
                    << " expected " << snd_nxt_;
@@ -567,6 +705,9 @@ class TcpFlow {
       rcv_nxt_ = seg_seq + 1;  // SYN consumes one seq.
       snd_una_ = seg_ack;
       snd_wnd_ = tcph->window.value();
+
+      // Parse TCP options from the kernel's SYN-ACK (MSS, etc.).
+      ParseTcpOptions(tcph, tcph->header_length());
 
       // Send ACK to complete 3-way handshake.
       SendAck();
@@ -578,24 +719,29 @@ class TcpFlow {
       callback_(channel_, true, key_);
     } else if (flags & Tcp::kSyn) {
       // Simultaneous open: SYN without ACK.
+      ParseTcpOptions(tcph, tcph->header_length());
       rcv_nxt_ = seg_seq + 1;
       SendSynAck();
       state_ = State::kSynReceived;
     }
   }
 
-  void HandleSynReceived(const Tcp* /*tcph*/, uint32_t /*seg_seq*/,
+  void HandleSynReceived(const Tcp* tcph, uint32_t seg_seq,
                          uint32_t seg_ack, uint8_t flags,
-                         const dpdk::Packet* /*packet*/, size_t /*payload_len*/,
-                         size_t /*net_hdr_len*/) {
+                         const dpdk::Packet* packet, size_t payload_len,
+                         size_t net_hdr_len) {
     if (flags & Tcp::kAck) {
       if (seg_ack == snd_nxt_) {
         state_ = State::kEstablished;
         snd_una_ = seg_ack;
+        snd_wnd_ = tcph->window.value();
         rto_active_ = false;
         retransmit_count_ = 0;
-        // For passive open (server side), the callback is invoked by the
-        // engine when the flow is created on a listening port.
+
+        // Linux kernel can piggyback data on the completing handshake ACK.
+        if (ProcessInOrderPayload(packet, seg_seq, payload_len, net_hdr_len)) {
+          SendAck();
+        }
       }
     }
   }
@@ -603,30 +749,47 @@ class TcpFlow {
   void HandleEstablished(const Tcp* tcph, uint32_t seg_seq, uint32_t seg_ack,
                          uint8_t flags, const dpdk::Packet* packet,
                          size_t payload_len, size_t net_hdr_len) {
+    VLOG(1) << "TCP HandleEstablished: " << key_.ToString()
+            << " seq=" << seg_seq << " ack=" << seg_ack
+            << " flags=0x" << std::hex << static_cast<int>(flags) << std::dec
+            << " payload_len=" << payload_len;
+
+    // Handle retransmitted SYN(-ACK) from the kernel — it missed our
+    // final handshake ACK.  Re-send the ACK so the kernel can proceed.
+    if (flags & Tcp::kSyn) {
+      SendAck();
+      return;
+    }
+
     // Process ACK.
     if (flags & Tcp::kAck) {
       AdvanceSndUna(seg_ack);
       snd_wnd_ = tcph->window.value();
     }
 
-    // Process payload data.
-    if (payload_len > 0 && seg_seq == rcv_nxt_) {
-      const uint8_t* payload =
-          packet->head_data<const uint8_t*>(static_cast<uint16_t>(net_hdr_len));
-      ConsumePayload(payload, payload_len);
-      rcv_nxt_ += payload_len;
-      SendAck();
-    } else if (payload_len > 0 && seg_seq != rcv_nxt_) {
-      // Out-of-order: send duplicate ACK (we don't buffer OOO for now).
-      SendAck();
+    // Process payload data with overlap handling for kernel retransmissions.
+    if (payload_len > 0) {
+      if (ProcessInOrderPayload(packet, seg_seq, payload_len, net_hdr_len)) {
+        SendAck();
+      } else {
+        // Duplicate or out-of-order — send dup ACK to trigger fast retransmit.
+        SendAck();
+      }
     }
 
-    // FIN handling.
+    // FIN handling — only accept if the FIN is at the expected sequence.
     if (flags & Tcp::kFin) {
-      rcv_nxt_ = seg_seq + payload_len + 1;  // FIN consumes one seq.
-      SendAck();
-      state_ = State::kCloseWait;
-      // Deliver remaining data and signal the app if needed.
+      uint32_t fin_seq = seg_seq + static_cast<uint32_t>(payload_len);
+      if (fin_seq == rcv_nxt_) {
+        rcv_nxt_++;  // FIN consumes one sequence number.
+        SendAck();
+        state_ = State::kCloseWait;
+      } else if (SeqLt(fin_seq, rcv_nxt_)) {
+        // Retransmitted FIN we already processed — re-ACK.
+        SendAck();
+      }
+      // fin_seq > rcv_nxt_: gap ahead of FIN; ignore for now, kernel will
+      // retransmit the missing data.
     }
   }
 
@@ -636,23 +799,28 @@ class TcpFlow {
     if (flags & Tcp::kAck) {
       AdvanceSndUna(seg_ack);
     }
-    if (payload_len > 0 && seg_seq == rcv_nxt_) {
-      const uint8_t* payload =
-          packet->head_data<const uint8_t*>(static_cast<uint16_t>(net_hdr_len));
-      ConsumePayload(payload, payload_len);
-      rcv_nxt_ += payload_len;
-      SendAck();
+
+    // Process incoming data with overlap handling.
+    if (payload_len > 0) {
+      if (ProcessInOrderPayload(packet, seg_seq, payload_len, net_hdr_len)) {
+        SendAck();
+      } else {
+        SendAck();
+      }
     }
-    if ((flags & Tcp::kFin) && (flags & Tcp::kAck)) {
-      rcv_nxt_ = seg_seq + payload_len + 1;
+
+    bool our_fin_acked = (snd_una_ == snd_nxt_);
+
+    if (flags & Tcp::kFin) {
+      uint32_t fin_seq = seg_seq + static_cast<uint32_t>(payload_len);
+      if (fin_seq == rcv_nxt_) {
+        rcv_nxt_++;
+      }
       SendAck();
       state_ = State::kTimeWait;
-    } else if (flags & Tcp::kAck) {
+      time_wait_remaining_ = kTimeWaitTicks;
+    } else if (our_fin_acked) {
       state_ = State::kFinWait2;
-    } else if (flags & Tcp::kFin) {
-      rcv_nxt_ = seg_seq + payload_len + 1;
-      SendAck();
-      state_ = State::kTimeWait;
     }
   }
 
@@ -660,17 +828,23 @@ class TcpFlow {
                       uint32_t /*seg_ack*/, uint8_t flags,
                       const dpdk::Packet* packet, size_t payload_len,
                       size_t net_hdr_len) {
-    if (payload_len > 0 && seg_seq == rcv_nxt_) {
-      const uint8_t* payload =
-          packet->head_data<const uint8_t*>(static_cast<uint16_t>(net_hdr_len));
-      ConsumePayload(payload, payload_len);
-      rcv_nxt_ += payload_len;
-      SendAck();
+    // Process incoming data with overlap handling.
+    if (payload_len > 0) {
+      if (ProcessInOrderPayload(packet, seg_seq, payload_len, net_hdr_len)) {
+        SendAck();
+      } else {
+        SendAck();
+      }
     }
+
     if (flags & Tcp::kFin) {
-      rcv_nxt_ = seg_seq + payload_len + 1;
+      uint32_t fin_seq = seg_seq + static_cast<uint32_t>(payload_len);
+      if (fin_seq == rcv_nxt_) {
+        rcv_nxt_++;
+      }
       SendAck();
       state_ = State::kTimeWait;
+      time_wait_remaining_ = kTimeWaitTicks;
     }
   }
 
@@ -874,11 +1048,19 @@ class TcpFlow {
   uint16_t rcv_wnd_;   ///< Receive window (advertised to peer).
   uint16_t snd_wnd_;   ///< Send window (from peer).
 
+  /// Peer's MSS learned from TCP options in SYN/SYN-ACK.
+  /// If the peer (Linux kernel) doesn't send an MSS option we fall back to
+  /// kDefaultMSS.  This is used in OutputMessage for segmentation.
+  uint16_t peer_mss_{static_cast<uint16_t>(kDefaultMSS)};
+
   // Retransmission timer (in periodic tick units).
   uint32_t rto_ticks_;
   uint32_t rto_remaining_;
   bool rto_active_;
   uint32_t retransmit_count_;
+
+  /// TIME_WAIT countdown (in periodic tick units).
+  uint32_t time_wait_remaining_{kTimeWaitTicks};
 
   // RX reassembly state for message deframing.
   uint8_t rx_len_buf_[kMsgLenPrefixSize]{};  ///< Partial length prefix buffer.

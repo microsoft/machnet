@@ -31,7 +31,7 @@ void MachnetTransportServer(rocksdb::DB *db) {
   void *channel = machnet_attach();
 
   CHECK(channel != nullptr) << "machnet_attach() failed";
-  ret = machnet_listen(channel, FLAGS_local.c_str(), kPort);
+  ret = machnet_listen(channel, FLAGS_local.c_str(), kPort, MACHNET_PROTO_UDP);
   CHECK_EQ(ret, 0) << "machnet_listen() failed";
 
   // Handle client requests
