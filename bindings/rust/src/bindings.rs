@@ -529,6 +529,7 @@ extern "C" {
         channel_ctx: *mut ::std::os::raw::c_void,
         local_ip: *const ::std::os::raw::c_char,
         port: u16,
+        protocol: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -539,6 +540,7 @@ extern "C" {
         remote_ip: *const ::std::os::raw::c_char,
         remote_port: u16,
         flow: *mut MachnetFlow_t,
+        protocol: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {

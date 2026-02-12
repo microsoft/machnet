@@ -21,10 +21,10 @@ public static class MachnetShim
     public static extern IntPtr machnet_attach();
 
     [DllImport(libmachnet_shim_location, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int machnet_listen(IntPtr channel_ctx, string local_ip, UInt16 port);
+    public static extern int machnet_listen(IntPtr channel_ctx, string local_ip, UInt16 port, int protocol);
 
     [DllImport(libmachnet_shim_location, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int machnet_connect(IntPtr channel_ctx, string local_ip, string remote_ip, UInt16 port, ref MachnetFlow_t flow);
+    public static extern int machnet_connect(IntPtr channel_ctx, string local_ip, string remote_ip, UInt16 port, ref MachnetFlow_t flow, int protocol);
 
     [DllImport(libmachnet_shim_location, CallingConvention = CallingConvention.Cdecl)]
     public static extern int machnet_send(IntPtr channel_ctx, MachnetFlow_t flow, byte[] data, IntPtr dataSize);

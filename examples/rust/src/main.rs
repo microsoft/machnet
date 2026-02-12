@@ -428,7 +428,7 @@ fn main() {
     let datapath_thread = match msg_gen.remote_ip.is_empty() {
         true => {
             // Server-mode
-            let ret = machnet_listen(&mut channel_ctx, &msg_gen.local_ip, msg_gen.local_port);
+            let ret = machnet_listen(&mut channel_ctx, &msg_gen.local_ip, msg_gen.local_port, 0);
             assert_eq!(ret, 0, "Failed to listen on local port.");
 
             info!("[LISTENING] [{}:{}]", msg_gen.local_ip, msg_gen.local_port);
@@ -441,6 +441,7 @@ fn main() {
                 &msg_gen.local_ip,
                 &msg_gen.remote_ip,
                 msg_gen.remote_port,
+                0,
             )
             .expect("Failed to connect to remote host.");
 

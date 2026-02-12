@@ -71,7 +71,7 @@ class Program
         {
             // Client
             MachnetFlow_t flow = new MachnetFlow_t();
-            ret = MachnetShim.machnet_connect(channel_ctx, options.LocalIp, options.RemoteIp, kHelloWorldPort, ref flow);
+            ret = MachnetShim.machnet_connect(channel_ctx, options.LocalIp, options.RemoteIp, kHelloWorldPort, ref flow, 0);
             CustomCheck(ret == 0, "machnet_connect()");
 
             string msg = "Hello World!";
@@ -84,7 +84,7 @@ class Program
         else
         {
             Console.WriteLine("Waiting for message from client");
-            ret = MachnetShim.machnet_listen(channel_ctx, options.LocalIp, kHelloWorldPort);
+            ret = MachnetShim.machnet_listen(channel_ctx, options.LocalIp, kHelloWorldPort, 0);
             CustomCheck(ret == 0, "machnet_listen()");
 
             while (true)
