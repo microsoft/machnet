@@ -72,14 +72,16 @@ async function machnetTransportClientAsync() {
     ref.allocCString(options.local_ip),
     ref.allocCString(options.remote_ip),
     kRocksDbServerPort,
-    tx_flow.ref()
+    tx_flow.ref(),
+    0
   );
   customCheck(ret === 0, "machnet_connect()");
 
   ret = machnet_shim.machnet_listen(
     channel_ctx,
     ref.allocCString(options.local_ip),
-    kRocksDbServerPort
+    kRocksDbServerPort,
+    0
   );
   customCheck(ret === 0, "machnet_listen()");
 

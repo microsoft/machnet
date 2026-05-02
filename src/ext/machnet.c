@@ -410,7 +410,7 @@ void *machnet_attach() {
 }
 
 int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
-                    uint16_t dst_port, MachnetFlow_t *flow) {
+                    uint16_t dst_port, MachnetFlow_t *flow, int protocol) {
   assert(flow != NULL);
   MachnetChannelCtx_t *ctx = channel_ctx;
 
@@ -425,7 +425,8 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
   MachnetCtrlQueueEntry_t req;
   memset(&req, 0, sizeof(req));
   req.id = ctx->ctrl_ctx.req_id++;
-  req.opcode = MACHNET_CTRL_OP_CREATE_FLOW;
+  req.opcode = (protocol == MACHNET_PROTO_TCP) ? MACHNET_CTRL_OP_TCP_CREATE_FLOW
+                                               : MACHNET_CTRL_OP_CREATE_FLOW;
   req.flow_info.src_ip = ntohl(inet_addr(src_ip));
   req.flow_info.dst_ip = ntohl(inet_addr(dst_ip));
   req.flow_info.dst_port = dst_port;
@@ -466,7 +467,7 @@ int machnet_connect(void *channel_ctx, const char *src_ip, const char *dst_ip,
 }
 
 int machnet_listen(void *channel_ctx, const char *local_ip,
-                   uint16_t local_port) {
+                   uint16_t local_port, int protocol) {
   assert(channel_ctx != NULL);
   MachnetChannelCtx_t *ctx = channel_ctx;
 
@@ -478,7 +479,8 @@ int machnet_listen(void *channel_ctx, const char *local_ip,
   MachnetCtrlQueueEntry_t req;
   memset(&req, 0, sizeof(req));
   req.id = ctx->ctrl_ctx.req_id++;
-  req.opcode = MACHNET_CTRL_OP_LISTEN;
+  req.opcode = (protocol == MACHNET_PROTO_TCP) ? MACHNET_CTRL_OP_TCP_LISTEN
+                                               : MACHNET_CTRL_OP_LISTEN;
   req.listener_info.ip = ntohl(inet_addr(local_ip));
   req.listener_info.port = local_port;
 

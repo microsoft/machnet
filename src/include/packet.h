@@ -101,6 +101,10 @@ class alignas(juggler::hardware_constructive_interference_size) Packet {
     offload_ipv4_csum();
     mbuf_.ol_flags |= (RTE_MBUF_F_TX_UDP_CKSUM);
   }
+  void offload_tcpv4_csum() {
+    offload_ipv4_csum();
+    mbuf_.ol_flags |= (RTE_MBUF_F_TX_TCP_CKSUM);
+  }
 
   /**
    * @brief Attach external buffer to this packet mbuf.

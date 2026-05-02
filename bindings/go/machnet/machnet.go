@@ -69,21 +69,21 @@ func Attach() *MachnetChannelCtx {
 }
 
 // Connect to the remote host and port.
-func Connect(ctx *MachnetChannelCtx, local_ip string, remote_ip string, remote_port uint) (int, MachnetFlow) {
+func Connect(ctx *MachnetChannelCtx, local_ip string, remote_ip string, remote_port uint, protocol int) (int, MachnetFlow) {
 	// Initialize the flow
 	var flow_ptr *C.MachnetFlow_t = C.__machnet_init_flow()
 
 	local_ip_int := ipv4_str_to_uint32(local_ip)
 	remote_ip_int := ipv4_str_to_uint32(remote_ip)
 
-	ret := C.__machnet_connect_go((*C.MachnetChannelCtx_t)(ctx), (C.uint)(local_ip_int), (C.uint)(remote_ip_int), C.ushort(remote_port), flow_ptr)
+	ret := C.__machnet_connect_go((*C.MachnetChannelCtx_t)(ctx), (C.uint)(local_ip_int), (C.uint)(remote_ip_int), C.ushort(remote_port), flow_ptr, C.int(protocol))
 	return (int)(ret), convert_net_flow_go(flow_ptr)
 }
 
 // Listen on the local host and port.
-func Listen(ctx *MachnetChannelCtx, local_ip string, local_port uint) int {
+func Listen(ctx *MachnetChannelCtx, local_ip string, local_port uint, protocol int) int {
 	local_ip_int := ipv4_str_to_uint32(local_ip)
-	ret := C.__machnet_listen_go((*C.MachnetChannelCtx_t)(ctx), (C.uint)(local_ip_int), C.ushort(local_port))
+	ret := C.__machnet_listen_go((*C.MachnetChannelCtx_t)(ctx), (C.uint)(local_ip_int), C.ushort(local_port), C.int(protocol))
 	return (int)(ret)
 }
 

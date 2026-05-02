@@ -30,6 +30,7 @@ DEFINE_uint32(msg_size, 64, "Size of the message (request/response) to send.");
 DEFINE_uint32(msg_window, 8, "Maximum number of messages in flight.");
 DEFINE_uint64(msg_nr, UINT64_MAX, "Number of messages to send.");
 DEFINE_bool(verify, false, "Verify payload of received messages.");
+DEFINE_string(protocol, "udp", "Transport protocol: 'udp' or 'tcp'.");
 
 static volatile int g_keep_running = 1;
 
@@ -326,6 +327,16 @@ int main(int argc, char *argv[]) {
   FLAGS_logtostderr = 1;
 
   CHECK_GT(FLAGS_msg_size, sizeof(app_hdr_t)) << "Message size too small";
+
+  int proto = MACHNET_PROTO_UDP;
+  if (FLAGS_protocol == "tcp") {
+    proto = MACHNET_PROTO_TCP;
+    LOG(INFO) << "Using TCP transport";
+  } else {
+    CHECK(FLAGS_protocol == "udp") << "Unknown protocol: " << FLAGS_protocol;
+    LOG(INFO) << "Using UDP transport";
+  }
+
   if (FLAGS_remote_ip == "") {
     LOG(INFO) << "Starting in server mode, response size " << FLAGS_msg_size;
   } else {
@@ -342,7 +353,8 @@ int main(int argc, char *argv[]) {
     // Client-mode
     int ret =
         machnet_connect(channel_ctx, FLAGS_local_ip.c_str(),
-                        FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow);
+                        FLAGS_remote_ip.c_str(), FLAGS_remote_port, &flow,
+                        proto);
     CHECK(ret == 0) << "Failed to connect to remote host. machnet_connect() "
                        "error: "
                     << strerror(ret);
@@ -353,7 +365,8 @@ int main(int argc, char *argv[]) {
     datapath_thread = std::thread(ClientLoop, channel_ctx, &flow);
   } else {
     int ret =
-        machnet_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_local_port);
+        machnet_listen(channel_ctx, FLAGS_local_ip.c_str(), FLAGS_local_port,
+                       proto);
     CHECK(ret == 0)
         << "Failed to listen on local port. machnet_listen() error: "
         << strerror(ret);

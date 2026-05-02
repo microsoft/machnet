@@ -49,7 +49,7 @@ if (options.remote_ip) {
   const flow = new MachnetFlow_t();
   ret = machnet_shim.machnet_connect(
       channel_ctx, ref.allocCString(options.local_ip),
-      ref.allocCString(options.remote_ip), kHelloWorldPort, flow.ref());
+      ref.allocCString(options.remote_ip), kHelloWorldPort, flow.ref(), 0);
   customCheck(ret === 0, 'machnet_connect()');
 
   const msg = 'Hello World!';
@@ -64,7 +64,7 @@ if (options.remote_ip) {
   // Server
   console.log('Waiting for message from client');
   ret = machnet_shim.machnet_listen(
-      channel_ctx, ref.allocCString(options.local_ip), kHelloWorldPort);
+      channel_ctx, ref.allocCString(options.local_ip), kHelloWorldPort, 0);
   customCheck(ret === 0, 'machnet_listen()');
 
   function receive_message() {

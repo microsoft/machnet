@@ -151,7 +151,7 @@ pub fn machnet_attach<'a>() -> Option<MachnetChannel<'a>> {
 /// let remote_ip = "192.168.1.3";
 /// let remote_port = 8080;
 ///
-/// match machnet_connect(&mut channel, local_ip, remote_ip, remote_port) {
+/// match machnet_connect(&mut channel, local_ip, remote_ip, remote_port, 0) {
 ///     Some(flow) => {
 ///         // Connection was successful, use `flow` here
 ///     }
@@ -166,6 +166,7 @@ pub fn machnet_connect(
     local_ip: &str,
     remote_ip: &str,
     remote_port: u16,
+    protocol: i32,
 ) -> Option<MachnetFlow> {
     unsafe {
         let channel_ptr = channel.get_ptr();
@@ -180,6 +181,7 @@ pub fn machnet_connect(
             remote_ip_cstr.as_ptr(),
             remote_port,
             flow_ptr, // &mut flow,
+            protocol,
         );
 
         match res {
@@ -226,11 +228,11 @@ pub fn machnet_connect(
 /// }
 /// ```
 ///
-pub fn machnet_listen(channel: &mut MachnetChannel, local_ip: &str, local_port: u16) -> i32 {
+pub fn machnet_listen(channel: &mut MachnetChannel, local_ip: &str, local_port: u16, protocol: i32) -> i32 {
     unsafe {
         let channel_ptr = channel.get_ptr();
         let local_ip_cstr = CString::new(local_ip).unwrap();
-        bindings::machnet_listen(channel_ptr, local_ip_cstr.as_ptr(), local_port)
+        bindings::machnet_listen(channel_ptr, local_ip_cstr.as_ptr(), local_port, protocol)
     }
 }
 

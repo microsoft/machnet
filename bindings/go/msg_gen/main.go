@@ -324,14 +324,14 @@ func main() {
 		remote_ip, _ := jsonparser.GetString(json_bytes, "hosts_config", remote_hostname, "ipv4_addr")
 
 		// Initiate connection to the remote host.
-		ret, flow = machnet.Connect(channel_ctx, local_ip, remote_ip, remote_port)
+		ret, flow = machnet.Connect(channel_ctx, local_ip, remote_ip, remote_port, 0)
 		if ret != 0 {
 			glog.Fatal("Failed to connect to remote host.")
 		}
 		glog.Info("[CONNECTED] [", local_ip, " <-> ", remote_ip, ":", remote_port, "]")
 	} else {
 		// Listen for incoming connections.
-		ret = machnet.Listen(channel_ctx, local_ip, remote_port)
+		ret = machnet.Listen(channel_ctx, local_ip, remote_port, 0)
 		if ret != 0 {
 			glog.Fatal("Failed to listen for incoming connections.")
 		}

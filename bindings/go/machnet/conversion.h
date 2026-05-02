@@ -45,13 +45,13 @@ MachnetFlow_t __machnet_recvmsg_go(const MachnetChannelCtx_t* ctx,
 
 int __machnet_connect_go(MachnetChannelCtx_t* ctx, uint32_t local_ip,
                          uint32_t remote_ip, uint16_t remote_port,
-                         MachnetFlow_t* flow) {
-  return machnet_connect(ctx, local_ip, remote_ip, remote_port, flow);
+                         MachnetFlow_t* flow, int protocol) {
+  return machnet_connect(ctx, local_ip, remote_ip, remote_port, flow, protocol);
 }
 
 int __machnet_listen_go(MachnetChannelCtx_t* ctx, uint32_t local_ip,
-                        uint16_t port) {
-  return machnet_listen(ctx, local_ip, port);
+                        uint16_t port, int protocol) {
+  return machnet_listen(ctx, local_ip, port, protocol);
 }
 
 MachnetFlow_t* __machnet_init_flow() {

@@ -31,7 +31,8 @@ class MachnetEngine;  // forward declaration
 namespace juggler {
 namespace net {
 namespace flow {
-class Flow;  // forward declaration
+class Flow;     // forward declaration
+class TcpFlow;  // forward declaration
 }  // namespace flow
 }  // namespace net
 }  // namespace juggler
@@ -49,6 +50,7 @@ namespace shm {
 class ShmChannel {
  public:
   using Flow = juggler::net::flow::Flow;
+  using TcpFlow = juggler::net::flow::TcpFlow;
   using Listener = juggler::net::flow::Listener;
   ShmChannel() = delete;
   ShmChannel(const ShmChannel &) = delete;
@@ -433,6 +435,14 @@ class Channel : public ShmChannel {
   std::list<std::unique_ptr<Flow>> &GetActiveFlows() { return active_flows_; }
 
   /**
+   * @brief Gets the list of active TCP flows.
+   * @return A reference to the list of active TCP flows.
+   */
+  std::list<std::unique_ptr<TcpFlow>> &GetActiveTcpFlows() {
+    return active_tcp_flows_;
+  }
+
+  /**
    * @brief Gets the list of listeners associated with the channel.
    * @return A reference to the list of listeners.
    */
@@ -451,8 +461,24 @@ class Channel : public ShmChannel {
     return std::prev(active_flows_.end());
   }
 
+  /**
+   * @brief Creates a new TCP flow associated with `this' channel object.
+   * @param params The parameters pack to be forwarded to the constructor of the
+   *               TcpFlow.
+   * @return A const iterator to the newly created TCP flow.
+   */
+  const std::list<std::unique_ptr<TcpFlow>>::const_iterator CreateTcpFlow(
+      auto &&...params) {
+    active_tcp_flows_.emplace_back(std::make_unique<TcpFlow>(
+        std::forward<decltype(params)>(params)..., this));
+    return std::prev(active_tcp_flows_.end());
+  }
+
   void RemoveFlow(
       const std::list<std::unique_ptr<Flow>>::const_iterator &flow_it);
+
+  void RemoveTcpFlow(
+      const std::list<std::unique_ptr<TcpFlow>>::const_iterator &flow_it);
 
   /**
    * @brief Adds a listener to the channel (i.e., an IP address and port pair).
@@ -489,6 +515,8 @@ class Channel : public ShmChannel {
   std::unordered_set<Listener> listeners_;
   // List of active flows associated with this channel.
   std::list<std::unique_ptr<Flow>> active_flows_;
+  // List of active TCP flows associated with this channel.
+  std::list<std::unique_ptr<TcpFlow>> active_tcp_flows_;
 
   // DPDK external memory region.
   rte_device *attached_dev_{nullptr};

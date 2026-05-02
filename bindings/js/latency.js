@@ -51,11 +51,11 @@ const latencies_us = [];
 const tx_flow = new MachnetFlow_t();
 var ret = machnet_shim.machnet_connect(
     channel_ctx, ref.allocCString(options.local_ip),
-    ref.allocCString(options.remote_ip), kHelloWorldPort, tx_flow.ref());
+    ref.allocCString(options.remote_ip), kHelloWorldPort, tx_flow.ref(), 0);
 customCheck(ret === 0, 'machnet_connect()');
 
 ret = machnet_shim.machnet_listen(
-    channel_ctx, ref.allocCString(options.local_ip), kHelloWorldPort);
+    channel_ctx, ref.allocCString(options.local_ip), kHelloWorldPort, 0);
 customCheck(ret === 0, 'machnet_listen()');
 
 if (options.is_client) {

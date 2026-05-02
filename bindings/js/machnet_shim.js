@@ -23,8 +23,8 @@ console.log('Loading libmachnet_shim');
 var machnet_shim = ffi.Library(libmachnet_shim_location, {
   'machnet_init': ['int', []],
   'machnet_attach': ['pointer', []],
-  'machnet_listen': ['int', [voidPtr, charPtr, uint16]],
-  'machnet_connect': ['int', [voidPtr, charPtr, charPtr, uint16, MachnetFlowPtr]],
+  'machnet_listen': ['int', [voidPtr, charPtr, uint16, 'int']],
+  'machnet_connect': ['int', [voidPtr, charPtr, charPtr, uint16, MachnetFlowPtr, 'int']],
   'machnet_send': ['int', [voidPtr, MachnetFlow_t, voidPtr, size_t]],
   'machnet_recv': ['int', [voidPtr, voidPtr, size_t, MachnetFlowPtr]]
 });

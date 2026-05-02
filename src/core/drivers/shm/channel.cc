@@ -6,6 +6,7 @@
 #include <channel.h>
 #include <flow.h>
 #include <glog/logging.h>
+#include <tcp_flow.h>
 
 namespace juggler {
 namespace shm {
@@ -169,6 +170,11 @@ void Channel::UnregisterDMAMem() {
 void Channel::RemoveFlow(
     const std::list<std::unique_ptr<Flow>>::const_iterator &flow_it) {
   active_flows_.erase(flow_it);
+}
+
+void Channel::RemoveTcpFlow(
+    const std::list<std::unique_ptr<TcpFlow>>::const_iterator &flow_it) {
+  active_tcp_flows_.erase(flow_it);
 }
 
 }  // namespace shm
