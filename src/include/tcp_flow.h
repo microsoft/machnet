@@ -32,6 +32,7 @@
 #include <packet.h>
 #include <packet_pool.h>
 #include <pmd.h>
+#include <rte_ip.h>
 #include <tcp.h>
 #include <types.h>
 #include <utils.h>
@@ -519,6 +520,20 @@ class TcpFlow {
     tcph->urgent_ptr = be16_t(0);
   }
 
+  /// Seed the TCP checksum field with the IPv4 pseudo-header partial checksum.
+  /// The DPDK TX offload contract for RTE_MBUF_F_TX_TCP_CKSUM (non-TSO) is:
+  /// software pre-loads the pseudo-header sum here, hardware completes it over
+  /// the TCP header + payload.  Leaving it 0 (valid for UDP, where checksums
+  /// are optional) yields an invalid TCP checksum that the peer drops.  Must run
+  /// after PrepareL3Header (IP total_length final) and offload_tcpv4_csum().
+  /// @note tcph->checksum is a raw uint16_t holding a network-order partial
+  ///       checksum — do NOT wrap it in be16_t, which would byte-swap it.
+  void FinalizeTcpChecksum(dpdk::Packet* packet) const {
+    auto* ipv4h = packet->head_data<struct rte_ipv4_hdr*>(sizeof(Ethernet));
+    auto* tcph = packet->head_data<Tcp*>(sizeof(Ethernet) + sizeof(Ipv4));
+    tcph->checksum = rte_ipv4_phdr_cksum(ipv4h, /*ol_flags=*/0);
+  }
+
   // ──────────────── Helpers: Send Control Packets ────────────────
 
   void SendControlPacket(uint32_t seq, uint32_t ack, uint8_t flags) {
@@ -532,6 +547,7 @@ class TcpFlow {
     PrepareL3Header(packet);
     PrepareL4Header(packet, seq, ack, flags);
     packet->offload_tcpv4_csum();
+    FinalizeTcpChecksum(packet);
 
     txring_->SendPackets(&packet, 1);
   }
@@ -563,13 +579,19 @@ class TcpFlow {
     std::memcpy(&opts[2], &mss_net, sizeof(mss_net));
 
     packet->offload_tcpv4_csum();
+    FinalizeTcpChecksum(packet);
     txring_->SendPackets(&packet, 1);
   }
 
   void SendSyn() {
-    SendControlPacketWithMSS(snd_nxt_, 0, Tcp::kSyn,
+    // Always send the SYN from the fixed ISN and set snd_nxt_ absolutely, so a
+    // retransmitted SYN (from PeriodicCheck) reuses the same sequence number
+    // instead of consuming a fresh one.  Incrementing on every call drifted
+    // snd_nxt_ past the peer's ack after the first retransmit, permanently
+    // breaking the handshake.  Mirrors SendSynAck, which is already idempotent.
+    SendControlPacketWithMSS(snd_isn_, 0, Tcp::kSyn,
                               static_cast<uint16_t>(kDefaultMSS));
-    snd_nxt_++;  // SYN consumes one sequence number.
+    snd_nxt_ = snd_isn_ + 1;  // SYN consumes one sequence number.
   }
 
   void SendSynAck() {
@@ -632,6 +654,7 @@ class TcpFlow {
     PrepareL3Header(packet);
     PrepareL4Header(packet, seq, rcv_nxt_, Tcp::kAck | Tcp::kPsh);
     packet->offload_tcpv4_csum();
+    FinalizeTcpChecksum(packet);
     txring_->SendPackets(&packet, 1);
     return true;
   }
@@ -652,6 +675,7 @@ class TcpFlow {
     PrepareL3Header(packet);
     PrepareL4Header(packet, snd_nxt_, rcv_nxt_, Tcp::kFin | Tcp::kAck);
     packet->offload_tcpv4_csum();
+    FinalizeTcpChecksum(packet);
     txring_->SendPackets(&packet, 1);
     return true;
   }

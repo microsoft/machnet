@@ -71,6 +71,19 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
   port_conf.txmode.offloads =
       (RTE_ETH_TX_OFFLOAD_IPV4_CKSUM | RTE_ETH_TX_OFFLOAD_UDP_CKSUM);
 
+  // TCP TX checksum offload for the native TCP transport.  The TCP datapath
+  // sets RTE_MBUF_F_TX_TCP_CKSUM per mbuf and pre-loads the pseudo-header
+  // checksum, but the NIC only completes the checksum if the offload was
+  // enabled here at port-configure time; otherwise every TCP segment ships with
+  // an invalid checksum and the peer drops it.  Enable it when supported.
+  if (tx_offload_capa & RTE_ETH_TX_OFFLOAD_TCP_CKSUM) {
+    port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_TCP_CKSUM;
+  } else {
+    LOG(WARNING) << "NIC does not support TCP TX checksum offload; the native "
+                    "TCP transport will emit invalid checksums until a software "
+                    "checksum fallback is added.";
+  }
+
   if (tx_offload_capa & RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE) {
     // TODO(ilias): Add option to the constructor to enable this offload.
     LOG(WARNING)

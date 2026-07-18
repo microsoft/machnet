@@ -360,6 +360,35 @@ TEST_F(TcpFlowTest, ActiveOpen_SynAckWrongAck) {
   dpdk::Packet::Free(bad_syn_ack);
 }
 
+// A retransmitted SYN must reuse the original sequence number, not consume a
+// fresh one.  Previously SendSyn incremented snd_nxt_ on every call, so after a
+// single retransmit the peer's SYN-ACK (acking isn+1) no longer matched
+// snd_nxt_ and the handshake could never complete.
+TEST_F(TcpFlowTest, SynRetransmitIsSequenceIdempotent) {
+  auto flow = MakeFlow();
+  flow->InitiateHandshake();
+  const uint32_t isn = flow->snd_isn_;
+  ASSERT_EQ(flow->snd_nxt_, isn + 1);
+
+  // Force an RTO to retransmit the SYN.
+  for (uint32_t i = 0; i < TcpFlow::kInitialRTO; i++) {
+    EXPECT_TRUE(flow->PeriodicCheck());
+  }
+  EXPECT_TRUE(flow->PeriodicCheck());  // RTO fires → SYN retransmit.
+
+  // The retransmit must NOT have advanced the sequence number.
+  EXPECT_EQ(flow->snd_nxt_, isn + 1);
+  EXPECT_EQ(flow->state(), TcpFlow::State::kSynSent);
+
+  // A SYN-ACK acking isn+1 now completes the handshake (it would have been
+  // rejected as a wrong-ack before the fix).
+  auto* syn_ack = MakePacket(9000, isn + 1, Tcp::kSyn | Tcp::kAck);
+  flow->InputPacket(syn_ack);
+  EXPECT_EQ(flow->state(), TcpFlow::State::kEstablished);
+  EXPECT_EQ(flow->snd_una_, isn + 1);
+  dpdk::Packet::Free(syn_ack);
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  Passive Open (Server) Handshake
 // ═══════════════════════════════════════════════════════════════
