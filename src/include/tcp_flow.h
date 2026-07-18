@@ -36,6 +36,7 @@
 #include <types.h>
 #include <utils.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <deque>
@@ -217,14 +218,17 @@ class TcpFlow {
 
   void ShutDown() {
     if (state_ == State::kEstablished || state_ == State::kCloseWait) {
-      SendFin();
+      // Queue the FIN behind any buffered data.  PumpSend emits it once the
+      // data has drained and keeps the RTO armed so a lost FIN retransmits.
+      fin_pending_ = true;
       state_ = (state_ == State::kEstablished) ? State::kFinWait1
                                                 : State::kLastAck;
+      PumpSend();
     } else {
       SendRst();
       state_ = State::kClosed;
+      rto_active_ = false;
     }
-    rto_active_ = false;
   }
 
   // ────────────────── RX Path ──────────────────
@@ -324,6 +328,11 @@ class TcpFlow {
       default:
         break;
     }
+
+    // A received ACK may have advanced snd_una_ and/or opened the peer's
+    // receive window, and RX-side transitions may now permit TX.  Push out any
+    // buffered data (and a pending FIN) that the window now allows.
+    PumpSend();
   }
 
   // ────────────────── TX Path ──────────────────
@@ -337,122 +346,67 @@ class TcpFlow {
   void OutputMessage(shm::MsgBuf* msg) {
     if (state_ != State::kEstablished && state_ != State::kCloseWait) {
       LOG(ERROR) << "Cannot send on TCP flow in state " << StateToString(state_);
+      FreeMsgBufChain(msg);  // Never leak the chain on an early return.
       return;
     }
 
-    VLOG(1) << "TCP OutputMessage: " << key_.ToString()
-            << " msg_len=" << msg->msg_length()
-            << " snd_nxt=" << snd_nxt_ << " snd_una=" << snd_una_;
-
-    // Gather the full message payload from the MsgBuf train.
-    // We copy the payload into a contiguous buffer to simplify TCP
-    // segmentation. For a zero-copy path this could be optimized later.
     const uint32_t msg_len = msg->msg_length();
-    const uint32_t total_len = kMsgLenPrefixSize + msg_len;
+    const uint32_t framed_len = kMsgLenPrefixSize + msg_len;
 
-    // We'll transmit the length prefix + payload as a TCP byte stream.
-    // Segment into MSS-sized TCP packets.
-    uint32_t bytes_sent = 0;
+    VLOG(1) << "TCP OutputMessage: " << key_.ToString()
+            << " msg_len=" << msg_len << " snd_nxt=" << snd_nxt_
+            << " snd_una=" << snd_una_ << " buffered=" << snd_buf_.size();
 
-    // First, send the 4-byte length prefix.
-    uint8_t len_buf[kMsgLenPrefixSize];
+    // Bound the send buffer.  Under a stalled peer/app this applies
+    // backpressure instead of growing without limit.
+    if (snd_buf_.size() + framed_len > kMaxSendBuf) {
+      LOG(ERROR) << "TCP send buffer full (" << snd_buf_.size()
+                 << " bytes); dropping " << msg_len << "-byte message on "
+                 << key_.ToString();
+      FreeMsgBufChain(msg);
+      return;
+    }
+
+    // Frame the message into the byte stream: 4-byte big-endian length prefix
+    // followed by the payload.  We append into snd_buf_ rather than sending
+    // immediately, so the bytes remain available for window-gated transmission
+    // and retransmission.
+    const size_t buf_before = snd_buf_.size();
     uint32_t net_len = htobe32(msg_len);
-    std::memcpy(len_buf, &net_len, kMsgLenPrefixSize);
+    const uint8_t* lp = reinterpret_cast<const uint8_t*>(&net_len);
+    snd_buf_.insert(snd_buf_.end(), lp, lp + kMsgLenPrefixSize);
 
-    // Walk through the MsgBuf chain and send data.
-    // We interleave the length prefix with the first payload chunk.
-    auto* cur_buf = msg;
-    size_t prefix_remaining = kMsgLenPrefixSize;
-    size_t buf_offset = 0;  // Offset within the current MsgBuf.
-    bool first_segment = true;
-
-    while (bytes_sent < total_len) {
-      auto* packet = txring_->GetPacketPool()->PacketAlloc();
-      if (packet == nullptr) {
-        LOG(ERROR) << "Failed to allocate packet for TCP TX";
-        return;
+    // Copy the payload from the MsgBuf chain, validating the declared length
+    // against the bytes actually present so a bad msg_length cannot desync the
+    // stream or spin the segmentation loop.
+    uint32_t copied = 0;
+    auto* cur = msg;
+    while (cur != nullptr && copied < msg_len) {
+      const auto* src = static_cast<const uint8_t*>(cur->head_data());
+      const uint32_t n =
+          std::min<uint32_t>(cur->length(), msg_len - copied);
+      snd_buf_.insert(snd_buf_.end(), src, src + n);
+      copied += n;
+      if (cur->is_sg() || cur->has_chain()) {
+        cur = channel_->GetMsgBuf(cur->next());
+      } else {
+        cur = nullptr;
       }
-      dpdk::Packet::Reset(packet);
-
-      const size_t hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Tcp);
-      size_t payload_room = peer_mss_;
-      size_t pkt_payload_len = 0;
-
-      // Allocate space for headers + max payload.
-      size_t max_pkt_len =
-          hdr_len + std::min<size_t>(payload_room, total_len - bytes_sent);
-      CHECK_NOTNULL(packet->append(static_cast<uint16_t>(max_pkt_len)));
-
-      uint8_t* payload_dst =
-          packet->head_data<uint8_t*>(static_cast<uint16_t>(hdr_len));
-
-      // Copy length prefix into the first segment(s).
-      if (prefix_remaining > 0) {
-        size_t prefix_to_copy = std::min(prefix_remaining, payload_room);
-        std::memcpy(payload_dst,
-                     len_buf + (kMsgLenPrefixSize - prefix_remaining),
-                     prefix_to_copy);
-        payload_dst += prefix_to_copy;
-        pkt_payload_len += prefix_to_copy;
-        prefix_remaining -= prefix_to_copy;
-        payload_room -= prefix_to_copy;
-      }
-
-      // Copy message payload from MsgBuf chain.
-      while (payload_room > 0 && cur_buf != nullptr) {
-        const size_t avail = cur_buf->length() - buf_offset;
-        const size_t to_copy = std::min(avail, payload_room);
-        std::memcpy(payload_dst,
-                     static_cast<const uint8_t*>(cur_buf->head_data()) + buf_offset,
-                     to_copy);
-        payload_dst += to_copy;
-        pkt_payload_len += to_copy;
-        payload_room -= to_copy;
-        buf_offset += to_copy;
-
-        if (buf_offset == cur_buf->length()) {
-          // Fully consumed this MsgBuf; move to next in chain.
-          buf_offset = 0;
-          if (cur_buf->is_sg() || cur_buf->has_chain()) {
-            cur_buf = channel_->GetMsgBuf(cur_buf->next());
-          } else {
-            cur_buf = nullptr;
-          }
-        }
-      }
-
-      // Adjust actual packet length if we didn't fill the max.
-      // We already appended max_pkt_len; trim if needed.
-      // Actually, since we append the exact max and copy into it, the packet
-      // length is already correct if max_pkt_len was right. For safety:
-      // (packet length is set by append)
-
-      // Prepare headers.
-      uint8_t tcp_flags = Tcp::kAck;
-      if (first_segment) {
-        tcp_flags |= Tcp::kPsh;  // Push on first segment for low latency.
-        first_segment = false;
-      }
-
-      PrepareL2Header(packet);
-      PrepareL3Header(packet);
-      PrepareL4Header(packet, snd_nxt_, rcv_nxt_, tcp_flags);
-      packet->offload_tcpv4_csum();
-
-      snd_nxt_ += pkt_payload_len;
-      bytes_sent += pkt_payload_len;
-
-      txring_->SendPackets(&packet, 1);
     }
 
-    if (!rto_active_) {
-      rto_active_ = true;
-      rto_remaining_ = rto_ticks_;
+    if (copied != msg_len) {
+      LOG(ERROR) << "TCP: msg_length=" << msg_len << " but chain holds "
+                 << copied << " bytes; dropping message on " << key_.ToString();
+      snd_buf_.resize(buf_before);  // Roll back this partial frame.
+      FreeMsgBufChain(msg);
+      return;
     }
 
-    // Free the MsgBuf chain (the engine normally tracks this, but since TCP
-    // does its own segmentation, we consume the buffers here).
+    // The bytes now live in snd_buf_; release the source chain.
     FreeMsgBufChain(msg);
+
+    // Transmit whatever the peer window currently allows.
+    PumpSend();
   }
 
   // ────────────────── Periodic Check ──────────────────
@@ -484,9 +438,9 @@ class TcpFlow {
     retransmit_count_++;
     if (retransmit_count_ > kMaxRetransmissions) {
       LOG(ERROR) << "TCP max retransmissions reached on " << key_.ToString();
-      if (state_ == State::kSynSent) {
-        callback_(channel_, false, key_);
-      }
+      // Notify the application on teardown from ANY state (not just SYN_SENT),
+      // so an established connection that dies does not fail silently.
+      callback_(channel_, false, key_);
       state_ = State::kClosed;
       return false;
     }
@@ -501,9 +455,24 @@ class TcpFlow {
         LOG(INFO) << "TCP retransmitting SYN-ACK";
         SendSynAck();
         break;
+      case State::kEstablished:
+      case State::kCloseWait:
+      case State::kFinWait1:
+      case State::kLastAck:
+        if (snd_wnd_ == 0 && SeqLt(snd_nxt_, SndBufferedEndSeq())) {
+          // Peer window is closed but we have data to send: probe it so a lost
+          // window-update ACK cannot deadlock the connection.
+          LOG(INFO) << "TCP zero-window probe on " << key_.ToString();
+          SendZeroWindowProbe();
+        } else {
+          // Go-back-N: rewind to the oldest unacked byte and retransmit the
+          // buffered data (and the FIN) from there.
+          LOG(INFO) << "TCP RTO retransmit from snd_una=" << snd_una_
+                    << " snd_nxt=" << snd_nxt_ << " on " << key_.ToString();
+          RetransmitUnacked();
+        }
+        break;
       default:
-        // For established connections, a full retransmission mechanism
-        // would require buffering sent data. For now, we just reset the timer.
         break;
     }
     rto_remaining_ = rto_ticks_;
@@ -611,12 +580,143 @@ class TcpFlow {
 
   void SendAck() { SendControlPacket(snd_nxt_, rcv_nxt_, Tcp::kAck); }
 
-  void SendFin() {
-    SendControlPacket(snd_nxt_, rcv_nxt_, Tcp::kFin | Tcp::kAck);
-    snd_nxt_++;  // FIN consumes one sequence number.
+  void SendRst() { SendControlPacket(snd_nxt_, 0, Tcp::kRst); }
+
+  // ──────────────── Helpers: Window-gated Data TX ────────────────
+
+  /// Sequence number one past the last buffered send byte.
+  uint32_t SndBufferedEndSeq() const {
+    return snd_una_ + static_cast<uint32_t>(snd_buf_.size());
   }
 
-  void SendRst() { SendControlPacket(snd_nxt_, 0, Tcp::kRst); }
+  /// Bytes transmitted but not yet acknowledged.
+  uint32_t BytesInFlight() const { return snd_nxt_ - snd_una_; }
+
+  /// True while a transmitted FIN has not yet been acknowledged.
+  bool FinOutstanding() const {
+    return fin_sent_ && SeqLt(snd_una_, snd_fin_seq_ + 1);
+  }
+
+  /// Effective per-segment payload: honor the peer's MSS but never exceed our
+  /// conservative default (also bounds the segment to the mbuf data room,
+  /// avoiding an allocation failure on an over-large advertised MSS).
+  uint16_t EffectiveMSS() const {
+    return std::min<uint16_t>(peer_mss_, static_cast<uint16_t>(kDefaultMSS));
+  }
+
+  /// Build and transmit a single data segment carrying `len` bytes of the send
+  /// buffer starting at sequence `seq`.  Returns false (without side effects on
+  /// sequence state) if a packet could not be allocated, so the caller can
+  /// retry later instead of crashing or emitting a short frame.
+  bool SendDataSegment(uint32_t seq, uint32_t len) {
+    DCHECK(SeqGeq(seq, snd_una_));
+    const size_t off = seq - snd_una_;
+    DCHECK_LE(off + len, snd_buf_.size());
+
+    auto* packet = txring_->GetPacketPool()->PacketAlloc();
+    if (packet == nullptr) [[unlikely]] {
+      LOG(ERROR) << "TCP: packet pool exhausted; deferring TX on "
+                 << key_.ToString();
+      return false;
+    }
+    dpdk::Packet::Reset(packet);
+
+    const size_t hdr_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Tcp);
+    CHECK_NOTNULL(packet->append(static_cast<uint16_t>(hdr_len + len)));
+
+    uint8_t* dst =
+        packet->head_data<uint8_t*>(static_cast<uint16_t>(hdr_len));
+    std::copy_n(snd_buf_.begin() + off, len, dst);
+
+    PrepareL2Header(packet);
+    PrepareL3Header(packet);
+    PrepareL4Header(packet, seq, rcv_nxt_, Tcp::kAck | Tcp::kPsh);
+    packet->offload_tcpv4_csum();
+    txring_->SendPackets(&packet, 1);
+    return true;
+  }
+
+  /// Transmit a FIN (carrying the current ACK) at snd_nxt_.  Returns false on
+  /// allocation failure so the FIN is retried rather than skipped.
+  bool SendFinSegment() {
+    auto* packet = txring_->GetPacketPool()->PacketAlloc();
+    if (packet == nullptr) [[unlikely]] {
+      LOG(ERROR) << "TCP: packet pool exhausted; deferring FIN on "
+                 << key_.ToString();
+      return false;
+    }
+    dpdk::Packet::Reset(packet);
+    const size_t pkt_len = sizeof(Ethernet) + sizeof(Ipv4) + sizeof(Tcp);
+    CHECK_NOTNULL(packet->append(static_cast<uint16_t>(pkt_len)));
+    PrepareL2Header(packet);
+    PrepareL3Header(packet);
+    PrepareL4Header(packet, snd_nxt_, rcv_nxt_, Tcp::kFin | Tcp::kAck);
+    packet->offload_tcpv4_csum();
+    txring_->SendPackets(&packet, 1);
+    return true;
+  }
+
+  /// Push out as much buffered data as the peer's receive window and MSS allow,
+  /// starting at snd_nxt_, then emit a pending FIN once all data has drained.
+  /// Safe to call repeatedly (from OutputMessage, on every received ACK, and
+  /// after RX-side state transitions); it only ever advances snd_nxt_ within
+  /// the window, so a closed window simply sends nothing.
+  void PumpSend() {
+    if (state_ != State::kEstablished && state_ != State::kCloseWait &&
+        state_ != State::kFinWait1 && state_ != State::kLastAck) {
+      return;  // Data may only flow in these states.
+    }
+
+    const uint32_t data_end = SndBufferedEndSeq();
+    const uint32_t win_edge = snd_una_ + snd_wnd_;  // Peer's advertised edge.
+    const uint16_t eff_mss = EffectiveMSS();
+
+    // Send data segments up to min(buffered end, window edge).
+    while (SeqLt(snd_nxt_, data_end) && SeqLt(snd_nxt_, win_edge)) {
+      const uint32_t to_win = win_edge - snd_nxt_;
+      const uint32_t to_end = data_end - snd_nxt_;
+      const uint32_t seg_len =
+          std::min<uint32_t>(std::min(to_win, to_end), eff_mss);
+      if (!SendDataSegment(snd_nxt_, seg_len)) break;  // Pool empty; retry later.
+      snd_nxt_ += seg_len;
+    }
+
+    // Emit the FIN only after every buffered data byte has been transmitted, so
+    // it carries the correct (highest) sequence number.
+    if (fin_pending_ && !fin_sent_ && snd_nxt_ == data_end) {
+      if (SendFinSegment()) {
+        snd_fin_seq_ = snd_nxt_;
+        snd_nxt_++;  // FIN consumes one sequence number.
+        fin_sent_ = true;
+      }
+    }
+
+    // Keep the RTO/persist timer armed whenever anything is outstanding or
+    // still waiting to be sent (data blocked by a closed window needs the
+    // persist timer to fire).
+    const bool pending = BytesInFlight() > 0 || FinOutstanding() ||
+                          SeqLt(snd_nxt_, data_end);
+    if (pending && !rto_active_) {
+      rto_active_ = true;
+      rto_remaining_ = rto_ticks_;
+    }
+  }
+
+  /// Go-back-N retransmission: rewind snd_nxt_ to the oldest unacked byte and
+  /// resend the buffered data (and a re-sent FIN) from there.
+  void RetransmitUnacked() {
+    snd_nxt_ = snd_una_;
+    fin_sent_ = false;  // Re-sent after the retransmitted data.
+    PumpSend();
+  }
+
+  /// Zero-window probe: send a single byte at snd_nxt_ (without advancing it)
+  /// to force the peer to re-advertise its window.
+  void SendZeroWindowProbe() {
+    if (SeqLt(snd_nxt_, SndBufferedEndSeq())) {
+      SendDataSegment(snd_nxt_, 1);
+    }
+  }
 
   // ──────────────── Helpers: TCP Option Parsing ──────────────────
 
@@ -809,7 +909,10 @@ class TcpFlow {
       }
     }
 
-    bool our_fin_acked = (snd_una_ == snd_nxt_);
+    // Our FIN is "acked" only once it has actually been transmitted (it may
+    // still be deferred behind window-limited data) and its sequence number
+    // has been acknowledged.
+    bool our_fin_acked = fin_sent_ && !FinOutstanding();
 
     if (flags & Tcp::kFin) {
       uint32_t fin_seq = seg_seq + static_cast<uint32_t>(payload_len);
@@ -978,10 +1081,20 @@ class TcpFlow {
 
   void AdvanceSndUna(uint32_t ack) {
     if (SeqGt(ack, snd_una_) && SeqLeq(ack, snd_nxt_)) {
+      const uint32_t acked = ack - snd_una_;
+      // Drop acknowledged octets from the front of the send buffer.  Capped at
+      // the buffer size so a FIN's sequence number (which occupies no buffer
+      // byte) and direct-state unit tests cannot over-erase.
+      const size_t drop =
+          std::min<size_t>(acked, snd_buf_.size());
+      snd_buf_.erase(snd_buf_.begin(), snd_buf_.begin() + drop);
       snd_una_ = ack;
       retransmit_count_ = 0;
-      if (snd_una_ == snd_nxt_) {
-        rto_active_ = false;  // All data acknowledged.
+
+      // The timer stays armed while any data or the FIN remains unacknowledged;
+      // otherwise everything is delivered and it can be disarmed.
+      if (snd_una_ == snd_nxt_ && snd_buf_.empty() && !FinOutstanding()) {
+        rto_active_ = false;
       } else {
         rto_remaining_ = rto_ticks_;
       }
@@ -1042,6 +1155,30 @@ class TcpFlow {
   uint32_t snd_una_;  ///< Oldest unacknowledged sequence number.
   uint32_t snd_nxt_;  ///< Next sequence number to send.
   uint32_t snd_isn_;  ///< Initial send sequence number.
+
+  /// Retransmission / send buffer. Holds the outgoing TCP byte stream from
+  /// snd_una_ onward: snd_buf_[0] is the octet with sequence number snd_una_,
+  /// and the buffer spans [snd_una_, snd_una_ + snd_buf_.size()).  Bytes are
+  /// appended by OutputMessage (framed length prefix + payload), transmitted
+  /// by PumpSend as the peer window allows, retransmitted from snd_una_ on
+  /// RTO, and dropped from the front as ACKs advance snd_una_.  This is the
+  /// state that makes lost data recoverable.
+  std::deque<uint8_t> snd_buf_;
+
+  /// Upper bound on buffered-but-unacked send data.  When the peer/app stalls
+  /// this caps memory instead of growing unbounded; further sends are dropped
+  /// with an error rather than OOMing the engine.  Sized to two max-length
+  /// messages so a single MACHNET_MSG_MAX_LEN message is never rejected for
+  /// being large — only genuine accumulation triggers backpressure.
+  static constexpr size_t kMaxSendBuf = 2 * MACHNET_MSG_MAX_LEN;
+
+  /// FIN bookkeeping.  A close request sets fin_pending_; the FIN octet is put
+  /// on the wire (at snd_fin_seq_, consuming one sequence number) only once all
+  /// buffered data has been transmitted, so its sequence number is correct even
+  /// when the app closes with data still queued behind a closed window.
+  bool fin_pending_{false};
+  bool fin_sent_{false};
+  uint32_t snd_fin_seq_{0};
 
   // TCP receive-side state.
   uint32_t rcv_nxt_;   ///< Next expected receive sequence number.

@@ -605,6 +605,175 @@ TEST_F(TcpFlowTest, OutputMessage_LargerThanMSS) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  Retransmit Queue & Window-Gated TX
+// ═══════════════════════════════════════════════════════════════
+
+// Data beyond the peer's advertised window must NOT be transmitted; it stays
+// buffered for later, but the full framed message is retained.
+TEST_F(TcpFlowTest, WindowGated_BuffersExcess) {
+  auto flow = MakeFlow();
+  flow->state_ = TcpFlow::State::kEstablished;
+  flow->rcv_nxt_ = 5000;
+  flow->snd_wnd_ = 50;      // Tiny peer window.
+  flow->peer_mss_ = 20;
+  const uint32_t isn = flow->snd_nxt_;
+
+  // Framed length = 4 (prefix) + 96 (payload) = 100 bytes, window only 50.
+  auto* msg = CreateMsg(96);
+  flow->OutputMessage(msg);
+
+  // At most a window's worth is in flight; the rest waits.
+  EXPECT_EQ(flow->BytesInFlight(), 50u);
+  EXPECT_EQ(flow->snd_nxt_, isn + 50);
+  EXPECT_EQ(flow->snd_buf_.size(), 100u);  // Whole message retained.
+  EXPECT_TRUE(flow->rto_active_);
+}
+
+// When an ACK advances snd_una_ / opens the window, the buffered remainder is
+// transmitted automatically.
+TEST_F(TcpFlowTest, WindowOpens_DrainsBuffer) {
+  auto flow = MakeFlow();
+  flow->state_ = TcpFlow::State::kEstablished;
+  flow->rcv_nxt_ = 5000;
+  flow->snd_wnd_ = 50;
+  flow->peer_mss_ = 20;
+  const uint32_t isn = flow->snd_nxt_;
+
+  auto* msg = CreateMsg(96);  // framed 100
+  flow->OutputMessage(msg);
+  ASSERT_EQ(flow->BytesInFlight(), 50u);
+
+  // Peer ACKs the first 50 bytes and advertises a large window.
+  auto* ack = MakePacket(5000, isn + 50, Tcp::kAck);  // window=65535 (MakePacket)
+  flow->InputPacket(ack);
+
+  EXPECT_EQ(flow->snd_una_, isn + 50);
+  EXPECT_EQ(flow->snd_nxt_, isn + 100);       // Remaining 50 bytes drained.
+  EXPECT_EQ(flow->snd_buf_.size(), 50u);      // 100 buffered − 50 acked.
+  EXPECT_EQ(flow->BytesInFlight(), 50u);
+  dpdk::Packet::Free(ack);
+}
+
+// On RTO with unacked data, the flow retransmits from snd_una_ (go-back-N);
+// the send buffer is retained across the retransmission.
+TEST_F(TcpFlowTest, RtoRetransmitsUnackedData) {
+  auto flow = MakeFlow();
+  flow->state_ = TcpFlow::State::kEstablished;
+  flow->rcv_nxt_ = 5000;
+  flow->snd_wnd_ = 65535;
+  const uint32_t isn = flow->snd_nxt_;
+
+  auto* msg = CreateMsg(40);  // framed 44
+  flow->OutputMessage(msg);
+  ASSERT_EQ(flow->snd_nxt_, isn + 44);
+  ASSERT_EQ(flow->snd_una_, isn);
+  ASSERT_EQ(flow->snd_buf_.size(), 44u);
+  ASSERT_TRUE(flow->rto_active_);
+
+  // Burn the RTO timer with no ACK.
+  for (uint32_t i = 0; i < TcpFlow::kInitialRTO; i++) {
+    EXPECT_TRUE(flow->PeriodicCheck());
+  }
+  const uint32_t rc_before = flow->retransmit_count_;
+  EXPECT_TRUE(flow->PeriodicCheck());  // RTO fires → go-back-N.
+
+  EXPECT_GT(flow->retransmit_count_, rc_before);
+  EXPECT_EQ(flow->snd_una_, isn);          // Nothing acked.
+  EXPECT_EQ(flow->snd_nxt_, isn + 44);     // Rewound to snd_una_, then re-sent.
+  EXPECT_EQ(flow->snd_buf_.size(), 44u);   // Still buffered for a future RTO.
+}
+
+// A cumulative ACK covering all sent data drops the acked bytes from the send
+// buffer and disarms the retransmit timer.
+TEST_F(TcpFlowTest, AckFreesSendBufferAndDisarmsRto) {
+  auto flow = MakeFlow();
+  flow->state_ = TcpFlow::State::kEstablished;
+  flow->rcv_nxt_ = 5000;
+  flow->snd_wnd_ = 65535;
+  const uint32_t isn = flow->snd_nxt_;
+
+  auto* msg = CreateMsg(40);  // framed 44
+  flow->OutputMessage(msg);
+
+  auto* ack = MakePacket(5000, isn + 44, Tcp::kAck);
+  flow->InputPacket(ack);
+
+  EXPECT_EQ(flow->snd_una_, isn + 44);
+  EXPECT_TRUE(flow->snd_buf_.empty());
+  EXPECT_FALSE(flow->rto_active_);
+  dpdk::Packet::Free(ack);
+}
+
+// An established connection that exhausts its retransmissions must notify the
+// application (previously only SYN_SENT did) rather than dying silently.
+TEST_F(TcpFlowTest, EstablishedRtoExhaustionNotifiesApp) {
+  auto flow = MakeFlow();
+  flow->state_ = TcpFlow::State::kEstablished;
+  flow->rcv_nxt_ = 5000;
+  flow->snd_wnd_ = 65535;
+
+  auto* msg = CreateMsg(40);
+  flow->OutputMessage(msg);
+
+  callback_called_ = false;
+  flow->retransmit_count_ = TcpFlow::kMaxRetransmissions;
+  flow->rto_remaining_ = 0;
+
+  EXPECT_FALSE(flow->PeriodicCheck());
+  EXPECT_EQ(flow->state(), TcpFlow::State::kClosed);
+  EXPECT_TRUE(callback_called_);
+  EXPECT_FALSE(callback_success_);
+}
+
+// A FIN requested while data is still window-blocked must wait behind that data
+// and be sent (with the correct sequence number) only once the data drains.
+TEST_F(TcpFlowTest, FinDeferredBehindWindowLimitedData) {
+  auto flow = MakeFlow();
+  flow->state_ = TcpFlow::State::kEstablished;
+  flow->rcv_nxt_ = 5000;
+  flow->snd_wnd_ = 30;
+  flow->peer_mss_ = 20;
+  const uint32_t isn = flow->snd_nxt_;
+
+  auto* msg = CreateMsg(56);  // framed 60, window only 30
+  flow->OutputMessage(msg);
+  ASSERT_EQ(flow->BytesInFlight(), 30u);
+
+  // App closes while 30 bytes are still buffered/unsent.
+  flow->ShutDown();
+  EXPECT_EQ(flow->state(), TcpFlow::State::kFinWait1);
+  EXPECT_TRUE(flow->fin_pending_);
+  EXPECT_FALSE(flow->fin_sent_);            // FIN waits behind the data.
+  EXPECT_EQ(flow->snd_nxt_, isn + 30);
+
+  // Peer ACKs the first 30 bytes; the window opens (snd_una_ advances).
+  auto* ack = MakePacket(5000, isn + 30, Tcp::kAck);
+  flow->InputPacket(ack);
+
+  EXPECT_TRUE(flow->fin_sent_);
+  EXPECT_EQ(flow->snd_fin_seq_, isn + 60);  // FIN follows all 60 data bytes.
+  EXPECT_EQ(flow->snd_nxt_, isn + 61);      // FIN consumed one sequence number.
+  dpdk::Packet::Free(ack);
+}
+
+// A message whose declared length exceeds the bytes actually in its chain is
+// dropped (not framed) so it cannot desync the wire stream or spin the loop.
+TEST_F(TcpFlowTest, OutputMessage_MsgLengthMismatchDropped) {
+  auto flow = MakeFlow();
+  flow->state_ = TcpFlow::State::kEstablished;
+  flow->rcv_nxt_ = 5000;
+  flow->snd_wnd_ = 65535;
+  const uint32_t isn = flow->snd_nxt_;
+
+  auto* msg = CreateMsg(40);
+  msg->set_msg_length(1000);  // Lie: claim far more than the chain holds.
+  flow->OutputMessage(msg);
+
+  EXPECT_TRUE(flow->snd_buf_.empty());   // Nothing framed.
+  EXPECT_EQ(flow->snd_nxt_, isn);        // Sequence state untouched.
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Data RX Path (ConsumePayload)
 // ═══════════════════════════════════════════════════════════════
 
