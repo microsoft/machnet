@@ -135,6 +135,27 @@ MSG_GEN="~/machnet/build/src/apps/msg_gen/msg_gen"
 ```
 
 
+## Local development without a NIC
+
+You can develop and test Machnet applications on a single Linux machine with
+no dedicated NIC, VM, or cloud setup. The trick is to run the Machnet stack on
+a pair of DPDK virtual devices (a `vhost` port and a `virtio-user` port) wired
+back-to-back over a unix socket, which behaves like two machines on the same
+L2 segment:
+
+```bash
+# Build Machnet and the examples first (see CONTRIBUTING.md and ./build_shim.sh)
+cd examples
+sudo ./local_vhost_test.sh
+```
+
+The script starts the Machnet daemon with
+[local_vhost_config.json](examples/local_vhost_config.json), then runs the
+`hello_world` server and client against the two local IPs (`10.66.0.1` and
+`10.66.0.2`). See the comments in
+[local_vhost_test.sh](examples/local_vhost_test.sh) for details.
+
+
 ## Machnet API
 
 See [machnet.h](src/ext/machnet.h) for the full API documentation.  Applications use the following steps to interact with the Machnet service:

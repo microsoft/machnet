@@ -1,0 +1,14 @@
+{
+  "machnet_config": {
+    "56:48:4f:53:54:00": {
+      "ip": "10.66.0.1",
+      "engine_threads": 1,
+      "vdev": "net_vhost0,iface=/var/run/machnet/local_vhost.sock,queues=1"
+    },
+    "aa:19:be:ef:00:02": {
+      "ip": "10.66.0.2",
+      "engine_threads": 1,
+      "vdev": "virtio_user1,path=/var/run/machnet/local_vhost.sock,queues=1,queue_size=1024,mac=aa:19:be:ef:00:02"
+    }
+  }
+}

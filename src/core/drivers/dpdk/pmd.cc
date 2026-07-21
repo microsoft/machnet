@@ -63,8 +63,15 @@ static rte_eth_conf DefaultEthConf(const rte_eth_dev_info *devinfo) {
   const auto tx_offload_capa = devinfo->tx_offload_capa;
   if (!(tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM) ||
       !(tx_offload_capa & RTE_ETH_TX_OFFLOAD_UDP_CKSUM)) {
-    // Making this fatal; not sure what NIC does not support checksum offloads.
-    LOG(FATAL) << "Hardware does not support checksum offloads.";
+    // Virtual devices (e.g., `net_vhost', `net_virtio_user') do not support
+    // checksum offloads. Machnet leaves checksum fields unfilled and relies on
+    // the offloads, so a port without them is only usable on a local loop
+    // where nothing verifies checksums (see examples/local_vhost_test.sh).
+    LOG(WARNING) << "Driver " << devinfo->driver_name
+                 << " does not support TX checksum offloads. Falling back to "
+                    "a basic ethernet configuration; outgoing checksums are "
+                    "NOT computed. Use this port for local testing only.";
+    return rte_eth_conf();
   }
 
   port_conf.txmode.mq_mode = RTE_ETH_MQ_TX_NONE;

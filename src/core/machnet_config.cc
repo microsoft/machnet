@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <ranges>
 #include <string>
+#include <vector>
 
 #include "dpdk.h"
 #include "ether.h"
@@ -84,7 +85,7 @@ void MachnetConfigProcessor::AssertJsonValidMachnetConfig() {
     }
     for (const auto &[key, _] : interface.items()) {
       if (key != "ip" && key != "engine_threads" && key != "cpu_mask" &&
-          key != "pcie") {
+          key != "pcie" && key != "vdev") {
         LOG(FATAL) << "Invalid key " << key << " in " << interface << " in "
                    << config_json_filename_;
       }
@@ -121,12 +122,19 @@ void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
       LOG(INFO) << "Using default CPU mask for " << l2_addr.ToString();
     }
 
+    std::string vdev = "";
+    if (json_val.find("vdev") != json_val.end()) {
+      vdev = json_val.at("vdev");
+      LOG(INFO) << "Using DPDK virtual device " << vdev << " for "
+                << l2_addr.ToString();
+    }
+
     std::string pci_addr = "";
     if (json_val.find("pcie") != json_val.end()) {
       pci_addr = json_val.at("pcie");
       LOG(INFO) << "Using config file PCIe address " << pci_addr << " for "
                 << l2_addr.ToString();
-    } else {
+    } else if (vdev.empty()) {
       const std::optional<std::string> ret = GetPCIeAddressSysfs(l2_addr);
       if (ret.has_value()) {
         pci_addr = ret.value();
@@ -138,7 +146,7 @@ void MachnetConfigProcessor::DiscoverInterfaceConfiguration() {
     }
 
     interfaces_config_.emplace(pci_addr, l2_addr, ip_addr, engine_threads,
-                               cpu_mask);
+                               cpu_mask, vdev);
   }
   for (const auto &interface : interfaces_config_) {
     interface.Dump();
@@ -151,13 +159,32 @@ utils::CmdLineOpts MachnetConfigProcessor::GetEalOpts() const {
   eal_opts.Append({"-c", "0x1"});
   eal_opts.Append({"-n", "4"});
   eal_opts.Append({"--telemetry"});
+  bool have_pci_interface = false;
+  std::vector<std::string> vdevs;
   for (const auto &interface : interfaces_config_) {
-    if (interface.pcie_addr() != "") {
+    if (interface.vdev() != "") {
+      vdevs.push_back(interface.vdev());
+    } else if (interface.pcie_addr() != "") {
       eal_opts.Append({"-a", interface.pcie_addr()});
+      have_pci_interface = true;
     } else {
       LOG(WARNING) << "Not passing PCIe allowlist for interface "
                    << interface.l2_addr().ToString();
+      have_pci_interface = true;
     }
+  }
+
+  // `interfaces_config_` is an unordered set, but DPDK assigns port ids in
+  // probe order, and some virtual drivers (e.g., `net_vhost') derive their MAC
+  // address from the port id. Sort the vdev arguments so that port ids are
+  // deterministic across runs.
+  std::sort(vdevs.begin(), vdevs.end());
+  for (const auto &vdev : vdevs) {
+    eal_opts.Append({"--vdev", vdev});
+  }
+  if (!vdevs.empty() && !have_pci_interface) {
+    // All interfaces are virtual devices; skip PCI bus probing altogether.
+    eal_opts.Append({"--no-pci"});
   }
 
   return eal_opts;

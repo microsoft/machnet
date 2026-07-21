@@ -20,6 +20,8 @@ the interface, and the value is a dictionary with the following fields:
    * `ip`: the IP address of the interface.
    * `engine_threads`: The number of threads (and NIC HW queues) to use for this interface.
    * `cpu_mask`: The CPU mask to use to affine all engine threads. If not specified, the default is to use all available cores.
+   * `pcie`: (optional) The PCIe address of the interface. If not specified, Machnet discovers it from sysfs using the MAC address.
+   * `vdev`: (optional) A DPDK virtual device specification (e.g., `net_vhost0,iface=/var/run/machnet/local_vhost.sock,queues=1`) to use instead of a physical NIC. Passed to DPDK as `--vdev`; when all configured interfaces are virtual devices, PCI probing is disabled (`--no-pci`). Virtual devices lack checksum offloads, so use them only for local development and testing — see [examples/local_vhost_test.sh](../../../examples/local_vhost_test.sh).
 
 **Example [config.json](config.json):**
 ```json

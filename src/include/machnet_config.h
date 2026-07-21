@@ -24,8 +24,10 @@ class NetworkInterfaceConfig {
                                   const net::Ethernet::Address &l2_addr,
                                   const net::Ipv4::Address &ip_addr,
                                   size_t engine_threads = 1,
-                                  cpu_set_t cpu_mask = kDefaultCpuMask)
+                                  cpu_set_t cpu_mask = kDefaultCpuMask,
+                                  const std::string vdev = "")
       : pcie_addr_(pcie_addr),
+        vdev_(vdev),
         l2_addr_(l2_addr),
         ip_addr_(ip_addr),
         engine_threads_(engine_threads),
@@ -36,6 +38,7 @@ class NetworkInterfaceConfig {
   }
 
   const std::string &pcie_addr() const { return pcie_addr_; }
+  const std::string &vdev() const { return vdev_; }
   const net::Ethernet::Address &l2_addr() const { return l2_addr_; }
   const net::Ipv4::Address &ip_addr() const { return ip_addr_; }
   size_t engine_threads() const { return engine_threads_; }
@@ -44,9 +47,10 @@ class NetworkInterfaceConfig {
   void Dump() const {
     LOG(INFO) << "NetworkInterfaceConfig: "
               << utils::Format(
-                     "[PCIe: %s, L2: %s, IP: %s, engine_threads: %zu, "
-                     "cpu_mask: %lu, dpdk_port_id: %d]",
-                     pcie_addr_.c_str(), l2_addr_.ToString().c_str(),
+                     "[PCIe: %s, vdev: %s, L2: %s, IP: %s, engine_threads: "
+                     "%zu, cpu_mask: %lu, dpdk_port_id: %d]",
+                     pcie_addr_.c_str(), vdev_.c_str(),
+                     l2_addr_.ToString().c_str(),
                      ip_addr_.ToString().c_str(), engine_threads_,
                      utils::cpuset_to_sizet(cpu_mask_),
                      dpdk_port_id_.value_or(-1));
@@ -58,6 +62,7 @@ class NetworkInterfaceConfig {
 
  private:
   const std::string pcie_addr_;
+  const std::string vdev_;
   const net::Ethernet::Address l2_addr_;
   const net::Ipv4::Address ip_addr_;
   const size_t engine_threads_;
